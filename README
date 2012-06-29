@@ -1,0 +1,16 @@
+1) http server - see available songs
+2) track song being played in each 'zone' (1 zone)
+3) control song playback
+4) allow players to join each song zone
+5) pause zone when 0 players online
+6) players subscribe to allow control of their volume settings
+
+- daemon portion - http + rtsp + network clock source
+  + avahi announcements
+  + base time distribution
+  - http = libsoup
+  - rtsp = gst-rtsp-server
+  - network clock source = gst
+- need a player
+  - playbin wrapper that does rtsp + network clock subscription
+    and follows remote volume control

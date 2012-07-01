@@ -14,15 +14,13 @@ dnl Find C compiler with C99
 AC_PROG_CC
 AC_PROG_CC_STDC
 
-# Checks for programs.
+LT_INIT
 
-# Checks for libraries.
+PKG_PROG_PKG_CONFIG([0.22])
+PKG_CHECK_MODULES(SNRA, [gobject-2.0 glib-2.0 avahi-gobject >= 0.6.31 libsoup-2.4 gstreamer-net-1.0 gstreamer-rtsp-server-1.0])
 
-# Checks for header files.
-
-# Checks for typedefs, structures, and compiler characteristics.
-
-# Checks for library functions.
+EXTRA_CFLAGS="-DGST_USE_UNSTABLE_API"
+AC_SUBST([EXTRA_CFLAGS])
 
 AC_CONFIG_FILES([
   Makefile

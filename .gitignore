@@ -18,4 +18,8 @@ missing
 src/sonarea
 stamp-h1
 .deps
+*.swp
+*.la
 *.o
+*.lo
+.libs/

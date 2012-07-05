@@ -17,84 +17,59 @@
  * Boston, MA 02111-1307, USA.
  */
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <gst/gst.h>
-#include <libs/gst/net/gstnet.h>
-#include <gst/rtsp-server/rtsp-server.h>
+
+#include "daemon/snra-manager.h"
 
 GMainLoop *ml;
-GstNetTimeProvider *net_time;
+gint sigint_received;
+
+static void sigint_handler_sighandler (int signum);
+
+static void
+sigint_setup (void)
+{
+  struct sigaction action = { 0, };
+
+  action.sa_handler = sigint_handler_sighandler;
+  sigaction (SIGINT, &action, NULL);
+}
+
+static void
+sigint_restore (void)
+{
+  struct sigaction action = { 0, };
+
+  action.sa_handler = SIG_DFL;
+  sigaction (SIGINT, &action, NULL);
+
+}
 
 static gboolean
-timeout (GstRTSPServer * server, gboolean ignored)
+sigint_check(void *data)
 {
-  GstRTSPSessionPool *pool;
-
-  pool = gst_rtsp_server_get_session_pool (server);
-  gst_rtsp_session_pool_cleanup (pool);
-  g_object_unref (pool);
-
-  g_print ("Exiting on timeout...\n");
-
-  g_main_loop_quit(ml);
-
+  if (sigint_received) {
+    g_print ("Exiting...\n");
+    g_main_loop_quit(ml);
+  }
   return TRUE;
 }
 
-int
-setup_rtsp (char *uri)
+static void
+sigint_handler_sighandler (int signum)
 {
-  GstRTSPServer *server;
-  GstRTSPMediaMapping *mapping;
-  GstRTSPMediaFactoryURI *factory;
-
-  server = gst_rtsp_server_new ();
-  mapping = gst_rtsp_server_get_media_mapping (server);
-  factory = gst_rtsp_media_factory_uri_new ();
-
-  /* Set up the URI, and set as shared (all viewers see the same stream) */
-  gst_rtsp_media_factory_uri_set_uri (factory, uri);
-  gst_rtsp_media_factory_set_shared ( GST_RTSP_MEDIA_FACTORY (factory), TRUE);
-
-  /* attach the test factory to the /test url */
-  gst_rtsp_media_mapping_add_factory (mapping, "/test",
-      GST_RTSP_MEDIA_FACTORY (factory));
-
-  g_object_unref (mapping);
-
-  /* attach the server to the default maincontext */
-  if (gst_rtsp_server_attach (server, NULL) == 0)
-    goto failed;
-
-  g_timeout_add_seconds (60, (GSourceFunc) timeout, server);
-
-  /* start serving */
-  g_print ("stream ready at rtsp://127.0.0.1:8554/test\n");
-
-  return 0;
-
-  /* ERRORS */
-failed:
-  {
-    g_print ("failed to attach the server\n");
-    return -1;
-  }
-}
-
-int
-setup_net_clock()
-{
-  GstClock *clock;
-
-  clock = gst_system_clock_obtain();
-  net_time = gst_net_time_provider_new (clock, NULL, 0);
-  gst_object_unref (clock);
-
-  return 0;
+  sigint_received++;
+  sigint_restore();
 }
 
 int
 main (int argc, char *argv[])
 {
+  SnraManager *manager;
 
   gst_init (&argc, &argv);
 
@@ -103,14 +78,16 @@ main (int argc, char *argv[])
     return -1;
   }
 
-  if (setup_net_clock() < 0)
-    return -1;
+  g_timeout_add(250, sigint_check, NULL);
+  sigint_setup();
 
-  if (setup_rtsp (argv[1]) < 0)
+  manager = snra_manager_new(argv[1]);
+  if (manager == NULL)
     return -1;
 
   ml = g_main_loop_new(NULL, FALSE);
   g_main_loop_run(ml);
 
+  g_object_unref (manager);
   return 0;
 }

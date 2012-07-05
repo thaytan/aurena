@@ -1,0 +1,177 @@
+/* GStreamer
+ * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public
+ * License along with this library; if not, write to the
+ * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+ * Boston, MA 02111-1307, USA.
+ */
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include <string.h>
+#include <libsoup/soup-server.h>
+#include <libsoup/soup-message.h>
+#include <libsoup/soup-socket.h>
+#include <libsoup/soup-address.h>
+
+#include "snra-http-resource.h"
+#include "snra-server.h"
+
+G_DEFINE_TYPE (SnraHttpResource, snra_http_resource, G_TYPE_OBJECT);
+
+enum
+{
+  PROP_0,
+  PROP_SOURCE_PATH,
+  PROP_LAST
+};
+
+static GParamSpec *obj_properties[PROP_LAST] = { NULL, };
+
+static void snra_http_resource_set_property (GObject * object, guint prop_id,
+    const GValue * value, GParamSpec * pspec);
+static void snra_http_resource_get_property (GObject * object, guint prop_id,
+    GValue * value, GParamSpec * pspec);
+
+typedef struct _SnraTransfer
+{
+  SnraServer *server;
+  SnraHttpResource *resource;
+  gsize position;
+} SnraTransfer;
+
+static gboolean
+snra_http_resource_open(SnraHttpResource *resource)
+{
+  if (resource->data == NULL) {
+    g_print ("Opening resource %s\n", resource->source_path);
+    resource->data = g_mapped_file_new (resource->source_path, FALSE, NULL);
+    if (resource->data == NULL)
+      return FALSE;
+  }
+  resource->use_count++;
+  return TRUE;
+}
+
+static void
+snra_http_resource_close(SnraHttpResource *resource)
+{
+  if (resource->use_count) {
+    resource->use_count--;
+    if (resource->use_count == 0) {
+      g_print ("Releasing resource %s\n", resource->source_path);
+      g_mapped_file_unref (resource->data);
+      resource->data = NULL;
+    }
+  }
+}
+
+static void
+resource_finished (SoupMessage *msg, SnraTransfer *transfer)
+{
+  g_print ("Completed transfer of %s\n", transfer->resource->source_path);
+
+  /* Close the resource, destroy the transfer */
+  snra_http_resource_close(transfer->resource);
+  g_object_unref (transfer->resource);
+  g_object_unref (transfer->server);
+  g_free (transfer);
+}
+
+void
+snra_http_resource_new_transfer (SnraHttpResource *resource, SnraServer *server, SoupMessage *msg)
+{
+  /* Create a new transfer structure, and pass the contents of our resource to it */
+  SnraTransfer *transfer;
+
+  if (!snra_http_resource_open(resource)) {
+    soup_message_set_status (msg, SOUP_STATUS_INTERNAL_SERVER_ERROR);
+    return;
+  }
+
+  transfer = g_new0 (SnraTransfer, 1);
+  transfer->resource = g_object_ref (resource);
+  transfer->server = g_object_ref (server);
+
+  {
+    soup_message_set_status (msg, SOUP_STATUS_OK);
+    soup_message_headers_set_encoding (msg->response_headers,
+        SOUP_ENCODING_CONTENT_LENGTH);
+    soup_message_headers_replace (msg->response_headers, "Content-Type",
+        "video/ogg");
+    g_signal_connect (msg, "finished", G_CALLBACK (resource_finished), transfer);
+
+    const gsize len = g_mapped_file_get_length (transfer->resource->data);
+    gchar *chunk = g_mapped_file_get_contents (transfer->resource->data); 
+
+    soup_message_headers_set_content_length (msg->response_headers, len);
+    soup_message_body_append (msg->response_body, SOUP_MEMORY_TEMPORARY, chunk, len);
+  }
+}
+
+static void
+snra_http_resource_init (SnraHttpResource *resource)
+{
+}
+
+static void
+snra_http_resource_class_init (SnraHttpResourceClass *resource_class)
+{
+  GObjectClass *gobject_class = (GObjectClass *)(resource_class);
+
+  gobject_class->set_property = snra_http_resource_set_property;
+  gobject_class->get_property = snra_http_resource_get_property;
+
+  obj_properties[PROP_SOURCE_PATH] =
+    g_param_spec_string ("source-path", "Source Path",
+                         "Source file path resource",
+                         NULL,
+                         G_PARAM_READWRITE);
+  g_object_class_install_properties (gobject_class, PROP_LAST, obj_properties);
+}
+
+static void
+snra_http_resource_set_property (GObject * object, guint prop_id,
+    const GValue * value, GParamSpec * pspec)
+{
+  SnraHttpResource *resource = (SnraHttpResource *)(object);
+
+  switch (prop_id) {
+    case PROP_SOURCE_PATH:
+      g_free (resource->source_path);
+      resource->source_path = g_value_dup_string (value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
+}  
+
+static void
+snra_http_resource_get_property (GObject * object, guint prop_id,
+    GValue * value, GParamSpec * pspec)
+{
+  SnraHttpResource *resource = (SnraHttpResource *)(object);
+
+  switch (prop_id) {
+    case PROP_SOURCE_PATH:
+      g_value_set_string (value, resource->source_path);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
+}  

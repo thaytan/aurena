@@ -34,6 +34,22 @@
 
 G_DEFINE_TYPE (SnraServer, snra_server, G_TYPE_OBJECT);
 
+enum
+{
+  PROP_0,
+  PROP_PORT,
+  PROP_RTSP_PORT,
+  PROP_CLOCK,
+  PROP_LAST
+};
+
+static GParamSpec *obj_properties[PROP_LAST] = { NULL, };
+
+static void snra_server_set_property (GObject * object, guint prop_id,
+    const GValue * value, GParamSpec * pspec);
+static void snra_server_get_property (GObject * object, guint prop_id,
+    GValue * value, GParamSpec * pspec);
+
 static void snra_server_finalize(GObject *object);
 static void snra_server_dispose(GObject *object);
 
@@ -47,8 +63,14 @@ server_api_cb (SoupServer *soup, SoupMessage *msg,
   JsonNode * root;
   gchar *body;
   int clock_port;
+  GstClock *clock;
+  GstClockTime cur_time;
 
   g_print("Got a hit on %s\n", path);
+
+  g_object_get (server->net_clock, "clock", &clock, NULL);
+  cur_time = gst_clock_get_time (clock);
+  gst_object_unref (clock);
 
   json_builder_begin_object (builder);
 
@@ -74,15 +96,15 @@ server_api_cb (SoupServer *soup, SoupMessage *msg,
 
   if (server->base_time == -1) {
     // configure a base time 0.5 seconds in the future
-    GstClock *clock;
-    g_object_get (server->net_clock, "clock", &clock, NULL);
-    server->base_time = gst_clock_get_time (clock) + (GST_SECOND / 2);
+    server->base_time = cur_time + (GST_SECOND / 2);
     g_print ("Base time now %" G_GUINT64_FORMAT "\n", server->base_time);
-    gst_object_unref (clock);
   }
 
   json_builder_set_member_name (builder, "base-time");
   json_builder_add_int_value (builder, (gint64)(server->base_time));
+
+  json_builder_set_member_name (builder, "current-time");
+  json_builder_add_int_value (builder, (gint64)(cur_time));
 
   json_builder_end_object (builder);
 
@@ -191,6 +213,25 @@ snra_server_class_init (SnraServerClass *server_class)
 
   gobject_class->dispose = snra_server_dispose;
   gobject_class->finalize = snra_server_finalize;
+  gobject_class->set_property = snra_server_set_property;
+  gobject_class->get_property = snra_server_get_property;
+
+  obj_properties[PROP_PORT] =
+    g_param_spec_int ("port", "port",
+                         "port for Sonarea service",
+                         1, 65535, 5457,
+                         G_PARAM_READWRITE);
+  obj_properties[PROP_RTSP_PORT] =
+    g_param_spec_int ("rtsp-port", "RTSP port",
+                         "port for RTSP service",
+                         1, 65535, 5458,
+                         G_PARAM_READWRITE);
+  obj_properties[PROP_CLOCK] =
+    g_param_spec_object ("clock", "clock",
+                         "clock to synchronise playback",
+                         GST_TYPE_NET_TIME_PROVIDER,
+                         G_PARAM_READWRITE);
+  g_object_class_install_properties (gobject_class, PROP_LAST, obj_properties);
 }
 
 static void
@@ -199,6 +240,9 @@ snra_server_finalize(GObject *object)
   SnraServer *server = (SnraServer *)(server);
   g_object_unref (server->soup);
   g_hash_table_remove_all (server->resources);
+
+  if (server->net_clock)
+    gst_object_unref (server->net_clock);
 
   G_OBJECT_CLASS (snra_server_parent_class)->finalize (object);
 }
@@ -212,3 +256,48 @@ snra_server_dispose(GObject *object)
   G_OBJECT_CLASS (snra_server_parent_class)->dispose (object);
 }
 
+static void
+snra_server_set_property (GObject * object, guint prop_id,
+    const GValue * value, GParamSpec * pspec)
+{
+  SnraServer *server = (SnraServer *)(object);
+
+  switch (prop_id) {
+    case PROP_PORT:
+      server->port = g_value_get_int (value);
+      break;
+    case PROP_RTSP_PORT:
+      server->rtsp_port = g_value_get_int (value);
+      break;
+    case PROP_CLOCK:
+      if (server->net_clock)
+        gst_object_unref (server->net_clock);
+      server->net_clock = g_value_dup_object (value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
+}
+
+static void
+snra_server_get_property (GObject * object, guint prop_id,
+    GValue * value, GParamSpec * pspec)
+{
+  SnraServer *server = (SnraServer *)(object);
+
+  switch (prop_id) {
+    case PROP_PORT:
+      g_value_set_int (value, server->port);
+      break;
+    case PROP_RTSP_PORT:
+      g_value_set_int (value, server->rtsp_port);
+      break;
+    case PROP_CLOCK:
+      g_value_set_object (value, server->net_clock);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
+}

@@ -52,6 +52,12 @@ def main(args):
     base_time = ctx['base-time']
     media_uri = '%s://%s:%d%s' % (ctx['resource-protocol'], server, ctx['resource-port'], ctx['resource-path'])
 
+    # print ctx
+
+    # make a clock slaving to the network
+    ip = socket.gethostbyname(server)
+    clock = gst.NetClientClock(None, ip, port, ctx['current-time'])
+
     # make the pipeline
     pipeline = gst.parse_launch('playbin2 name=pb');
     pipeline.set_property("uri", media_uri) # uri interface
@@ -61,10 +67,6 @@ def main(args):
     # disable the pipeline's management of base_time -- we're going
     # to set it ourselves.
     pipeline.set_new_stream_time(gst.CLOCK_TIME_NONE)
-
-    # make a clock slaving to the network
-    ip = socket.gethostbyname(server)
-    clock = gst.NetClientClock(None, ip, port, base_time)
 
     # use it in the pipeline
     pipeline.set_base_time(base_time)

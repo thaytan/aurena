@@ -124,12 +124,10 @@ snra_manager_new(const char *test_path)
   manager->rtsp = setup_rtsp(manager, rtsp_uri);
   g_free (rtsp_uri);
 
-  manager->server = g_object_new (SNRA_TYPE_SERVER, NULL);
-  manager->server->rtsp_port = 5458;
-
+  manager->server = g_object_new (SNRA_TYPE_SERVER,
+      "rtsp-port", 5458, "clock", manager->net_clock, NULL);
   /* FIXME: Implement a mapping for multiple resources */
   manager->server->test_path = test_path;
-  snra_server_set_clock (manager->server, manager->net_clock);
 
   return manager;
 }

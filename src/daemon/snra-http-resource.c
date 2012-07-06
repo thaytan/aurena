@@ -158,7 +158,7 @@ snra_http_resource_set_property (GObject * object, guint prop_id,
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
   }
-}  
+}
 
 static void
 snra_http_resource_get_property (GObject * object, guint prop_id,
@@ -174,4 +174,4 @@ snra_http_resource_get_property (GObject * object, guint prop_id,
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
   }
-}  
+}

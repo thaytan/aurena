@@ -54,7 +54,7 @@ static void snra_server_finalize(GObject *object);
 static void snra_server_dispose(GObject *object);
 
 static void
-server_api_cb (SoupServer *soup, SoupMessage *msg, 
+server_control_cb (SoupServer *soup, SoupMessage *msg, 
   const char *path, GHashTable *query,
   SoupClientContext *client, SnraServer *server)
 {
@@ -191,7 +191,7 @@ snra_server_init (SnraServer *server)
   server->port = 5457;
 
   server->soup = soup_server_new(SOUP_SERVER_PORT, server->port, NULL);
-  soup_server_add_handler (server->soup, "/api", (SoupServerCallback) server_api_cb, g_object_ref (server), g_object_unref);
+  soup_server_add_handler (server->soup, "/control", (SoupServerCallback) server_control_cb, g_object_ref (server), g_object_unref);
   soup_server_add_handler (server->soup, "/resource", (SoupServerCallback) server_resource_cb, g_object_ref (server), g_object_unref);
   soup_server_run_async (server->soup);
 

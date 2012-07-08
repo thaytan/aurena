@@ -98,6 +98,7 @@ snra_http_resource_new_transfer (SnraHttpResource *resource, SnraServer *server,
   SnraTransfer *transfer;
 
   if (!snra_http_resource_open(resource)) {
+    g_message ("Failed to open resource %s", resource->source_path);
     soup_message_set_status (msg, SOUP_STATUS_INTERNAL_SERVER_ERROR);
     return;
   }

@@ -16,40 +16,36 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  */
-#ifndef __SNRA_MANAGER_H__
-#define __SNRA_MANAGER_H__
+#ifndef __SRNA_AVAHI_H__
+#define __SRNA_AVAHI_H__
 
-#include <gst/gst.h>
-#include <libs/gst/net/gstnet.h>
-#include <gst/rtsp-server/rtsp-server.h>
+#include <glib.h>
+#include <glib-object.h>
 
 #include "snra-types.h"
-#include "snra-avahi.h"
 
 G_BEGIN_DECLS
 
-#define SNRA_TYPE_MANAGER (snra_manager_get_type ())
+#define SNRA_TYPE_AVAHI (snra_avahi_get_type ())
 
-typedef struct _SnraManagerClass SnraManagerClass;
+typedef struct _SnraAvahiClass SnraAvahiClass;
+typedef struct _SnraAvahiPrivate SnraAvahiPrivate;
 
-struct _SnraManager
+struct _SnraAvahi
 {
   GObject parent;
-
-  SnraServer *server;
-  GstNetTimeProvider *net_clock;
-  GstRTSPServer *rtsp;
-
-  SnraAvahi *avahi;
+  SnraAvahiPrivate *priv;
 };
 
-struct _SnraManagerClass
+struct _SnraAvahiClass
 {
   GObjectClass parent;
 };
 
-GType snra_manager_get_type(void);
-SnraManager *snra_manager_new(const char *test_path);
+GType snra_avahi_get_type(void);
+
+SnraAvahi *snra_avahi_new(void);
 
 G_END_DECLS
+
 #endif

@@ -19,8 +19,11 @@
 #ifndef __SRNA_TYPES_H__
 #define __SRNA_TYPES_H__
 
+#include <glib.h>
+
 G_BEGIN_DECLS
 
+typedef struct _SnraAvahi SnraAvahi;
 typedef struct _SnraHttpResource SnraHttpResource;
 typedef struct _SnraManager SnraManager;
 typedef struct _SnraServer SnraServer;

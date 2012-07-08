@@ -45,7 +45,7 @@ def clock_update(clock, base_time):
 def main(args):
     _, server = args
 
-    u = urllib.urlopen('http://' + server + ':5457/api')
+    u = urllib.urlopen('http://' + server + ':5457/control')
 
     ctx = json.load(u)
     port = ctx['clock-port']

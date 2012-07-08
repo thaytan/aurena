@@ -124,6 +124,8 @@ snra_manager_new(const char *test_path)
   manager->rtsp = setup_rtsp(manager, rtsp_uri);
   g_free (rtsp_uri);
 
+  manager->avahi = g_object_new (SNRA_TYPE_AVAHI, NULL);
+
   manager->server = g_object_new (SNRA_TYPE_SERVER,
       "rtsp-port", 5458, "clock", manager->net_clock, NULL);
   /* FIXME: Implement a mapping for multiple resources */

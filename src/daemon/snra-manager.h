@@ -39,8 +39,11 @@ struct _SnraManager
   SnraServer *server;
   GstNetTimeProvider *net_clock;
   GstRTSPServer *rtsp;
+  int rtsp_port;
 
   SnraAvahi *avahi;
+
+  GPtrArray *playlist;
 };
 
 struct _SnraManagerClass
@@ -49,7 +52,7 @@ struct _SnraManagerClass
 };
 
 GType snra_manager_get_type(void);
-SnraManager *snra_manager_new(const char *test_path);
+SnraManager *snra_manager_new(const char *playlist);
 
 G_END_DECLS
 #endif

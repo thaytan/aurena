@@ -65,6 +65,8 @@ static void
 handle_connection_closed_cb (SoupSession *session, SoupMessage *msg, SnraClient *client)
 {
   g_print ("HTTP connection closed, status %d (%s)\n", msg->status_code, msg->reason_phrase);
+  if (client->player)
+    gst_element_set_state (client->player, GST_STATE_READY);
   if (client->timeout == 0)
     client->timeout = g_timeout_add_seconds (1, (GSourceFunc) try_reconnect, client);
 }

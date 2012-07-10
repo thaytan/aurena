@@ -28,7 +28,6 @@
 #include <libsoup/soup-address.h>
 
 #include "snra-http-resource.h"
-#include "snra-server.h"
 
 G_DEFINE_TYPE (SnraHttpResource, snra_http_resource, G_TYPE_OBJECT);
 
@@ -48,7 +47,6 @@ static void snra_http_resource_get_property (GObject * object, guint prop_id,
 
 typedef struct _SnraTransfer
 {
-  SnraServer *server;
   SnraHttpResource *resource;
   gsize position;
 } SnraTransfer;
@@ -57,10 +55,14 @@ static gboolean
 snra_http_resource_open(SnraHttpResource *resource)
 {
   if (resource->data == NULL) {
+    GError *error = NULL;
     g_print ("Opening resource %s\n", resource->source_path);
-    resource->data = g_mapped_file_new (resource->source_path, FALSE, NULL);
-    if (resource->data == NULL)
+    resource->data = g_mapped_file_new (resource->source_path, FALSE, &error);
+    if (resource->data == NULL) {
+      g_message ("Failed to open resource %s: %s", resource->source_path, error->message);
+      g_error_free (error);
       return FALSE;
+    }
   }
   resource->use_count++;
   return TRUE;
@@ -87,25 +89,22 @@ resource_finished (SoupMessage *msg, SnraTransfer *transfer)
   /* Close the resource, destroy the transfer */
   snra_http_resource_close(transfer->resource);
   g_object_unref (transfer->resource);
-  g_object_unref (transfer->server);
   g_free (transfer);
 }
 
 void
-snra_http_resource_new_transfer (SnraHttpResource *resource, SnraServer *server, SoupMessage *msg)
+snra_http_resource_new_transfer (SnraHttpResource *resource, SoupMessage *msg)
 {
   /* Create a new transfer structure, and pass the contents of our resource to it */
   SnraTransfer *transfer;
 
   if (!snra_http_resource_open(resource)) {
-    g_message ("Failed to open resource %s", resource->source_path);
     soup_message_set_status (msg, SOUP_STATUS_INTERNAL_SERVER_ERROR);
     return;
   }
 
   transfer = g_new0 (SnraTransfer, 1);
   transfer->resource = g_object_ref (resource);
-  transfer->server = g_object_ref (server);
 
   {
     soup_message_set_status (msg, SOUP_STATUS_OK);

@@ -43,8 +43,10 @@ struct _SnraServer
   GstNetTimeProvider *net_clock;
 
   GHashTable *resources;
+  guint current_resource;
 
-  const gchar *test_path;
+  SnraHttpResource *(*get_resource)(SnraServer *server, guint resource_id, void *cb_data);
+  void *get_resource_userdata;
 };
 
 struct _SnraServerClass
@@ -54,8 +56,13 @@ struct _SnraServerClass
 
 GType snra_server_get_type(void);
 
+void snra_server_set_resource_callback (SnraServer *server, void *userdata);
+void snra_server_start (SnraServer *server);
+void snra_server_stop (SnraServer *server);
 void snra_server_set_base_time(SnraServer *server, GstClockTime base_time);
 void snra_server_set_clock (SnraServer *server, GstNetTimeProvider *net_clock);
+void snra_server_set_resource_cb (SnraServer *server, 
+  SnraHttpResource *(*get_resource)(SnraServer *server, guint resource_id, void *cb_data), void *userdata);
 
 G_END_DECLS
 #endif

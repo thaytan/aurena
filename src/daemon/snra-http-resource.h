@@ -48,7 +48,7 @@ struct _SnraHttpResourceClass
 
 GType snra_http_resource_get_type(void);
 
-void snra_http_resource_new_transfer (SnraHttpResource *resource, SnraServer *server, SoupMessage *msg);
+void snra_http_resource_new_transfer (SnraHttpResource *resource, SoupMessage *msg);
 
 G_END_DECLS
 #endif

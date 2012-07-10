@@ -1,4 +1,4 @@
-AC_PREREQ([2.69])
+AC_PREREQ([2.68])
 AC_INIT([sonarea], [0.1], [thaytan@noraisin.net])
 
 AM_INIT_AUTOMAKE([-Wno-portability 1.11 no-dist-gzip dist-bzip2 dist-xz tar-ustar])
@@ -19,7 +19,7 @@ AC_PROG_CC_STDC
 LT_INIT
 
 PKG_PROG_PKG_CONFIG([0.22])
-PKG_CHECK_MODULES(SNRA, [gobject-2.0 glib-2.0 avahi-gobject >= 0.6.31 json-glib-1.0 libsoup-2.4 gstreamer-net-1.0 gstreamer-rtsp-server-1.0])
+PKG_CHECK_MODULES(SNRA, [gobject-2.0 glib-2.0 avahi-gobject >= 0.6.30 json-glib-1.0 libsoup-2.4 gstreamer-net-1.0 gstreamer-rtsp-server-1.0])
 
 EXTRA_CFLAGS="-DGST_USE_UNSTABLE_API"
 AC_SUBST([EXTRA_CFLAGS])

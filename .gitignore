@@ -16,6 +16,7 @@ Makefile
 Makefile.in
 missing
 src/sonarea
+src/client/simple-client
 stamp-h1
 .deps
 *.swp

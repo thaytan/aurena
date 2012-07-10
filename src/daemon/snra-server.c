@@ -43,6 +43,13 @@ enum
   PROP_LAST
 };
 
+typedef struct _SnraClientConnection SnraClientConnection;
+
+struct _SnraClientConnection
+{
+  SoupMessage *msg;
+};
+
 static GParamSpec *obj_properties[PROP_LAST] = { NULL, };
 
 static void snra_server_set_property (GObject * object, guint prop_id,
@@ -54,9 +61,57 @@ static void snra_server_finalize(GObject *object);
 static void snra_server_dispose(GObject *object);
 
 static void
-server_control_cb (SoupServer *soup, SoupMessage *msg, 
-  const char *path, GHashTable *query,
-  SoupClientContext *client, SnraServer *server)
+server_send_json_to_client (SnraServer *server, SnraClientConnection *client, JsonBuilder *builder)
+{
+  JsonGenerator *gen;
+  JsonNode * root;
+  gchar *body;
+
+  gen = json_generator_new ();
+  root = json_builder_get_root (builder);
+
+  json_generator_set_root (gen, root);
+  body = json_generator_to_data (gen, NULL);
+
+  json_node_free (root);
+  g_object_unref (gen);
+  g_object_unref (builder);
+
+  soup_message_body_append (client->msg->response_body,/* "application/json", */ SOUP_MEMORY_TAKE, body, strlen(body));
+  soup_server_unpause_message (server->soup, client->msg);
+}
+
+static void
+server_send_enrol_msg (SnraServer *server, SnraClientConnection *client)
+{
+  JsonBuilder *builder = json_builder_new ();
+  int clock_port;
+  GstClock *clock;
+  GstClockTime cur_time;
+
+  g_object_get (server->net_clock, "clock", &clock, NULL);
+  cur_time = gst_clock_get_time (clock);
+  gst_object_unref (clock);
+
+  json_builder_begin_object (builder);
+
+  json_builder_set_member_name (builder, "msgtype");
+  json_builder_add_string_value (builder, "enrol");
+
+  g_object_get (server->net_clock, "port", &clock_port, NULL);
+  json_builder_set_member_name (builder, "clock-port");
+  json_builder_add_int_value (builder, clock_port);
+
+  json_builder_set_member_name (builder, "current-time");
+  json_builder_add_int_value (builder, (gint64)(cur_time));
+
+  json_builder_end_object (builder);
+
+  server_send_json_to_client (server, client, builder);
+}
+
+static void
+server_send_play_media_msg (SnraServer *server, SnraClientConnection *client)
 {
   JsonBuilder *builder = json_builder_new ();
   JsonGenerator *gen;
@@ -66,17 +121,14 @@ server_control_cb (SoupServer *soup, SoupMessage *msg,
   GstClock *clock;
   GstClockTime cur_time;
 
-  g_print("Got a hit on %s\n", path);
-
   g_object_get (server->net_clock, "clock", &clock, NULL);
   cur_time = gst_clock_get_time (clock);
   gst_object_unref (clock);
 
   json_builder_begin_object (builder);
 
-  g_object_get (server->net_clock, "port", &clock_port, NULL);
-  json_builder_set_member_name (builder, "clock-port");
-  json_builder_add_int_value (builder, clock_port);
+  json_builder_set_member_name (builder, "msgtype");
+  json_builder_add_string_value (builder, "play-media");
 
 #if 1
   /* Serve via HTTP */
@@ -91,6 +143,7 @@ server_control_cb (SoupServer *soup, SoupMessage *msg,
   json_builder_set_member_name (builder, "resource-port");
   json_builder_add_int_value (builder, server->rtsp_port);
 #endif
+
   json_builder_set_member_name (builder, "resource-path");
   json_builder_add_string_value (builder, "/resource/1");
 
@@ -103,25 +156,26 @@ server_control_cb (SoupServer *soup, SoupMessage *msg,
   json_builder_set_member_name (builder, "base-time");
   json_builder_add_int_value (builder, (gint64)(server->base_time));
 
-  json_builder_set_member_name (builder, "current-time");
-  json_builder_add_int_value (builder, (gint64)(cur_time));
-
   json_builder_end_object (builder);
 
-  gen = json_generator_new ();
-  root = json_builder_get_root (builder);
+  server_send_json_to_client (server, client, builder);
+}
 
-  json_generator_set_root (gen, root);
-  body = json_generator_to_data (gen, NULL);
+static void
+server_client_cb (SoupServer *soup, SoupMessage *msg,
+  const char *path, GHashTable *query,
+  SoupClientContext *client, SnraServer *server)
+{
+  SnraClientConnection *client_conn = g_new0(SnraClientConnection, 1);
 
-  json_node_free (root);
-  g_object_unref (gen);
-  g_object_unref (builder);
+  client_conn->msg = msg;
 
+  g_print("Got a hit on %s\n", path);
+  soup_message_headers_set_encoding (msg->response_headers, SOUP_ENCODING_CHUNKED);
   soup_message_set_status (msg, SOUP_STATUS_OK);
-  soup_message_set_response (msg, "application/json", SOUP_MEMORY_COPY, body, strlen(body));
 
-  g_free (body);
+  server_send_enrol_msg(server, client_conn);
+  server_send_play_media_msg (server, client_conn);
 }
 
 static SnraHttpResource *
@@ -191,7 +245,7 @@ snra_server_init (SnraServer *server)
   server->port = 5457;
 
   server->soup = soup_server_new(SOUP_SERVER_PORT, server->port, NULL);
-  soup_server_add_handler (server->soup, "/control", (SoupServerCallback) server_control_cb, g_object_ref (server), g_object_unref);
+  soup_server_add_handler (server->soup, "/client", (SoupServerCallback) server_client_cb, g_object_ref (server), g_object_unref);
   soup_server_add_handler (server->soup, "/resource", (SoupServerCallback) server_resource_cb, g_object_ref (server), g_object_unref);
   soup_server_run_async (server->soup);
 
@@ -237,7 +291,7 @@ snra_server_class_init (SnraServerClass *server_class)
 static void
 snra_server_finalize(GObject *object)
 {
-  SnraServer *server = (SnraServer *)(server);
+  SnraServer *server = (SnraServer *)(object);
   g_object_unref (server->soup);
   g_hash_table_remove_all (server->resources);
 
@@ -250,7 +304,7 @@ snra_server_finalize(GObject *object)
 static void
 snra_server_dispose(GObject *object)
 {
-  SnraServer *server = (SnraServer *)(server);
+  SnraServer *server = (SnraServer *)(object);
   soup_server_quit (server->soup);
 
   G_OBJECT_CLASS (snra_server_parent_class)->dispose (object);

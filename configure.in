@@ -1,7 +1,9 @@
 AC_PREREQ([2.69])
 AC_INIT([sonarea], [0.1], [thaytan@noraisin.net])
 
-AM_INIT_AUTOMAKE([-Wno-portability 1.11 silent-rules no-dist-gzip dist-bzip2 dist-xz tar-ustar])
+AM_INIT_AUTOMAKE([-Wno-portability 1.11 no-dist-gzip dist-bzip2 dist-xz tar-ustar])
+
+AM_SILENT_RULES([yes])
 
 AM_MAINTAINER_MODE([enable])
 

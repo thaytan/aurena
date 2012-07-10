@@ -46,13 +46,14 @@ def main(args):
     _, server = args
 
     u = urllib.urlopen('http://' + server + ':5457/control')
+    print u.read()
 
     ctx = json.load(u)
     port = ctx['clock-port']
     base_time = ctx['base-time']
     media_uri = '%s://%s:%d%s' % (ctx['resource-protocol'], server, ctx['resource-port'], ctx['resource-path'])
 
-    # print ctx
+    print ctx
 
     # make a clock slaving to the network
     ip = socket.gethostbyname(server)

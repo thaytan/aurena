@@ -18,11 +18,13 @@ struct _SnraClient
 {
   GObject parent;
 
-  GstNetClientClock *net_clock;
+  GstClock *net_clock;
   gchar *server_host;
 
   SoupSession *soup;
   JsonParser *json;
+
+  GstElement *player;
 };
 
 struct _SnraClientClass

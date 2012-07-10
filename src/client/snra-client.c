@@ -67,6 +67,94 @@ handle_connection_closed_cb (SoupSession *session, SoupMessage *msg, SnraClient 
 }
 
 static void
+handle_enrol_message (SnraClient *client, JsonReader *reader)
+{
+  int clock_port;
+  GstClockTime cur_time;
+  GResolver *resolver;
+  GList *names;
+ 
+  if (!json_reader_read_member (reader, "clock-port"))
+    return; /* Invalid message */
+  clock_port = json_reader_get_int_value (reader);
+  json_reader_end_member (reader);
+
+  if (!json_reader_read_member (reader, "current-time"))
+    return; /* Invalid message */
+  cur_time = (GstClockTime)(json_reader_get_int_value (reader));
+  json_reader_end_member (reader);
+
+  resolver = g_resolver_get_default ();
+  if (resolver == NULL)
+    return;
+
+  names = g_resolver_lookup_by_name (resolver, client->server_host, NULL, NULL);
+  if (names) {
+    gchar *name = g_inet_address_to_string ((GInetAddress *)(names->data));
+
+    if (client->net_clock)
+      gst_object_unref (client->net_clock);
+    g_print ("Creating net clock at %s:%d time %" GST_TIME_FORMAT "\n", name, clock_port, GST_TIME_ARGS (cur_time));
+    client->net_clock = gst_net_client_clock_new ("net_clock", name, clock_port, cur_time);
+
+    g_resolver_free_addresses (names);
+  }
+
+  g_object_unref (resolver);
+}
+
+static void
+handle_play_media_message (SnraClient *client, JsonReader *reader)
+{
+  const gchar *protocol, *path;
+  int port;
+  GstClockTime base_time;
+  gchar *uri;
+  
+  if (!json_reader_read_member (reader, "resource-protocol"))
+    return; /* Invalid message */
+  protocol = json_reader_get_string_value (reader);
+  json_reader_end_member (reader);
+
+  if (!json_reader_read_member (reader, "resource-port"))
+    return; /* Invalid message */
+  port = json_reader_get_int_value (reader);
+  json_reader_end_member (reader);
+
+  if (!json_reader_read_member (reader, "resource-path"))
+    return; /* Invalid message */
+  path = json_reader_get_string_value (reader);
+  json_reader_end_member (reader);
+
+  if (!json_reader_read_member (reader, "base-time"))
+    return; /* Invalid message */
+  base_time = json_reader_get_int_value (reader);
+  json_reader_end_member (reader);
+
+  if (client->player == NULL) {
+    client->player = gst_element_factory_make ("playbin", NULL);
+    if (client->player == NULL) {
+      g_warning ("Failed to construct playbin");
+      return;
+    }
+  }
+  else {
+    gst_element_set_state (client->player, GST_STATE_READY);
+  }
+
+  uri = g_strdup_printf ("%s://%s:%d%s", protocol, client->server_host, port, path);
+  g_print ("Playing URI %s base_time %" GST_TIME_FORMAT "\n", uri, GST_TIME_ARGS (base_time));
+  g_object_set (client->player, "uri", uri, NULL);
+  g_free (uri);
+
+  gst_element_set_start_time (client->player, GST_CLOCK_TIME_NONE);
+  gst_element_set_base_time (client->player, base_time);
+  gst_pipeline_use_clock (GST_PIPELINE (client->player), client->net_clock);
+  
+  gst_element_set_state (client->player, GST_STATE_PLAYING);
+}
+
+static void
 handle_received_chunk (SoupMessage *msg, SoupBuffer *chunk, SnraClient *client)
 {
   if (client->json == NULL)
@@ -74,6 +162,15 @@ handle_received_chunk (SoupMessage *msg, SoupBuffer *chunk, SnraClient *client)
   if (json_parser_load_from_data (client->json, chunk->data, chunk->length, NULL)) {
     JsonReader *reader = json_reader_new (json_parser_get_root (client->json));
     g_print ("Parsed a chunk of JSON\n");
+    if (json_reader_read_member (reader, "msg-type")) {
+      const char *msg_type = json_reader_get_string_value (reader);
+      json_reader_end_member (reader);
+      g_print ("Message type %s\n", msg_type);
+      if (g_str_equal (msg_type, "enrol"))
+        handle_enrol_message (client, reader);
+      else if (g_str_equal (msg_type, "play-media"))
+        handle_play_media_message (client, reader);
+    }
     g_object_unref (reader);
   }
 }
@@ -138,6 +235,8 @@ snra_client_finalize(GObject *object)
     g_object_unref (client->soup);
   if (client->json)
     g_object_unref (client->json);
+  if (client->player)
+    gst_object_unref (client->player);
 
   g_free (client->server_host);
 

@@ -95,7 +95,7 @@ server_send_enrol_msg (SnraServer *server, SnraClientConnection *client)
 
   json_builder_begin_object (builder);
 
-  json_builder_set_member_name (builder, "msgtype");
+  json_builder_set_member_name (builder, "msg-type");
   json_builder_add_string_value (builder, "enrol");
 
   g_object_get (server->net_clock, "port", &clock_port, NULL);
@@ -127,7 +127,7 @@ server_send_play_media_msg (SnraServer *server, SnraClientConnection *client)
 
   json_builder_begin_object (builder);
 
-  json_builder_set_member_name (builder, "msgtype");
+  json_builder_set_member_name (builder, "msg-type");
   json_builder_add_string_value (builder, "play-media");
 
 #if 1
@@ -195,7 +195,7 @@ snra_server_get_resource(SnraServer *server, const char *resource_path)
 static void
 dump_header(const char *name, const char *value, gpointer user_data)
 {
-  g_print("%s: %s\n", name, value);
+  // g_print("%s: %s\n", name, value);
 }
 
 static void

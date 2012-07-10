@@ -25,6 +25,8 @@ struct _SnraClient
   JsonParser *json;
 
   GstElement *player;
+
+  guint timeout;
 };
 
 struct _SnraClientClass

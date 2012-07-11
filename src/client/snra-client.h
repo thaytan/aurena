@@ -2,7 +2,7 @@
 #define __SNRA_CLIENT_H__
 
 #include <gst/gst.h>
-#include <libs/gst/net/gstnet.h>
+#include <gst/net/gstnet.h>
 #include <libsoup/soup.h>
 #include <json-glib/json-glib.h>
 

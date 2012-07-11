@@ -21,7 +21,7 @@
 #define __SNRA_SERVER_H__
 
 #include <gst/gst.h>
-#include <libs/gst/net/gstnet.h>
+#include <gst/net/gstnet.h>
 #include <libsoup/soup.h>
 
 #include "snra-types.h"

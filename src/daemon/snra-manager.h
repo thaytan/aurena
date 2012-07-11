@@ -20,7 +20,7 @@
 #define __SNRA_MANAGER_H__
 
 #include <gst/gst.h>
-#include <libs/gst/net/gstnet.h>
+#include <gst/net/gstnet.h>
 #include <gst/rtsp-server/rtsp-server.h>
 
 #include "snra-types.h"

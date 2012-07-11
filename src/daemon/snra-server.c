@@ -60,6 +60,7 @@ static void snra_server_get_property (GObject * object, guint prop_id,
 
 static void snra_server_finalize(GObject *object);
 static void snra_server_dispose(GObject *object);
+static void free_client_connection (gpointer data);
 
 static void
 server_send_json_to_client (SnraServer *server, SnraClientConnection *client, JsonBuilder *builder)
@@ -176,6 +177,25 @@ server_send_play_media_msg (SnraServer *server, SnraClientConnection *client, gu
   server_send_json_to_client (server, client, builder);
 }
 
+static gint
+find_client_by_message (SnraClientConnection *client, SoupMessage *wanted)
+{
+  if (client->msg == wanted)
+    return 0;
+  return 1;
+}
+
+static void
+server_client_disconnect (SoupMessage *message, SnraServer *server)
+{
+  GList *client = g_list_find_custom (server->clients, message, (GCompareFunc)(find_client_by_message));
+
+  if (client) {
+    free_client_connection ((SnraClientConnection *)(client->data));
+    server->clients = g_list_delete_link (server->clients, client);
+  }
+}
+
 static void
 server_client_cb (SoupServer *soup, SoupMessage *msg,
   const char *path, GHashTable *query,
@@ -187,6 +207,8 @@ server_client_cb (SoupServer *soup, SoupMessage *msg,
 
   soup_message_headers_set_encoding (msg->response_headers, SOUP_ENCODING_CHUNKED);
   soup_message_set_status (msg, SOUP_STATUS_OK);
+
+  g_signal_connect (msg, "finished", G_CALLBACK (server_client_disconnect), server);
 
   server->clients = g_list_prepend (server->clients, client_conn);
 
@@ -317,7 +339,7 @@ snra_server_finalize(GObject *object)
 }
 
 static void
-free_client_conn (gpointer data)
+free_client_connection (gpointer data)
 {
   SnraClientConnection *client = (SnraClientConnection *)(data);
   soup_message_body_complete (client->msg->response_body);
@@ -329,7 +351,7 @@ snra_server_dispose(GObject *object)
 {
   SnraServer *server = (SnraServer *)(object);
 
-  g_list_free_full (server->clients, free_client_conn);
+  g_list_free_full (server->clients, free_client_connection);
   server->clients = NULL;
 
   soup_server_quit (server->soup);

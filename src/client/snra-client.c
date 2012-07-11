@@ -144,7 +144,7 @@ handle_play_media_message (SnraClient *client, JsonReader *reader)
     }
   }
   else {
-    gst_element_set_state (client->player, GST_STATE_READY);
+    gst_element_set_state (client->player, GST_STATE_NULL);
   }
 
   uri = g_strdup_printf ("%s://%s:%d%s", protocol, client->server_host, port, path);

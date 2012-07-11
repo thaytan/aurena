@@ -194,7 +194,7 @@ snra_manager_new(const char *playlist_file)
   read_playlist_file (manager, playlist_file);
 
   if (manager->playlist->len) {
-    char *rtsp_uri = g_strdup_printf("file://%s", g_ptr_array_index (manager->playlist, 0));
+    char *rtsp_uri = g_strdup_printf("file://%s", (gchar *)(g_ptr_array_index (manager->playlist, 0)));
     add_rtsp_uri (manager, 1, rtsp_uri);
     g_free (rtsp_uri);
 

@@ -109,6 +109,43 @@ handle_enrol_message (SnraClient *client, JsonReader *reader)
 }
 
 static void
+on_eos_msg (GstBus *bus, GstMessage *msg, SnraClient *client)
+{
+  g_print ("Got EOS message\n");
+}
+
+static void
+on_error_msg (GstBus *bus, GstMessage *msg, SnraClient *client)
+{
+  GError *err;
+  gchar *dbg_info = NULL;
+    
+  gst_message_parse_error (msg, &err, &dbg_info);
+  g_printerr ("ERROR from element %s: %s\n",
+      GST_OBJECT_NAME (msg->src), err->message);
+  g_printerr ("Debugging info: %s\n", (dbg_info) ? dbg_info : "none");
+  g_error_free (err);
+  g_free (dbg_info);
+}
+
+static void
+construct_player (SnraClient *client)
+{
+  GstBus *bus;
+
+  client->player = gst_element_factory_make ("playbin", NULL);
+  if (client->player == NULL) {
+    g_warning ("Failed to construct playbin");
+    return;
+  }
+  bus = gst_element_get_bus (GST_ELEMENT (client->player));
+  gst_bus_add_signal_watch (bus);
+  g_signal_connect (bus, "message::eos", (GCallback)(on_eos_msg), client);
+  g_signal_connect (bus, "message::error", (GCallback)(on_error_msg), client);
+  gst_object_unref (bus);
+}
+
+static void
 handle_play_media_message (SnraClient *client, JsonReader *reader)
 {
   const gchar *protocol, *path;
@@ -137,11 +174,9 @@ handle_play_media_message (SnraClient *client, JsonReader *reader)
   json_reader_end_member (reader);
 
   if (client->player == NULL) {
-    client->player = gst_element_factory_make ("playbin", NULL);
-    if (client->player == NULL) {
-      g_warning ("Failed to construct playbin");
+    construct_player (client);
+    if (client->player == NULL)
       return;
-    }
   }
   else {
     gst_element_set_state (client->player, GST_STATE_NULL);
@@ -166,11 +201,10 @@ handle_received_chunk (SoupMessage *msg, SoupBuffer *chunk, SnraClient *client)
     client->json = json_parser_new();
   if (json_parser_load_from_data (client->json, chunk->data, chunk->length, NULL)) {
     JsonReader *reader = json_reader_new (json_parser_get_root (client->json));
-    g_print ("Parsed a chunk of JSON\n");
     if (json_reader_read_member (reader, "msg-type")) {
       const char *msg_type = json_reader_get_string_value (reader);
       json_reader_end_member (reader);
-      g_print ("Message type %s\n", msg_type);
+      g_print ("event of type %s\n", msg_type);
       if (g_str_equal (msg_type, "enrol"))
         handle_enrol_message (client, reader);
       else if (g_str_equal (msg_type, "play-media"))
@@ -186,13 +220,9 @@ connect_to_server (SnraClient *client, const gchar *server)
   SoupMessage *msg;
   char *url = g_strdup_printf ("http://%s:5457/client", server);
 
-  g_print ("Requesting %s\n", url);
   msg = soup_message_new ("GET", url);
-
   soup_message_body_set_accumulate (msg->response_body, FALSE);
-
   g_signal_connect (msg, "got-chunk", (GCallback) handle_received_chunk, client);
-
   soup_session_queue_message (client->soup, msg, (SoupSessionCallback) handle_connection_closed_cb, client);
   g_free (url);
 }
@@ -240,8 +270,12 @@ snra_client_finalize(GObject *object)
     g_object_unref (client->soup);
   if (client->json)
     g_object_unref (client->json);
-  if (client->player)
+  if (client->player) {
+    GstBus *bus = gst_element_get_bus (client->player);
+    gst_bus_remove_signal_watch (bus);
+    gst_object_unref (bus);
     gst_object_unref (client->player);
+  }
 
   g_free (client->server_host);
 

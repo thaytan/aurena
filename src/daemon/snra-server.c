@@ -78,8 +78,19 @@ server_send_json_to_client (SnraServer *server, SnraClientConnection *client, Js
   g_object_unref (gen);
   g_object_unref (builder);
 
-  soup_message_body_append (client->msg->response_body,/* "application/json", */ SOUP_MEMORY_TAKE, body, strlen(body));
-  soup_server_unpause_message (server->soup, client->msg);
+  if (client) {
+    soup_message_body_append (client->msg->response_body,/* "application/json", */ SOUP_MEMORY_TAKE, body, strlen(body));
+    soup_server_unpause_message (server->soup, client->msg);
+  }
+  else {
+    /* client == NULL - send to all clients */
+    GList *cur;
+    for (cur = server->clients; cur != NULL; cur = g_list_next (cur)) {
+      client = (SnraClientConnection *)(cur->data);
+      soup_message_body_append (client->msg->response_body,/* "application/json", */ SOUP_MEMORY_TAKE, body, strlen(body));
+      soup_server_unpause_message (server->soup, client->msg);
+    }
+  }
 }
 
 static void
@@ -152,8 +163,8 @@ server_send_play_media_msg (SnraServer *server, SnraClientConnection *client, gu
   g_free (resource_path);
 
   if (server->base_time == -1) {
-    // configure a base time 0.5 seconds in the future
-    server->base_time = cur_time + (GST_SECOND / 2);
+    // configure a base time 0.25 seconds in the future
+    server->base_time = cur_time + (GST_SECOND / 4);
     g_print ("Base time now %" G_GUINT64_FORMAT "\n", server->base_time);
   }
 
@@ -176,6 +187,8 @@ server_client_cb (SoupServer *soup, SoupMessage *msg,
 
   soup_message_headers_set_encoding (msg->response_headers, SOUP_ENCODING_CHUNKED);
   soup_message_set_status (msg, SOUP_STATUS_OK);
+
+  server->clients = g_list_prepend (server->clients, client_conn);
 
   server_send_enrol_msg(server, client_conn);
   if (server->current_resource)
@@ -304,9 +317,21 @@ snra_server_finalize(GObject *object)
 }
 
 static void
+free_client_conn (gpointer data)
+{
+  SnraClientConnection *client = (SnraClientConnection *)(data);
+  soup_message_body_complete (client->msg->response_body);
+  g_free (client);
+}
+
+static void
 snra_server_dispose(GObject *object)
 {
   SnraServer *server = (SnraServer *)(object);
+
+  g_list_free_full (server->clients, free_client_conn);
+  server->clients = NULL;
+
   soup_server_quit (server->soup);
 
   G_OBJECT_CLASS (snra_server_parent_class)->dispose (object);
@@ -370,9 +395,25 @@ snra_server_stop (SnraServer *server)
   soup_server_quit (server->soup);
 }
 
-void snra_server_set_resource_cb (SnraServer *server, 
+void
+snra_server_set_resource_cb (SnraServer *server, 
   SnraHttpResource *(*callback)(SnraServer *server, guint resource_id, void *cb_data), void *userdata)
 {
   server->get_resource = callback;
   server->get_resource_userdata = userdata;
+}
+
+void
+snra_server_add_handler (SnraServer *server, const gchar *path, SoupServerCallback callback, gpointer user_data,
+    GDestroyNotify destroy_notify)
+{
+  soup_server_add_handler (server->soup, path, callback, user_data, destroy_notify);
+}
+
+void
+snra_server_play_resource (SnraServer *server, guint resource_id)
+{
+  server->current_resource = resource_id;
+  server->base_time = GST_CLOCK_TIME_NONE;
+  server_send_play_media_msg (server, NULL, resource_id);
 }

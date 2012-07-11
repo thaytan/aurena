@@ -75,6 +75,17 @@ failed:
   }
 }
 
+
+static void
+control_callback (SoupServer *soup, SoupMessage *msg, 
+  const char *path, GHashTable *query,
+  SoupClientContext *client, SnraManager *manager)
+{
+  g_print ("Hit on control API %s\n", path);
+  /* Just always skip to another random track for now */
+  snra_server_play_resource (manager->server, g_random_int_range (0, manager->playlist->len) + 1);
+}
+
 static void
 snra_manager_init (SnraManager *manager)
 {
@@ -88,6 +99,8 @@ snra_manager_init (SnraManager *manager)
   manager->server = g_object_new (SNRA_TYPE_SERVER,
       "rtsp-port", manager->rtsp_port, "clock", manager->net_clock, NULL);
   snra_server_set_resource_cb (manager->server, snra_manager_get_resource_cb, manager);
+  snra_server_add_handler (manager->server, "/control", (SoupServerCallback) control_callback,
+      g_object_ref (G_OBJECT(manager)), g_object_unref);
 }
 
 static void
@@ -185,7 +198,7 @@ snra_manager_new(const char *playlist_file)
     add_rtsp_uri (manager, 1, rtsp_uri);
     g_free (rtsp_uri);
 
-    manager->server->current_resource = g_random_int_range (0, manager->playlist->len) + 1;
+    snra_server_play_resource (manager->server, g_random_int_range (0, manager->playlist->len) + 1);
   }
 
   snra_server_start (manager->server);

@@ -22,7 +22,7 @@
 
 #include <gst/gst.h>
 #include <libs/gst/net/gstnet.h>
-#include <libsoup/soup-types.h>
+#include <libsoup/soup.h>
 
 #include "snra-types.h"
 
@@ -45,8 +45,11 @@ struct _SnraServer
   GHashTable *resources;
   guint current_resource;
 
+  GList *clients;
+
   SnraHttpResource *(*get_resource)(SnraServer *server, guint resource_id, void *cb_data);
   void *get_resource_userdata;
+
 };
 
 struct _SnraServerClass
@@ -63,6 +66,10 @@ void snra_server_set_base_time(SnraServer *server, GstClockTime base_time);
 void snra_server_set_clock (SnraServer *server, GstNetTimeProvider *net_clock);
 void snra_server_set_resource_cb (SnraServer *server, 
   SnraHttpResource *(*get_resource)(SnraServer *server, guint resource_id, void *cb_data), void *userdata);
+
+void snra_server_add_handler (SnraServer *server, const gchar *path, SoupServerCallback callback, gpointer user_data, GDestroyNotify destroy_notify);
+
+void snra_server_play_resource (SnraServer *server, guint resource_id);
 
 G_END_DECLS
 #endif

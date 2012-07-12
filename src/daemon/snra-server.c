@@ -88,9 +88,10 @@ server_send_json_to_client (SnraServer *server, SnraClientConnection *client, Js
     GList *cur;
     for (cur = server->clients; cur != NULL; cur = g_list_next (cur)) {
       client = (SnraClientConnection *)(cur->data);
-      soup_message_body_append (client->msg->response_body,/* "application/json", */ SOUP_MEMORY_TAKE, body, strlen(body));
+      soup_message_body_append (client->msg->response_body,/* "application/json", */ SOUP_MEMORY_COPY, body, strlen(body));
       soup_server_unpause_message (server->soup, client->msg);
     }
+    g_free (body);
   }
 }
 

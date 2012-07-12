@@ -111,7 +111,14 @@ handle_enrol_message (SnraClient *client, JsonReader *reader)
 static void
 on_eos_msg (GstBus *bus, GstMessage *msg, SnraClient *client)
 {
+  SoupMessage *soup_msg;
+  char *url = g_strdup_printf ("http://%s:5457/control/next", client->server_host);
+
   g_print ("Got EOS message\n");
+
+  soup_msg = soup_message_new ("GET", url);
+  soup_session_send_message (client->soup, soup_msg);
+  g_free (url);
 }
 
 static void

@@ -202,6 +202,23 @@ handle_play_media_message (SnraClient *client, JsonReader *reader)
 }
 
 static void
+handle_play_message (SnraClient *client, JsonReader *reader)
+{
+  GstClockTime base_time;
+
+  if (!json_reader_read_member (reader, "base-time"))
+    return; /* Invalid message */
+  base_time = json_reader_get_int_value (reader);
+  json_reader_end_member (reader);
+
+  if (client->player) {
+    g_print ("Playing base_time %" GST_TIME_FORMAT "\n", GST_TIME_ARGS (base_time));
+    gst_element_set_base_time (GST_ELEMENT (client->player), base_time);
+    gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PLAYING);
+  }
+}
+
+static void
 handle_received_chunk (SoupMessage *msg, SoupBuffer *chunk, SnraClient *client)
 {
   if (client->json == NULL)
@@ -221,8 +238,7 @@ handle_received_chunk (SoupMessage *msg, SoupBuffer *chunk, SnraClient *client)
             gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PAUSED);
       }
       else if (g_str_equal (msg_type, "play")) {
-        if (client->player)
-            gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PLAYING);
+        handle_play_message (client, reader);
       }
     }
     g_object_unref (reader);

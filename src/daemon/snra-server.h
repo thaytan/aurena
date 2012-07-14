@@ -40,6 +40,8 @@ struct _SnraServer
   int rtsp_port;
 
   GstClockTime base_time;
+  GstClockTime stream_time;
+
   GstNetTimeProvider *net_clock;
 
   GHashTable *resources;

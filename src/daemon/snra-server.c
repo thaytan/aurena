@@ -279,6 +279,7 @@ snra_server_init (SnraServer *server)
   SoupSocket *socket;
 
   server->base_time = GST_CLOCK_TIME_NONE;
+  server->stream_time = GST_CLOCK_TIME_NONE;
   server->port = 5457;
 
   server->soup = soup_server_new(SOUP_SERVER_PORT, server->port, NULL);
@@ -442,17 +443,24 @@ snra_server_play_resource (SnraServer *server, guint resource_id)
 
 void snra_server_send_play (SnraServer *server)
 {
-
   JsonBuilder *builder = json_builder_new ();
   JsonGenerator *gen;
   JsonNode * root;
+  GstClock *clock;
+  GstClockTime cur_time;
 
   json_builder_begin_object (builder);
 
   json_builder_set_member_name (builder, "msg-type");
   json_builder_add_string_value (builder, "play");
 
-  /* FIXME: Update base time to match length of time paused */
+  /* Update base time to match length of time paused */
+  g_object_get (server->net_clock, "clock", &clock, NULL);
+  server->base_time = gst_clock_get_time (clock) + (GST_SECOND / 4) - server->stream_time;
+  gst_object_unref (clock);
+
+  json_builder_set_member_name (builder, "base-time");
+  json_builder_add_int_value (builder, (gint64)(server->base_time));
 
   json_builder_end_object (builder);
 
@@ -464,6 +472,8 @@ void snra_server_send_pause (SnraServer *server)
   JsonBuilder *builder = json_builder_new ();
   JsonGenerator *gen;
   JsonNode * root;
+  GstClock *clock;
+  GstClockTime cur_time;
 
   json_builder_begin_object (builder);
 
@@ -473,4 +483,12 @@ void snra_server_send_pause (SnraServer *server)
   json_builder_end_object (builder);
 
   server_send_json_to_client (server, NULL, builder);
+
+  if (server->stream_time == GST_CLOCK_TIME_NONE) {
+    g_object_get (server->net_clock, "clock", &clock, NULL);
+    /* Calculate how much of the current file we played up until now, and store */
+    server->stream_time = gst_clock_get_time (clock) + (GST_SECOND / 4) - server->base_time;
+    gst_object_unref (clock);
+    g_print ("Storing stream_time %" GST_TIME_FORMAT "\n", GST_TIME_ARGS (server->stream_time));
+  }
 }

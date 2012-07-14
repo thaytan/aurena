@@ -212,7 +212,9 @@ handle_play_message (SnraClient *client, JsonReader *reader)
   json_reader_end_member (reader);
 
   if (client->player) {
-    g_print ("Playing base_time %" GST_TIME_FORMAT "\n", GST_TIME_ARGS (base_time));
+    GstClockTime stream_time = gst_clock_get_time (client->net_clock) - base_time;
+    g_print ("Playing base_time %" GST_TIME_FORMAT " (offset %" GST_TIME_FORMAT ")\n",
+        GST_TIME_ARGS (base_time), GST_TIME_ARGS (stream_time));
     gst_element_set_base_time (GST_ELEMENT (client->player), base_time);
     gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PLAYING);
   }

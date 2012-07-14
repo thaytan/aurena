@@ -458,6 +458,7 @@ void snra_server_send_play (SnraServer *server)
   g_object_get (server->net_clock, "clock", &clock, NULL);
   server->base_time = gst_clock_get_time (clock) + (GST_SECOND / 4) - server->stream_time;
   gst_object_unref (clock);
+  server->stream_time = GST_CLOCK_TIME_NONE;
 
   json_builder_set_member_name (builder, "base-time");
   json_builder_add_int_value (builder, (gint64)(server->base_time));

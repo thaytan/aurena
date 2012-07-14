@@ -216,6 +216,14 @@ handle_received_chunk (SoupMessage *msg, SoupBuffer *chunk, SnraClient *client)
         handle_enrol_message (client, reader);
       else if (g_str_equal (msg_type, "play-media"))
         handle_play_media_message (client, reader);
+      else if (g_str_equal (msg_type, "pause")) {
+        if (client->player)
+            gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PAUSED);
+      }
+      else if (g_str_equal (msg_type, "play")) {
+        if (client->player)
+            gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PLAYING);
+      }
     }
     g_object_unref (reader);
   }

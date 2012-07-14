@@ -75,15 +75,89 @@ failed:
   }
 }
 
+typedef enum _SnraControlEvent SnraControlEvent;
+
+enum _SnraControlEvent {
+  SNRA_CONTROL_NONE,
+  SNRA_CONTROL_NEXT,
+  SNRA_CONTROL_PREV,
+  SNRA_CONTROL_PLAY,
+  SNRA_CONTROL_PAUSE,
+  SNRA_CONTROL_ENQUEUE,
+  SNRA_CONTROL_VOLUME
+};
+
+static const
+struct { const char *name; SnraControlEvent type; } control_event_names[] = 
+{
+  { "next", SNRA_CONTROL_NEXT },
+  { "previous", SNRA_CONTROL_PREV },
+  { "play", SNRA_CONTROL_PLAY },
+  { "pause", SNRA_CONTROL_PAUSE },
+  { "enqueue", SNRA_CONTROL_ENQUEUE },
+  { "volume", SNRA_CONTROL_VOLUME }
+};
+static const guint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
+
+static SnraControlEvent
+str_to_control_event_type (const gchar *str)
+{
+  gint i;
+  for (i = 0; i < N_CONTROL_EVENTS; i++) {
+    if (g_str_equal (str, control_event_names[i].name))
+      return control_event_names[i].type;
+  }
+
+  return SNRA_CONTROL_NONE;
+}
 
 static void
 control_callback (SoupServer *soup, SoupMessage *msg, 
   const char *path, GHashTable *query,
   SoupClientContext *client, SnraManager *manager)
 {
-  g_print ("Hit on control API %s\n", path);
-  /* Just always skip to another random track for now */
-  snra_server_play_resource (manager->server, g_random_int_range (0, manager->playlist->len) + 1);
+  gchar **parts = g_strsplit (path, "/", 3);
+  guint n_parts = g_strv_length (parts);
+  SnraControlEvent event_type;
+
+  if (n_parts < 3)
+    return; /* Invalid request */
+  g_return_if_fail (g_str_equal ("control", parts[1]));
+
+  event_type = str_to_control_event_type (parts[2]);
+  
+  switch (event_type) {
+    case SNRA_CONTROL_NEXT: {
+      gchar *id_str = NULL;
+      gint resource_id;
+
+      if (query)
+        id_str = g_hash_table_lookup (query, "id");
+
+      if (id_str == NULL || !sscanf (id_str, "%d", &resource_id)) {
+         /* No or invalid resource id: skip to another random track */
+         resource_id = g_random_int_range (0, manager->playlist->len) + 1;
+      }
+      else {
+        resource_id = CLAMP (resource_id, 1, manager->playlist->len);
+      }
+      snra_server_play_resource (manager->server, resource_id);
+      break;
+    }
+    case SNRA_CONTROL_PAUSE: {
+      snra_server_send_pause (manager->server);
+      break;
+    }
+    case SNRA_CONTROL_PLAY: {
+      snra_server_send_play (manager->server);
+      break;
+    }
+    default:
+      g_message ("Ignoring unknown/unimplemented control %s\n", parts[2]);
+      break;
+  }
+
+  g_strfreev(parts);
 }
 
 static void

@@ -70,6 +70,8 @@ void snra_server_set_resource_cb (SnraServer *server,
 void snra_server_add_handler (SnraServer *server, const gchar *path, SoupServerCallback callback, gpointer user_data, GDestroyNotify destroy_notify);
 
 void snra_server_play_resource (SnraServer *server, guint resource_id);
+void snra_server_send_play (SnraServer *server);
+void snra_server_send_pause (SnraServer *server);
 
 G_END_DECLS
 #endif

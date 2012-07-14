@@ -130,7 +130,6 @@ server_send_play_media_msg (SnraServer *server, SnraClientConnection *client, gu
   JsonBuilder *builder = json_builder_new ();
   JsonGenerator *gen;
   JsonNode * root;
-  gchar *body;
   int clock_port;
   GstClock *clock;
   GstClockTime cur_time;
@@ -439,4 +438,39 @@ snra_server_play_resource (SnraServer *server, guint resource_id)
   server->current_resource = resource_id;
   server->base_time = GST_CLOCK_TIME_NONE;
   server_send_play_media_msg (server, NULL, resource_id);
+}
+
+void snra_server_send_play (SnraServer *server)
+{
+
+  JsonBuilder *builder = json_builder_new ();
+  JsonGenerator *gen;
+  JsonNode * root;
+
+  json_builder_begin_object (builder);
+
+  json_builder_set_member_name (builder, "msg-type");
+  json_builder_add_string_value (builder, "play");
+
+  /* FIXME: Update base time to match length of time paused */
+
+  json_builder_end_object (builder);
+
+  server_send_json_to_client (server, NULL, builder);
+}
+
+void snra_server_send_pause (SnraServer *server)
+{
+  JsonBuilder *builder = json_builder_new ();
+  JsonGenerator *gen;
+  JsonNode * root;
+
+  json_builder_begin_object (builder);
+
+  json_builder_set_member_name (builder, "msg-type");
+  json_builder_add_string_value (builder, "pause");
+
+  json_builder_end_object (builder);
+
+  server_send_json_to_client (server, NULL, builder);
 }

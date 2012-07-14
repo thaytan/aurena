@@ -19,6 +19,7 @@
 #ifndef __SNRA_MANAGER_H__
 #define __SNRA_MANAGER_H__
 
+#include <stdio.h>
 #include <gst/gst.h>
 #include <gst/net/gstnet.h>
 #include <gst/rtsp-server/rtsp-server.h>

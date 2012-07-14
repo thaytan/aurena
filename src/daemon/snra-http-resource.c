@@ -84,12 +84,14 @@ snra_http_resource_close(SnraHttpResource *resource)
 static void
 resource_finished (SoupMessage *msg, SnraTransfer *transfer)
 {
-  g_print ("Completed transfer of %s\n", transfer->resource->source_path);
-
   /* Close the resource, destroy the transfer */
   snra_http_resource_close(transfer->resource);
+
+  g_print ("Completed transfer of %s. Use count now %d\n", transfer->resource->source_path, transfer->resource->use_count);
+
   g_object_unref (transfer->resource);
   g_free (transfer);
+
 }
 
 void
@@ -107,15 +109,16 @@ snra_http_resource_new_transfer (SnraHttpResource *resource, SoupMessage *msg)
   transfer->resource = g_object_ref (resource);
 
   {
+    const gsize len = g_mapped_file_get_length (transfer->resource->data);
+    gchar *chunk = g_mapped_file_get_contents (transfer->resource->data); 
+
+    g_signal_connect (msg, "finished", G_CALLBACK (resource_finished), transfer);
+
     soup_message_set_status (msg, SOUP_STATUS_OK);
     soup_message_headers_set_encoding (msg->response_headers,
         SOUP_ENCODING_CONTENT_LENGTH);
     soup_message_headers_replace (msg->response_headers, "Content-Type",
         "video/ogg");
-    g_signal_connect (msg, "finished", G_CALLBACK (resource_finished), transfer);
-
-    const gsize len = g_mapped_file_get_length (transfer->resource->data);
-    gchar *chunk = g_mapped_file_get_contents (transfer->resource->data); 
 
     soup_message_headers_set_content_length (msg->response_headers, len);
     soup_message_body_append (msg->response_body, SOUP_MEMORY_TEMPORARY, chunk, len);

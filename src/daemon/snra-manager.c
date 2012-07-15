@@ -152,6 +152,17 @@ control_callback (SoupServer *soup, SoupMessage *msg,
       snra_server_send_play (manager->server);
       break;
     }
+    case SNRA_CONTROL_VOLUME: {
+      if (query) {
+        gchar *vol_str = g_hash_table_lookup (query, "level");
+        gdouble new_vol;
+        if (vol_str && sscanf (vol_str, "%lf", &new_vol)) {
+          new_vol = CLAMP (new_vol, 0.0, 10.0);
+          snra_server_send_volume (manager->server, new_vol);
+        }
+      }
+      break;
+    }
     default:
       g_message ("Ignoring unknown/unimplemented control %s\n", parts[2]);
       break;

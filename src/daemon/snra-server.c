@@ -166,6 +166,7 @@ server_send_play_media_msg (SnraServer *server, SnraClientConnection *client, gu
   if (server->base_time == -1) {
     // configure a base time 0.25 seconds in the future
     server->base_time = cur_time + (GST_SECOND / 4);
+    server->stream_time = GST_CLOCK_TIME_NONE;
     g_print ("Base time now %" G_GUINT64_FORMAT "\n", server->base_time);
   }
 
@@ -215,6 +216,19 @@ server_client_cb (SoupServer *soup, SoupMessage *msg,
   server_send_enrol_msg(server, client_conn);
   if (server->current_resource)
     server_send_play_media_msg (server, client_conn, server->current_resource);
+}
+
+static void
+server_fallback_cb (SoupServer *soup, SoupMessage *msg,
+  const char *path, GHashTable *query,
+  SoupClientContext *client, SnraServer *server)
+{
+  if (g_str_equal (path, "/")) {
+    soup_message_set_redirect (msg, SOUP_STATUS_MOVED_PERMANENTLY, "/ui");
+  }
+  else {
+    soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
+  }
 }
 
 static SnraHttpResource *
@@ -283,6 +297,7 @@ snra_server_init (SnraServer *server)
   server->port = 5457;
 
   server->soup = soup_server_new(SOUP_SERVER_PORT, server->port, NULL);
+  soup_server_add_handler (server->soup, "/", (SoupServerCallback) server_fallback_cb, g_object_ref (server), g_object_unref);
   soup_server_add_handler (server->soup, "/client", (SoupServerCallback) server_client_cb, g_object_ref (server), g_object_unref);
   soup_server_add_handler (server->soup, "/resource", (SoupServerCallback) server_resource_cb, g_object_ref (server), g_object_unref);
   socket = soup_server_get_listener(server->soup);
@@ -438,6 +453,7 @@ snra_server_play_resource (SnraServer *server, guint resource_id)
 {
   server->current_resource = resource_id;
   server->base_time = GST_CLOCK_TIME_NONE;
+  server->stream_time = GST_CLOCK_TIME_NONE;
   server_send_play_media_msg (server, NULL, resource_id);
 }
 
@@ -492,4 +508,25 @@ void snra_server_send_pause (SnraServer *server)
     gst_object_unref (clock);
     g_print ("Storing stream_time %" GST_TIME_FORMAT "\n", GST_TIME_ARGS (server->stream_time));
   }
+}
+
+void snra_server_send_volume (SnraServer *server, gdouble volume)
+{
+  JsonBuilder *builder = json_builder_new ();
+  JsonGenerator *gen;
+  JsonNode * root;
+  GstClock *clock;
+  GstClockTime cur_time;
+
+  json_builder_begin_object (builder);
+
+  json_builder_set_member_name (builder, "msg-type");
+  json_builder_add_string_value (builder, "volume");
+
+  json_builder_set_member_name (builder, "level");
+  json_builder_add_double_value (builder, volume);
+
+  json_builder_end_object (builder);
+
+  server_send_json_to_client (server, NULL, builder);
 }

@@ -74,6 +74,7 @@ void snra_server_add_handler (SnraServer *server, const gchar *path, SoupServerC
 void snra_server_play_resource (SnraServer *server, guint resource_id);
 void snra_server_send_play (SnraServer *server);
 void snra_server_send_pause (SnraServer *server);
+void snra_server_send_volume (SnraServer *server, gdouble volume);
 
 G_END_DECLS
 #endif

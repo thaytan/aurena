@@ -221,10 +221,42 @@ handle_play_message (SnraClient *client, JsonReader *reader)
 }
 
 static void
+handle_set_volume_message (SnraClient *client, JsonReader *reader)
+{
+  gdouble new_vol;
+
+  if (!json_reader_read_member (reader, "level"))
+    return; /* Invalid message */
+  new_vol = json_reader_get_double_value (reader);
+
+  json_reader_end_member (reader);
+
+  if (new_vol == 0) {
+    if (!json_reader_read_member (reader, "level"))
+      return; /* Invalid message */
+    new_vol = (double)(json_reader_get_int_value (reader));
+    json_reader_end_member (reader);
+  }
+
+  if (client->player) {
+    g_print ("New volume %g\n", new_vol);
+    g_object_set (G_OBJECT (client->player), "volume", new_vol,
+        "mute", (gboolean)(new_vol == 0.0), NULL);
+  }
+}
+
+static void
 handle_received_chunk (SoupMessage *msg, SoupBuffer *chunk, SnraClient *client)
 {
   if (client->json == NULL)
     client->json = json_parser_new();
+#if 0
+  {
+    gchar *tmp = g_strndup (chunk->data, chunk->length);
+    g_print ("%s\n", tmp);
+    g_free (tmp);
+  }
+#endif
   if (json_parser_load_from_data (client->json, chunk->data, chunk->length, NULL)) {
     JsonReader *reader = json_reader_new (json_parser_get_root (client->json));
     if (json_reader_read_member (reader, "msg-type")) {
@@ -235,13 +267,14 @@ handle_received_chunk (SoupMessage *msg, SoupBuffer *chunk, SnraClient *client)
         handle_enrol_message (client, reader);
       else if (g_str_equal (msg_type, "play-media"))
         handle_play_media_message (client, reader);
+      else if (g_str_equal (msg_type, "play"))
+        handle_play_message (client, reader);
       else if (g_str_equal (msg_type, "pause")) {
         if (client->player)
             gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PAUSED);
       }
-      else if (g_str_equal (msg_type, "play")) {
-        handle_play_message (client, reader);
-      }
+      else if (g_str_equal (msg_type, "volume"))
+        handle_set_volume_message (client, reader);
     }
     g_object_unref (reader);
   }

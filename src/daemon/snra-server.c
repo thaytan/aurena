@@ -31,6 +31,7 @@
 #include <json-glib/json-glib.h>
 
 #include "snra-server.h"
+#include "snra-resource.h"
 #include "snra-http-resource.h"
 
 G_DEFINE_TYPE (SnraServer, snra_server, G_TYPE_OBJECT);
@@ -43,8 +44,6 @@ enum
   PROP_CLOCK,
   PROP_LAST
 };
-
-typedef struct _SnraClientConnection SnraClientConnection;
 
 struct _SnraClientConnection
 {
@@ -95,7 +94,7 @@ server_send_json_to_client (SnraServer *server, SnraClientConnection *client, Js
   }
 }
 
-static void
+void
 server_send_enrol_msg (SnraServer *server, SnraClientConnection *client)
 {
   JsonBuilder *builder = json_builder_new ();
@@ -267,28 +266,6 @@ error:
   soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
 }
 
-static const gchar *
-get_mime_type (const gchar *filename)
-{
-  const gchar *extension;
-
-  extension = g_strrstr (filename, ".");
-  if (extension) {
-    if (g_str_equal (extension, ".html"))
-      return "text/html";
-    if (g_str_equal (extension, ".png"))
-      return "image/png";
-    if (g_str_equal (extension, ".css"))
-      return "text/css";
-    if (g_str_equal (extension, ".jpg"))
-      return "image/jpeg";
-    if (g_str_equal (extension, ".js"))
-      return "text/javascript";
-  }
-
-  return "text/plain";
-}
-
 static void
 server_ui_cb (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg, 
   const char *path, G_GNUC_UNUSED GHashTable *query,
@@ -323,7 +300,7 @@ server_ui_cb (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
   if (!g_file_get_contents (filename, &contents, &size, NULL))
     goto fail;
 
-  mime_type = get_mime_type (filename);
+  mime_type = snra_resource_get_mime_type (filename);
   g_print ("Returning %s - %s\n", mime_type, filename);
 
   soup_message_set_response (msg, mime_type, SOUP_MEMORY_TAKE, contents, size);

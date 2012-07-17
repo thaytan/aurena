@@ -46,6 +46,7 @@ struct _SnraManager
 
   GPtrArray *playlist;
   gboolean paused;
+  guint current_resource;
 };
 
 struct _SnraManagerClass

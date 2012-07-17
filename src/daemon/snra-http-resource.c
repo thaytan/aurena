@@ -27,6 +27,7 @@
 #include <libsoup/soup-socket.h>
 #include <libsoup/soup-address.h>
 
+#include "snra-resource.h"
 #include "snra-http-resource.h"
 
 G_DEFINE_TYPE (SnraHttpResource, snra_http_resource, G_TYPE_OBJECT);
@@ -118,7 +119,7 @@ snra_http_resource_new_transfer (SnraHttpResource *resource, SoupMessage *msg)
     soup_message_headers_set_encoding (msg->response_headers,
         SOUP_ENCODING_CONTENT_LENGTH);
     soup_message_headers_replace (msg->response_headers, "Content-Type",
-        "video/ogg");
+        snra_resource_get_mime_type(resource->source_path));
 
     soup_message_headers_set_content_length (msg->response_headers, len);
     soup_message_body_append (msg->response_body, SOUP_MEMORY_TEMPORARY, chunk, len);

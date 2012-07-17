@@ -7,6 +7,8 @@ libsnra_daemon_la_SOURCES = \
     snra-http-resource.h \
     snra-manager.c \
     snra-manager.h \
+    snra-resource.c \
+    snra-resource.h \
     snra-server.c \
     snra-server.h \
     snra-types.h

@@ -15,7 +15,7 @@ $(document).ready(function() {
 
   $("#mastervolslider").slider({
      animate: true,
-     min : 0.0, max : 1.5, range : 'true', value : 1.0, step : 0.05,
+     min : 0.0, max : 1.5, range : 'true', value : 1.0, step : 0.01,
      slide : function(event, ui) { volChange = true; send_slider_volume(); },
      change : function(event, ui) { volChange = true; send_slider_volume(); }
   });

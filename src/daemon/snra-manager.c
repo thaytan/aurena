@@ -165,9 +165,13 @@ control_callback (SoupServer *soup, SoupMessage *msg,
     }
     default:
       g_message ("Ignoring unknown/unimplemented control %s\n", parts[2]);
-      break;
+      soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
+      goto done;
   }
 
+  soup_message_set_response (msg, "text/plain", SOUP_MEMORY_STATIC, " ", 1);
+  soup_message_set_status (msg, SOUP_STATUS_OK);
+done:
   g_strfreev(parts);
 }
 

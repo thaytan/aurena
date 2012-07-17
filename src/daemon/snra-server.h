@@ -42,6 +42,8 @@ struct _SnraServer
   GstClockTime base_time;
   GstClockTime stream_time;
 
+  gdouble current_volume;
+
   GstNetTimeProvider *net_clock;
 
   GHashTable *resources;

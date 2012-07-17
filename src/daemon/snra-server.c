@@ -119,6 +119,9 @@ server_send_enrol_msg (SnraServer *server, SnraClientConnection *client)
   json_builder_set_member_name (builder, "current-time");
   json_builder_add_int_value (builder, (gint64)(cur_time));
 
+  json_builder_set_member_name (builder, "volume-level");
+  json_builder_add_double_value (builder, server->current_volume);
+
   json_builder_end_object (builder);
 
   server_send_json_to_client (server, client, builder);
@@ -224,7 +227,7 @@ server_fallback_cb (SoupServer *soup, SoupMessage *msg,
   SoupClientContext *client, SnraServer *server)
 {
   if (g_str_equal (path, "/")) {
-    soup_message_set_redirect (msg, SOUP_STATUS_MOVED_PERMANENTLY, "/ui");
+    soup_message_set_redirect (msg, SOUP_STATUS_MOVED_PERMANENTLY, "/ui/");
   }
   else {
     soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
@@ -275,6 +278,76 @@ error:
   soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
 }
 
+static const gchar *
+get_mime_type (const gchar *filename)
+{
+  const gchar *extension;
+
+  extension = g_strrstr (filename, ".");
+  if (extension) {
+    if (g_str_equal (extension, ".html"))
+      return "text/html";
+    if (g_str_equal (extension, ".png"))
+      return "image/png";
+    if (g_str_equal (extension, ".css"))
+      return "text/css";
+    if (g_str_equal (extension, ".jpg"))
+      return "image/jpeg";
+    if (g_str_equal (extension, ".js"))
+      return "text/javascript";
+  }
+
+  return "text/plain";
+}
+
+static void
+server_ui_cb (SoupServer *soup, SoupMessage *msg, 
+  const char *path, GHashTable *query,
+  SoupClientContext *client, SnraServer *server)
+{
+  const gchar *file_path;
+  gchar *filename = NULL;
+  gchar *contents;
+  gsize size;
+  const gchar *mime_type;
+
+  if (!g_str_has_prefix (path, "/ui"))
+    goto fail;
+
+  file_path = path + 3;
+
+  if (strstr (file_path, "/.."))
+    goto fail;
+
+  if (g_str_equal (file_path, "")) {
+    soup_message_set_redirect (msg, SOUP_STATUS_MOVED_PERMANENTLY, "/ui/");
+    return;
+  }
+
+  if (g_str_equal (file_path, "/"))
+    file_path = "/index.html";
+
+  filename = g_strdup_printf ("src/static%s", file_path);
+
+  g_print ("looking for %s\n", filename);
+
+  if (!g_file_get_contents (filename, &contents, &size, NULL))
+    goto fail;
+
+  mime_type = get_mime_type (filename);
+  g_print ("Returning %s - %s\n", mime_type, filename);
+
+  soup_message_set_response (msg, mime_type, SOUP_MEMORY_TAKE, contents, size);
+  soup_message_set_status (msg, SOUP_STATUS_OK);
+
+  g_free (filename);
+  return;
+
+fail:
+  g_free (filename);
+  soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
+}
+
 void
 snra_server_set_base_time(SnraServer *server, GstClockTime base_time)
 {
@@ -295,9 +368,11 @@ snra_server_init (SnraServer *server)
   server->base_time = GST_CLOCK_TIME_NONE;
   server->stream_time = GST_CLOCK_TIME_NONE;
   server->port = 5457;
+  server->current_volume = 1.0;
 
   server->soup = soup_server_new(SOUP_SERVER_PORT, server->port, NULL);
   soup_server_add_handler (server->soup, "/", (SoupServerCallback) server_fallback_cb, g_object_ref (server), g_object_unref);
+  soup_server_add_handler (server->soup, "/ui", (SoupServerCallback) server_ui_cb, g_object_ref (server), g_object_unref);
   soup_server_add_handler (server->soup, "/client", (SoupServerCallback) server_client_cb, g_object_ref (server), g_object_unref);
   soup_server_add_handler (server->soup, "/resource", (SoupServerCallback) server_resource_cb, g_object_ref (server), g_object_unref);
   socket = soup_server_get_listener(server->soup);
@@ -515,8 +590,8 @@ void snra_server_send_volume (SnraServer *server, gdouble volume)
   JsonBuilder *builder = json_builder_new ();
   JsonGenerator *gen;
   JsonNode * root;
-  GstClock *clock;
-  GstClockTime cur_time;
+
+  server->current_volume = volume;
 
   json_builder_begin_object (builder);
 

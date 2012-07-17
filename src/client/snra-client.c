@@ -51,6 +51,7 @@ static void snra_client_finalize(GObject *object);
 static void snra_client_dispose(GObject *object);
 
 static void connect_to_server (SnraClient *client, const gchar *server);
+static void construct_player (SnraClient *client);
 
 static gboolean
 try_reconnect (SnraClient *client)
@@ -88,6 +89,24 @@ handle_enrol_message (SnraClient *client, JsonReader *reader)
     return; /* Invalid message */
   cur_time = (GstClockTime)(json_reader_get_int_value (reader));
   json_reader_end_member (reader);
+
+  if (json_reader_read_member (reader, "volume-level")) {
+    gdouble new_vol = json_reader_get_double_value (reader);
+    json_reader_end_member (reader);
+    if (new_vol == 0) {
+      json_reader_read_member (reader, "volume-level");
+      new_vol = (double)(json_reader_get_int_value (reader));
+      json_reader_end_member (reader);
+    }
+    if (client->player == NULL) 
+      construct_player (client);
+
+    if (client->player) {
+      g_print ("New volume %g\n", new_vol);
+      g_object_set (G_OBJECT (client->player), "volume", new_vol,
+          "mute", (gboolean)(new_vol == 0.0), NULL);
+    }
+  }
 
   resolver = g_resolver_get_default ();
   if (resolver == NULL)

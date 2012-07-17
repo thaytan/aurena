@@ -1,0 +1,11 @@
+#player {
+  width: 640;
+  background-color: #101010;
+  padding: 10px 5px;
+  color: white;
+}
+#mastervollabel, #mastervolval { display: inline; }
+#mastervol { display: inline; margin: 10px; }
+#mastervolslider { display: inline-block; width: 80%; }
+
+#controls { margin: 10px; }

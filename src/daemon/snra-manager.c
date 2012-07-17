@@ -119,12 +119,20 @@ control_callback (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
   gchar **parts = g_strsplit (path, "/", 3);
   guint n_parts = g_strv_length (parts);
   SnraControlEvent event_type;
+  GHashTable *post_params = NULL;
+  const gchar *content_type;
 
   if (n_parts < 3)
     return; /* Invalid request */
   g_return_if_fail (g_str_equal ("control", parts[1]));
 
   event_type = str_to_control_event_type (parts[2]);
+  content_type =
+      soup_message_headers_get_content_type (msg->request_headers, NULL);
+  if (g_str_equal (msg->method, "POST") &&
+      content_type &&
+      g_str_equal (content_type, SOUP_FORM_MIME_TYPE_URLENCODED))
+    post_params = soup_form_decode(msg->request_body->data);
   
   switch (event_type) {
     case SNRA_CONTROL_NEXT: {
@@ -158,14 +166,18 @@ control_callback (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
       break;
     }
     case SNRA_CONTROL_VOLUME: {
-      if (query) {
-        gchar *vol_str = g_hash_table_lookup (query, "level");
-        gdouble new_vol;
-        if (vol_str && sscanf (vol_str, "%lf", &new_vol)) {
-          new_vol = CLAMP (new_vol, 0.0, 10.0);
-          snra_server_send_volume (manager->server, new_vol);
-        }
+      gchar *vol_str = NULL;
+      gdouble new_vol;
+      if (query)
+        vol_str = g_hash_table_lookup (query, "level");
+      if (vol_str == NULL && post_params)
+        vol_str = g_hash_table_lookup (post_params, "level");
+
+      if (vol_str && sscanf (vol_str, "%lf", &new_vol)) {
+        new_vol = CLAMP (new_vol, 0.0, 10.0);
+        snra_server_send_volume (manager->server, new_vol);
       }
+
       break;
     }
     default:
@@ -177,6 +189,8 @@ control_callback (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
   soup_message_set_response (msg, "text/plain", SOUP_MEMORY_STATIC, " ", 1);
   soup_message_set_status (msg, SOUP_STATUS_OK);
 done:
+  if (post_params)
+    g_hash_table_destroy (post_params);
   g_strfreev(parts);
 }
 

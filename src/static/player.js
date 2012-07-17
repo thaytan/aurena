@@ -8,9 +8,13 @@ $(document).ready(function() {
     sendingVol = true; volChange = false;
     $('#mastervolval').text(Math.round(curVol * 100).toString() + '%');
     // console.log("Sending volume " + curVol.toString());
-    $.ajax({ url: "../control/volume?level=" + curVol.toString(), type: 'POST' }).complete(function() { 
-      sendingVol = false; send_slider_volume();
-    });
+    $.ajax({
+      type: 'POST',
+      url: "../control/volume",
+      data: { level: curVol.toString() }
+    }).complete(function() {
+        sendingVol = false; send_slider_volume();
+      });
   }
 
   $("#mastervolslider").slider({

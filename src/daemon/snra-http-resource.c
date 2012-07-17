@@ -82,7 +82,7 @@ snra_http_resource_close(SnraHttpResource *resource)
 }
 
 static void
-resource_finished (SoupMessage *msg, SnraTransfer *transfer)
+resource_finished (G_GNUC_UNUSED SoupMessage *msg, SnraTransfer *transfer)
 {
   /* Close the resource, destroy the transfer */
   snra_http_resource_close(transfer->resource);
@@ -126,7 +126,7 @@ snra_http_resource_new_transfer (SnraHttpResource *resource, SoupMessage *msg)
 }
 
 static void
-snra_http_resource_init (SnraHttpResource *resource)
+snra_http_resource_init (G_GNUC_UNUSED SnraHttpResource *resource)
 {
 }
 

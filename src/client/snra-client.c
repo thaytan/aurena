@@ -63,7 +63,7 @@ try_reconnect (SnraClient *client)
 }
 
 static void
-handle_connection_closed_cb (SoupSession *session, SoupMessage *msg, SnraClient *client)
+handle_connection_closed_cb (G_GNUC_UNUSED SoupSession *session, SoupMessage *msg, SnraClient *client)
 {
   g_print ("HTTP connection closed, status %d (%s)\n", msg->status_code, msg->reason_phrase);
   if (client->player)
@@ -128,7 +128,7 @@ handle_enrol_message (SnraClient *client, JsonReader *reader)
 }
 
 static void
-on_eos_msg (GstBus *bus, GstMessage *msg, SnraClient *client)
+on_eos_msg (G_GNUC_UNUSED GstBus *bus, G_GNUC_UNUSED GstMessage *msg, SnraClient *client)
 {
   SoupMessage *soup_msg;
   char *url = g_strdup_printf ("http://%s:5457/control/next", client->server_host);
@@ -141,7 +141,7 @@ on_eos_msg (GstBus *bus, GstMessage *msg, SnraClient *client)
 }
 
 static void
-on_error_msg (GstBus *bus, GstMessage *msg, SnraClient *client)
+on_error_msg (G_GNUC_UNUSED GstBus *bus, GstMessage *msg, G_GNUC_UNUSED SnraClient *client)
 {
   GError *err;
   gchar *dbg_info = NULL;
@@ -265,7 +265,7 @@ handle_set_volume_message (SnraClient *client, JsonReader *reader)
 }
 
 static void
-handle_received_chunk (SoupMessage *msg, SoupBuffer *chunk, SnraClient *client)
+handle_received_chunk (G_GNUC_UNUSED SoupMessage *msg, SoupBuffer *chunk, SnraClient *client)
 {
   if (client->json == NULL)
     client->json = json_parser_new();
@@ -335,6 +335,9 @@ snra_client_class_init (SnraClientClass *client_class)
   GObjectClass *gobject_class = (GObjectClass *)(client_class);
 
   gobject_class->constructed = snra_client_constructed;
+  gobject_class->dispose = snra_client_dispose;
+  gobject_class->finalize = snra_client_finalize;
+
   gobject_class->set_property = snra_client_set_property;
   gobject_class->get_property = snra_client_get_property;
 

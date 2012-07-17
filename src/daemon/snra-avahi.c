@@ -48,7 +48,7 @@ static void snra_avahi_finalize (GObject * object);
 static void create_service (SnraAvahi * avahi);
 
 static void
-entry_group_callback (AvahiEntryGroup * g, AvahiEntryGroupState state,
+entry_group_callback (AVAHI_GCC_UNUSED AvahiEntryGroup * g, AvahiEntryGroupState state,
     AVAHI_GCC_UNUSED void *userdata)
 {
   SnraAvahi *avahi = (SnraAvahi *) (userdata);
@@ -179,6 +179,8 @@ avahi_client_callback (AVAHI_GCC_UNUSED AvahiClient * client,
        * registration group. */
       if (avahi->priv->group)
         avahi_entry_group_reset (avahi->priv->group);
+      break;
+    default:
       break;
   }
 }

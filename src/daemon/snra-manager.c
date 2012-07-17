@@ -52,7 +52,7 @@ create_net_clock()
 }
 
 static GstRTSPServer *
-create_rtsp_server (SnraManager *mgr)
+create_rtsp_server (G_GNUC_UNUSED SnraManager *mgr)
 {
   GstRTSPServer *server = NULL;
 
@@ -97,7 +97,7 @@ struct { const char *name; SnraControlEvent type; } control_event_names[] =
   { "enqueue", SNRA_CONTROL_ENQUEUE },
   { "volume", SNRA_CONTROL_VOLUME }
 };
-static const guint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
+static const gint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
 
 static SnraControlEvent
 str_to_control_event_type (const gchar *str)
@@ -112,9 +112,9 @@ str_to_control_event_type (const gchar *str)
 }
 
 static void
-control_callback (SoupServer *soup, SoupMessage *msg, 
+control_callback (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg, 
   const char *path, GHashTable *query,
-  SoupClientContext *client, SnraManager *manager)
+  G_GNUC_UNUSED SoupClientContext *client, SnraManager *manager)
 {
   gchar **parts = g_strsplit (path, "/", 3);
   guint n_parts = g_strv_length (parts);
@@ -129,14 +129,14 @@ control_callback (SoupServer *soup, SoupMessage *msg,
   switch (event_type) {
     case SNRA_CONTROL_NEXT: {
       gchar *id_str = NULL;
-      gint resource_id;
+      guint resource_id;
 
       if (query)
         id_str = g_hash_table_lookup (query, "id");
 
       if (id_str == NULL || !sscanf (id_str, "%d", &resource_id)) {
          /* No or invalid resource id: skip to another random track */
-         resource_id = g_random_int_range (0, manager->playlist->len) + 1;
+         resource_id = (guint) g_random_int_range (0, manager->playlist->len) + 1;
       }
       else {
         resource_id = CLAMP (resource_id, 1, manager->playlist->len);
@@ -214,13 +214,13 @@ snra_manager_finalize(GObject *object)
 }
 
 static void
-rtsp_media_prepared(GstRTSPMedia *media, SnraManager *mgr)
+rtsp_media_prepared(GstRTSPMedia *media, G_GNUC_UNUSED SnraManager *mgr)
 {
   g_object_set (media->rtpbin, "use-pipeline-clock", TRUE, NULL);
 }
 
 static void
-new_stream_constructed_cb (GstRTSPMediaFactory *factory,
+new_stream_constructed_cb (G_GNUC_UNUSED GstRTSPMediaFactory *factory,
     GstRTSPMedia *media, SnraManager *mgr)
 {
   g_print ("Media constructed: %p\n", media);
@@ -301,7 +301,7 @@ snra_manager_new(const char *playlist_file)
 }
 
 static SnraHttpResource *
-snra_manager_get_resource_cb (SnraServer *server, guint resource_id, void *userdata)
+snra_manager_get_resource_cb (G_GNUC_UNUSED SnraServer *server, guint resource_id, void *userdata)
 {
   SnraManager *manager = (SnraManager *)(userdata);
   const gchar *file;

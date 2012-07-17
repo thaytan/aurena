@@ -131,9 +131,6 @@ static void
 server_send_play_media_msg (SnraServer *server, SnraClientConnection *client, guint resource_id)
 {
   JsonBuilder *builder = json_builder_new ();
-  JsonGenerator *gen;
-  JsonNode * root;
-  int clock_port;
   GstClock *clock;
   GstClockTime cur_time;
   gchar *resource_path;
@@ -166,7 +163,7 @@ server_send_play_media_msg (SnraServer *server, SnraClientConnection *client, gu
   json_builder_add_string_value (builder, resource_path);
   g_free (resource_path);
 
-  if (server->base_time == -1) {
+  if (server->base_time == GST_CLOCK_TIME_NONE) {
     // configure a base time 0.25 seconds in the future
     server->base_time = cur_time + (GST_SECOND / 4);
     server->stream_time = GST_CLOCK_TIME_NONE;
@@ -201,9 +198,9 @@ server_client_disconnect (SoupMessage *message, SnraServer *server)
 }
 
 static void
-server_client_cb (SoupServer *soup, SoupMessage *msg,
-  const char *path, GHashTable *query,
-  SoupClientContext *client, SnraServer *server)
+server_client_cb (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
+  G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable *query,
+  G_GNUC_UNUSED SoupClientContext *client, SnraServer *server)
 {
   SnraClientConnection *client_conn = g_new0(SnraClientConnection, 1);
 
@@ -222,9 +219,9 @@ server_client_cb (SoupServer *soup, SoupMessage *msg,
 }
 
 static void
-server_fallback_cb (SoupServer *soup, SoupMessage *msg,
-  const char *path, GHashTable *query,
-  SoupClientContext *client, SnraServer *server)
+server_fallback_cb (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
+  G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable *query,
+  G_GNUC_UNUSED SoupClientContext *client, G_GNUC_UNUSED SnraServer *server)
 {
   if (g_str_equal (path, "/")) {
     soup_message_set_redirect (msg, SOUP_STATUS_MOVED_PERMANENTLY, "/ui/");
@@ -248,15 +245,9 @@ snra_server_get_resource(SnraServer *server, guint resource_id)
 }
 
 static void
-dump_header(const char *name, const char *value, gpointer user_data)
-{
-  // g_print("%s: %s\n", name, value);()
-}
-
-static void
-server_resource_cb (SoupServer *soup, SoupMessage *msg, 
-  const char *path, GHashTable *query,
-  SoupClientContext *client, SnraServer *server)
+server_resource_cb (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg, 
+  const char *path, G_GNUC_UNUSED GHashTable *query,
+  G_GNUC_UNUSED SoupClientContext *client, SnraServer *server)
 {
   guint resource_id = 0;
   SnraHttpResource *resource;
@@ -264,13 +255,11 @@ server_resource_cb (SoupServer *soup, SoupMessage *msg,
   if (!sscanf(path, "/resource/%u", &resource_id))
     goto error;
 
-  g_print ("Hit on resource %u\n", resource_id);
-  soup_message_headers_foreach (msg->request_headers, dump_header, NULL);
-
   resource = snra_server_get_resource(server, resource_id);
   if (resource == NULL)
     goto error;
 
+  g_print ("Hit on resource %u\n", resource_id);
   snra_http_resource_new_transfer (resource, msg);
   
   return;
@@ -301,9 +290,9 @@ get_mime_type (const gchar *filename)
 }
 
 static void
-server_ui_cb (SoupServer *soup, SoupMessage *msg, 
-  const char *path, GHashTable *query,
-  SoupClientContext *client, SnraServer *server)
+server_ui_cb (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg, 
+  const char *path, G_GNUC_UNUSED GHashTable *query,
+  G_GNUC_UNUSED SoupClientContext *client, G_GNUC_UNUSED SnraServer *server)
 {
   const gchar *file_path;
   gchar *filename = NULL;
@@ -535,10 +524,7 @@ snra_server_play_resource (SnraServer *server, guint resource_id)
 void snra_server_send_play (SnraServer *server)
 {
   JsonBuilder *builder = json_builder_new ();
-  JsonGenerator *gen;
-  JsonNode * root;
   GstClock *clock;
-  GstClockTime cur_time;
 
   json_builder_begin_object (builder);
 
@@ -562,10 +548,7 @@ void snra_server_send_play (SnraServer *server)
 void snra_server_send_pause (SnraServer *server)
 {
   JsonBuilder *builder = json_builder_new ();
-  JsonGenerator *gen;
-  JsonNode * root;
   GstClock *clock;
-  GstClockTime cur_time;
 
   json_builder_begin_object (builder);
 
@@ -588,8 +571,6 @@ void snra_server_send_pause (SnraServer *server)
 void snra_server_send_volume (SnraServer *server, gdouble volume)
 {
   JsonBuilder *builder = json_builder_new ();
-  JsonGenerator *gen;
-  JsonNode * root;
 
   server->current_volume = volume;
 

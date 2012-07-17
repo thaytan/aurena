@@ -33,7 +33,8 @@ static void sigint_handler_sighandler (int signum);
 static void
 sigint_setup (void)
 {
-  struct sigaction action = { 0, };
+  struct sigaction action;
+  memset (&action, 0, sizeof (struct sigaction));
 
   action.sa_handler = sigint_handler_sighandler;
   sigaction (SIGINT, &action, NULL);
@@ -42,7 +43,8 @@ sigint_setup (void)
 static void
 sigint_restore (void)
 {
-  struct sigaction action = { 0, };
+  struct sigaction action;
+  memset (&action, 0, sizeof (struct sigaction));
 
   action.sa_handler = SIG_DFL;
   sigaction (SIGINT, &action, NULL);
@@ -50,7 +52,7 @@ sigint_restore (void)
 }
 
 static gboolean
-sigint_check(void *data)
+sigint_check(G_GNUC_UNUSED void *data)
 {
   if (sigint_received) {
     g_print ("Exiting...\n");
@@ -60,7 +62,7 @@ sigint_check(void *data)
 }
 
 static void
-sigint_handler_sighandler (int signum)
+sigint_handler_sighandler (G_GNUC_UNUSED int signum)
 {
   sigint_received++;
   sigint_restore();

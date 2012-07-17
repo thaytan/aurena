@@ -141,15 +141,20 @@ control_callback (SoupServer *soup, SoupMessage *msg,
       else {
         resource_id = CLAMP (resource_id, 1, manager->playlist->len);
       }
+      manager->paused = FALSE;
       snra_server_play_resource (manager->server, resource_id);
       break;
     }
     case SNRA_CONTROL_PAUSE: {
-      snra_server_send_pause (manager->server);
+      if (!manager->paused)
+        snra_server_send_pause (manager->server);
+      manager->paused = TRUE;
       break;
     }
     case SNRA_CONTROL_PLAY: {
-      snra_server_send_play (manager->server);
+      if (manager->paused)
+        snra_server_send_play (manager->server);
+      manager->paused = FALSE;
       break;
     }
     case SNRA_CONTROL_VOLUME: {

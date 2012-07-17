@@ -45,6 +45,7 @@ struct _SnraManager
   SnraAvahi *avahi;
 
   GPtrArray *playlist;
+  gboolean paused;
 };
 
 struct _SnraManagerClass

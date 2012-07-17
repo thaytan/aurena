@@ -159,7 +159,11 @@ construct_player (SnraClient *client)
 {
   GstBus *bus;
 
-  client->player = gst_element_factory_make ("playbin", NULL);
+  if (GST_CHECK_VERSION(0,11,1))
+    client->player = gst_element_factory_make ("playbin", NULL);
+  else
+    client->player = gst_element_factory_make ("playbin2", NULL);
+
   if (client->player == NULL) {
     g_warning ("Failed to construct playbin");
     return;

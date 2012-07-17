@@ -19,9 +19,24 @@ AC_PROG_CC_STDC
 LT_INIT
 
 PKG_PROG_PKG_CONFIG([0.22])
-PKG_CHECK_MODULES(SNRA, [gobject-2.0 glib-2.0 avahi-client avahi-glib avahi-gobject >= 0.6.30 json-glib-1.0 libsoup-2.4 gstreamer-net-1.0 gstreamer-rtsp-server-1.0])
+PKG_CHECK_MODULES(SNRA_COMMON, [gobject-2.0 glib-2.0 avahi-client avahi-glib avahi-gobject >= 0.6.30 json-glib-1.0 libsoup-2.4])
 
-EXTRA_CFLAGS="-DGST_USE_UNSTABLE_API"
+AC_MSG_NOTICE([Checking for GStreamer 1.0])
+PKG_CHECK_MODULES(GST_1_0, [gstreamer-1.0 gstreamer-net-1.0 gstreamer-rtsp-server-1.0], [HAVE_GST_1_0=yes], [HAVE_GST_1_0=no])
+if test "x$HAVE_GST_1_0" = "xyes"; then
+  GST_CFLAGS="$GST_1_0_CFLAGS -DGST_USE_UNSTABLE_API"
+  GST_LIBS="$GST_1_0_LIBS"
+else
+  AC_MSG_NOTICE([Checking for GStreamer 0.10])
+  PKG_CHECK_MODULES(GST_0_10, [gstreamer-0.10 gstreamer-net-0.10 gst-rtsp-server-0.10])
+  GST_CFLAGS="$GST_0_10_CFLAGS"
+  GST_LIBS="$GST_0_10_LIBS"
+fi
+
+AC_SUBST([GST_CFLAGS])
+AC_SUBST([GST_LIBS])
+
+EXTRA_CFLAGS="-Wall -Wextra"
 AC_SUBST([EXTRA_CFLAGS])
 
 AC_CONFIG_FILES([

@@ -35,7 +35,7 @@ struct _SnraClientClass
 };
 
 GType snra_client_get_type(void);
-SnraClient *snra_client_new(const char *server);
+SnraClient *snra_client_new(const gchar *server);
 
 G_END_DECLS
 #endif

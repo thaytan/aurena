@@ -69,7 +69,8 @@ handle_connection_closed_cb (G_GNUC_UNUSED SoupSession *session, SoupMessage *ms
   if (client->player)
     gst_element_set_state (client->player, GST_STATE_READY);
   if (client->timeout == 0)
-    client->timeout = g_timeout_add_seconds (1, (GSourceFunc) try_reconnect, client);
+    client->timeout = g_timeout_add_seconds (1,
+        (GSourceFunc) try_reconnect, client);
 }
 
 static void
@@ -381,6 +382,8 @@ snra_client_dispose(GObject *object)
 
   if (client->soup)
     soup_session_abort (client->soup);
+  if (client->player)
+    gst_element_set_state (client->player, GST_STATE_NULL);
 
   G_OBJECT_CLASS (snra_client_parent_class)->dispose (object);
 }
@@ -423,7 +426,7 @@ snra_client_get_property (GObject * object, guint prop_id,
 SnraClient *
 snra_client_new(const char *server_host)
 {
-  SnraClient *client = g_object_new (SNRA_TYPE_CLIENT, "server-host", server_host, NULL);
-
+  SnraClient *client = g_object_new (SNRA_TYPE_CLIENT,
+                           "server-host", server_host, NULL);
   return client;
 }

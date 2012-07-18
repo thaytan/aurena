@@ -1,3 +1,13 @@
+Hi,
+
+To use this, just build it in the usual autoconf-ey way (configure && make)
+
+Then, run src/sonarea on one machine, and
+'src/client/simple-client server-name' on several clients that can access the
+server machine 'server-host'. For control, hit http://server-host:5457/
+
+Notes/future ideas:
+
 1) http server - see available songs
 2) track song being played in each 'zone' (1 zone)
 3) control song playback
@@ -8,9 +18,9 @@
 - daemon portion - http + rtsp + network clock source
   + avahi announcements
   + base time distribution
-  - http = libsoup
+  + http = libsoup
+  + network clock source = gst
   - rtsp = gst-rtsp-server
-  - network clock source = gst
 - need a player
-  - playbin wrapper that does rtsp + network clock subscription
+  + playbin wrapper that does rtsp + network clock subscription
     and follows remote volume control

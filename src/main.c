@@ -21,6 +21,7 @@
 #include "config.h"
 #endif
 
+#include <string.h>
 #include <gst/gst.h>
 
 #include "daemon/snra-manager.h"

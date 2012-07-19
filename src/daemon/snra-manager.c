@@ -51,6 +51,7 @@ create_net_clock()
   return net_time;
 }
 
+#ifdef HAVE_GST_RTSP
 static GstRTSPServer *
 create_rtsp_server (G_GNUC_UNUSED SnraManager *mgr)
 {
@@ -74,6 +75,7 @@ failed:
     return NULL;
   }
 }
+#endif
 
 typedef enum _SnraControlEvent SnraControlEvent;
 
@@ -200,7 +202,9 @@ snra_manager_init (SnraManager *manager)
   manager->playlist = g_ptr_array_new_with_free_func (g_free);
   manager->rtsp_port = 5458;
   manager->net_clock = create_net_clock();
+#ifdef HAVE_GST_RTSP
   manager->rtsp = create_rtsp_server(manager);
+#endif
 
   manager->avahi = g_object_new (SNRA_TYPE_AVAHI, NULL);
 
@@ -227,6 +231,7 @@ snra_manager_finalize(GObject *object)
   g_ptr_array_free (manager->playlist, TRUE);
 }
 
+#ifdef HAVE_GST_RTSP
 static void
 rtsp_media_prepared(GstRTSPMedia *media, G_GNUC_UNUSED SnraManager *mgr)
 {
@@ -242,7 +247,6 @@ new_stream_constructed_cb (G_GNUC_UNUSED GstRTSPMediaFactory *factory,
   g_signal_connect (media, "prepared", G_CALLBACK (rtsp_media_prepared), mgr);
 
 }
-
 
 static void
 add_rtsp_uri (SnraManager *manager, guint resource_id, const gchar *source_uri)
@@ -263,6 +267,7 @@ add_rtsp_uri (SnraManager *manager, guint resource_id, const gchar *source_uri)
 
   g_free (rtsp_uri);
 }
+#endif
 
 static void
 read_playlist_file(SnraManager *manager, const char *filename)
@@ -302,9 +307,11 @@ snra_manager_new(const char *playlist_file)
   read_playlist_file (manager, playlist_file);
 
   if (manager->playlist->len) {
+#ifdef HAVE_GST_RTSP
     char *rtsp_uri = g_strdup_printf("file://%s", (gchar *)(g_ptr_array_index (manager->playlist, 0)));
     add_rtsp_uri (manager, 1, rtsp_uri);
     g_free (rtsp_uri);
+#endif
 
     snra_server_play_resource (manager->server, g_random_int_range (0, manager->playlist->len) + 1);
   }

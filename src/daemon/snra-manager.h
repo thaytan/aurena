@@ -22,7 +22,10 @@
 #include <stdio.h>
 #include <gst/gst.h>
 #include <gst/net/gstnet.h>
+
+#ifdef HAVE_GST_RTSP
 #include <gst/rtsp-server/rtsp-server.h>
+#endif
 
 #include "snra-types.h"
 #include "snra-avahi.h"
@@ -39,7 +42,9 @@ struct _SnraManager
 
   SnraServer *server;
   GstNetTimeProvider *net_clock;
+#ifdef HAVE_GST_RTSP
   GstRTSPServer *rtsp;
+#endif
   int rtsp_port;
 
   SnraAvahi *avahi;

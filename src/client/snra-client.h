@@ -5,6 +5,12 @@
 #include <gst/net/gstnet.h>
 #include <libsoup/soup.h>
 #include <json-glib/json-glib.h>
+#include <avahi-client/client.h>
+#include <avahi-client/lookup.h>
+
+#include <avahi-common/malloc.h>
+#include <avahi-common/error.h>
+#include <avahi-glib/glib-watch.h>
 
 #include "snra-client-types.h"
 
@@ -20,6 +26,7 @@ struct _SnraClient
 
   GstClock *net_clock;
   gchar *server_host;
+  gint server_port;
 
   SoupSession *soup;
   JsonParser *json;
@@ -27,6 +34,15 @@ struct _SnraClient
   GstElement *player;
 
   guint timeout;
+
+  gboolean connecting;
+  gboolean was_connected;
+  gchar *connected_server;
+  gint connected_port;
+
+  AvahiGLibPoll *glib_poll;
+  AvahiClient *avahi_client;
+  AvahiServiceBrowser *avahi_sb;
 };
 
 struct _SnraClientClass

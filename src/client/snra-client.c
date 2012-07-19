@@ -50,7 +50,8 @@ static void snra_client_get_property (GObject * object, guint prop_id,
 static void snra_client_finalize(GObject *object);
 static void snra_client_dispose(GObject *object);
 
-static void connect_to_server (SnraClient *client, const gchar *server);
+static void search_for_server (SnraClient *client);
+static void connect_to_server (SnraClient *client, const gchar *server, int port);
 static void construct_player (SnraClient *client);
 
 static gboolean
@@ -58,19 +59,33 @@ try_reconnect (SnraClient *client)
 {
   client->timeout = 0;
 
-  connect_to_server (client, client->server_host);
+  if (client->server_host)
+    connect_to_server (client, client->server_host, client->server_port);
+  else
+    search_for_server (client);
+
   return FALSE;
 }
 
 static void
 handle_connection_closed_cb (G_GNUC_UNUSED SoupSession *session, SoupMessage *msg, SnraClient *client)
 {
-  g_print ("HTTP connection closed, status %d (%s)\n", msg->status_code, msg->reason_phrase);
+  client->connecting = FALSE;
+
+  if (msg->status_code == SOUP_STATUS_CANCELLED)
+    return;
+
+  if (client->was_connected) {
+    g_print ("Disconnected from server. Reason %s status %d\n",
+      msg->reason_phrase, msg->status_code);
+  }
+  client->was_connected = FALSE;
+
   if (client->player)
     gst_element_set_state (client->player, GST_STATE_READY);
-  if (client->timeout == 0)
-    client->timeout = g_timeout_add_seconds (1,
-        (GSourceFunc) try_reconnect, client);
+  if (client->timeout == 0) {
+    client->timeout = g_timeout_add_seconds (1, (GSourceFunc) try_reconnect, client);
+  }
 }
 
 static void
@@ -113,7 +128,7 @@ handle_enrol_message (SnraClient *client, JsonReader *reader)
   if (resolver == NULL)
     return;
 
-  names = g_resolver_lookup_by_name (resolver, client->server_host, NULL, NULL);
+  names = g_resolver_lookup_by_name (resolver, client->connected_server, NULL, NULL);
   if (names) {
     gchar *name = g_inet_address_to_string ((GInetAddress *)(names->data));
 
@@ -132,7 +147,9 @@ static void
 on_eos_msg (G_GNUC_UNUSED GstBus *bus, G_GNUC_UNUSED GstMessage *msg, SnraClient *client)
 {
   SoupMessage *soup_msg;
-  char *url = g_strdup_printf ("http://%s:5457/control/next", client->server_host);
+  /* FIXME: Next song should all be handled server side */
+  char *url = g_strdup_printf ("http://%s:%u/control/next",
+                  client->connected_server, client->connected_port);
 
   g_print ("Got EOS message\n");
 
@@ -213,7 +230,7 @@ handle_play_media_message (SnraClient *client, JsonReader *reader)
     gst_element_set_state (client->player, GST_STATE_NULL);
   }
 
-  uri = g_strdup_printf ("%s://%s:%d%s", protocol, client->server_host, port, path);
+  uri = g_strdup_printf ("%s://%s:%d%s", protocol, client->connected_server, port, path);
   g_print ("Playing URI %s base_time %" GST_TIME_FORMAT "\n", uri, GST_TIME_ARGS (base_time));
   g_object_set (client->player, "uri", uri, NULL);
   g_free (uri);
@@ -270,8 +287,24 @@ handle_set_volume_message (SnraClient *client, JsonReader *reader)
 }
 
 static void
+handle_network_event (G_GNUC_UNUSED SoupMessage *msg, GSocketClientEvent event,
+    G_GNUC_UNUSED GIOStream *connection, SnraClient *client)
+{
+  if (event == G_SOCKET_CLIENT_COMPLETE) {
+    /* Successful server connection, stop avahi discovery */
+    if (client->avahi_client) {
+      avahi_client_free (client->avahi_client);
+      client->avahi_sb = NULL;
+      client->avahi_client = NULL;
+    }
+  }
+}
+
+static void
 handle_received_chunk (G_GNUC_UNUSED SoupMessage *msg, SoupBuffer *chunk, SnraClient *client)
 {
+  client->was_connected = TRUE;
+
   if (client->json == NULL)
     client->json = json_parser_new();
 #if 0
@@ -305,13 +338,19 @@ handle_received_chunk (G_GNUC_UNUSED SoupMessage *msg, SoupBuffer *chunk, SnraCl
 }
 
 static void
-connect_to_server (SnraClient *client, const gchar *server)
+connect_to_server (SnraClient *client, const gchar *server, int port)
 {
   SoupMessage *msg;
-  char *url = g_strdup_printf ("http://%s:5457/client", server);
+  char *url = g_strdup_printf ("http://%s:%u/client", server, port);
+
+  client->connecting = TRUE;
+  g_free (client->connected_server);
+  client->connected_server = g_strdup (server);
+  client->connected_port = port;
 
   msg = soup_message_new ("GET", url);
   soup_message_body_set_accumulate (msg->response_body, FALSE);
+  g_signal_connect (msg, "network-event", (GCallback) handle_network_event, client);
   g_signal_connect (msg, "got-chunk", (GCallback) handle_received_chunk, client);
   soup_session_queue_message (client->soup, msg, (SoupSessionCallback) handle_connection_closed_cb, client);
   g_free (url);
@@ -321,6 +360,7 @@ static void
 snra_client_init (SnraClient *client)
 {
   client->soup = soup_session_async_new();
+  client->server_port = 5457;
 }
 
 static void
@@ -330,8 +370,7 @@ snra_client_constructed (GObject *object)
 
   G_OBJECT_CLASS (snra_client_parent_class)->constructed (G_OBJECT (client));
 
-  if (client->server_host)
-    connect_to_server (client, client->server_host);
+  try_reconnect (client);
 }
 
 static void
@@ -357,6 +396,13 @@ snra_client_finalize(GObject *object)
 {
   SnraClient *client = (SnraClient *)(object);
 
+  if (client->avahi_sb)
+    avahi_service_browser_free (client->avahi_sb);
+  if (client->avahi_client)
+    avahi_client_free (client->avahi_client);
+  if (client->glib_poll)
+    avahi_glib_poll_free (client->glib_poll);
+
   if (client->net_clock)
     gst_object_unref (client->net_clock);
   if (client->soup)
@@ -371,6 +417,7 @@ snra_client_finalize(GObject *object)
   }
 
   g_free (client->server_host);
+  g_free (client->connected_server);
 
   G_OBJECT_CLASS (snra_client_parent_class)->finalize (object);
 }
@@ -389,6 +436,22 @@ snra_client_dispose(GObject *object)
 }
 
 static void
+split_server_host (SnraClient *client)
+{
+  /* See if the client->server_host string has a : and split into
+   * server:port if so */
+  gchar *sep = g_strrstr(client->server_host, ":");
+
+  if (sep) {
+    gchar *server = g_strndup (client->server_host, sep - client->server_host);
+
+    client->server_port = atoi (sep + 1);
+    g_free (client->server_host);
+    client->server_host = server;
+  }
+}
+
+static void
 snra_client_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
@@ -399,7 +462,8 @@ snra_client_set_property (GObject * object, guint prop_id,
       if (client->server_host)
         g_free (client->server_host);
       client->server_host = g_value_dup_string (value);
-      g_print ("Host %s\n", client->server_host);
+      if (client->server_host)
+        split_server_host (client);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -414,9 +478,11 @@ snra_client_get_property (GObject * object, guint prop_id,
   SnraClient *client = (SnraClient *)(object);
 
   switch (prop_id) {
-    case PROP_SERVER_HOST:
-      g_value_set_string (value, client->server_host);
+    case PROP_SERVER_HOST: {
+      gchar *tmp = g_strdup_printf ("%s:%u", client->server_host, client->server_port);
+      g_value_take_string (value, tmp);
       break;
+    }
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -429,4 +495,97 @@ snra_client_new(const char *server_host)
   SnraClient *client = g_object_new (SNRA_TYPE_CLIENT,
                            "server-host", server_host, NULL);
   return client;
+}
+
+static void
+avahi_resolve_callback (AvahiServiceResolver * r,
+    AVAHI_GCC_UNUSED AvahiIfIndex interface, AVAHI_GCC_UNUSED AvahiProtocol protocol,
+    AvahiResolverEvent event,
+    AVAHI_GCC_UNUSED const char *name,
+    AVAHI_GCC_UNUSED const char *type, AVAHI_GCC_UNUSED const char *domain,
+    const char *host_name,
+    AVAHI_GCC_UNUSED const AvahiAddress * address,
+    uint16_t port, AVAHI_GCC_UNUSED AvahiStringList * txt,
+    AVAHI_GCC_UNUSED AvahiLookupResultFlags flags, AVAHI_GCC_UNUSED void *userdata)
+{
+  SnraClient *client = userdata;
+
+  switch (event) {
+    case AVAHI_RESOLVER_FAILURE:
+      break;
+
+    case AVAHI_RESOLVER_FOUND:{
+      if (!client->connecting) {
+        /* FIXME: Build a list of servers and try each one in turn? */
+        connect_to_server (client, host_name, port);
+      }
+    }
+  }
+
+  avahi_service_resolver_free (r);
+}
+
+static void
+browse_callback (AVAHI_GCC_UNUSED AvahiServiceBrowser *b,
+    AvahiIfIndex interface, AvahiProtocol protocol,
+    AvahiBrowserEvent event,
+    const char *name, const char *type, const char *domain,
+    AVAHI_GCC_UNUSED AvahiLookupResultFlags flags, void *userdata)
+{
+  SnraClient *client = userdata;
+
+  switch (event) {
+    case AVAHI_BROWSER_FAILURE:
+      /* Respawn browser on a timer? */
+      avahi_service_browser_free (client->avahi_sb);
+      client->timeout = g_timeout_add_seconds (1,
+          (GSourceFunc) try_reconnect, client);
+      return;
+
+    case AVAHI_BROWSER_NEW:{
+      avahi_service_resolver_new (client->avahi_client, interface,
+                  protocol, name, type, domain, AVAHI_PROTO_UNSPEC, 0,
+                  avahi_resolve_callback, client);
+      break;
+    }
+    case AVAHI_BROWSER_REMOVE:
+    case AVAHI_BROWSER_ALL_FOR_NOW:
+    case AVAHI_BROWSER_CACHE_EXHAUSTED:
+      break;
+  }
+}
+
+static void
+search_for_server (SnraClient *client)
+{
+  const AvahiPoll *poll_api;
+  int error;
+
+  if (client->glib_poll == NULL) {
+    client->glib_poll = avahi_glib_poll_new (NULL, G_PRIORITY_DEFAULT);
+    if (client->glib_poll == NULL)
+      return;
+  }
+
+  poll_api = avahi_glib_poll_get (client->glib_poll);
+
+  if (client->avahi_client == NULL) {
+    client->avahi_client =
+        avahi_client_new (poll_api, AVAHI_CLIENT_NO_FAIL,
+            NULL, NULL, &error);
+    if (client->avahi_client == NULL) {
+      g_error ("Failed to create client: %s", avahi_strerror (error));
+      return;
+    }
+  }
+
+  if (client->avahi_sb == NULL) {
+    client->avahi_sb = avahi_service_browser_new (client->avahi_client, AVAHI_IF_UNSPEC,
+        AVAHI_PROTO_UNSPEC, "_sonarea._tcp", NULL, 0, browse_callback, client);
+    if (client->avahi_sb == NULL) {
+      fprintf (stderr, "Failed to create service browser: %s\n",
+          avahi_strerror (avahi_client_errno (client->avahi_client)));
+      return;
+    }
+  }
 }

@@ -94,3 +94,61 @@ snra_json_from_gst_structure (const GstStructure *s)
   return root;
 }
 
+static gboolean
+snra_json_structure_get_as (const GstStructure *structure,
+    const gchar *fieldname, GType t, GValue *dest)
+{
+  const GValue *v1 = gst_structure_get_value (structure, fieldname);
+  if (v1 == NULL)
+    return FALSE;
+
+  g_value_init (dest, t);
+  g_value_transform (v1, dest);
+
+  return TRUE;
+}
+
+gboolean 
+snra_json_structure_get_int (const GstStructure *structure,
+    const gchar *fieldname, gint *value)
+{
+  GValue dest = G_VALUE_INIT;
+  gboolean res = snra_json_structure_get_as (structure, fieldname, G_TYPE_INT, &dest);
+
+  if (res) {
+    if (value)
+      *value = g_value_get_int (&dest);
+    g_value_unset (&dest);
+  }
+  return TRUE;
+}
+
+gboolean 
+snra_json_structure_get_int64 (const GstStructure *structure,
+    const gchar *fieldname, gint64 *value)
+{
+  GValue dest = G_VALUE_INIT;
+  gboolean res = snra_json_structure_get_as (structure, fieldname, G_TYPE_INT64, &dest);
+
+  if (res) {
+    if (value)
+      *value = g_value_get_int64 (&dest);
+    g_value_unset (&dest);
+  }
+  return res;
+}
+
+gboolean 
+snra_json_structure_get_double (const GstStructure *structure,
+    const gchar *fieldname, gdouble *value)
+{
+  GValue dest = G_VALUE_INIT;
+  gboolean res = snra_json_structure_get_as (structure, fieldname, G_TYPE_DOUBLE, &dest);
+
+  if (res) {
+    if (value)
+      *value = g_value_get_double (&dest);
+    g_value_unset (&dest);
+  }
+  return res;
+}

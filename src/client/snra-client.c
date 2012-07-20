@@ -40,6 +40,8 @@
 #include <netdb.h>
 #endif
 
+#include <src/snra-json.h>
+
 #include "snra-client.h"
 
 G_DEFINE_TYPE (SnraClient, snra_client, G_TYPE_OBJECT);
@@ -98,30 +100,22 @@ handle_connection_closed_cb (G_GNUC_UNUSED SoupSession *session, SoupMessage *ms
 }
 
 static void
-handle_enrol_message (SnraClient *client, JsonReader *reader)
+handle_enrol_message (SnraClient *client, GstStructure *s)
 {
   int clock_port;
+  gint64 tmp;
   GstClockTime cur_time;
   gchar *server_ip_str = NULL;
+  gdouble new_vol;
  
-  if (!json_reader_read_member (reader, "clock-port"))
+  if (!snra_json_structure_get_int (s, "clock-port", &clock_port))
     return; /* Invalid message */
-  clock_port = json_reader_get_int_value (reader);
-  json_reader_end_member (reader);
 
-  if (!json_reader_read_member (reader, "current-time"))
+  if (!snra_json_structure_get_int64 (s, "current-time", &tmp))
     return; /* Invalid message */
-  cur_time = (GstClockTime)(json_reader_get_int_value (reader));
-  json_reader_end_member (reader);
+  cur_time = (GstClockTime)(tmp);
 
-  if (json_reader_read_member (reader, "volume-level")) {
-    gdouble new_vol = json_reader_get_double_value (reader);
-    json_reader_end_member (reader);
-    if (new_vol == 0) {
-      json_reader_read_member (reader, "volume-level");
-      new_vol = (double)(json_reader_get_int_value (reader));
-      json_reader_end_member (reader);
-    }
+  if (snra_json_structure_get_double (s, "volume-level", &new_vol)) {
     if (client->player == NULL) 
       construct_player (client);
 
@@ -224,32 +218,26 @@ construct_player (SnraClient *client)
 }
 
 static void
-handle_play_media_message (SnraClient *client, JsonReader *reader)
+handle_play_media_message (SnraClient *client, GstStructure *s)
 {
   const gchar *protocol, *path;
   int port;
   GstClockTime base_time;
+  gint64 tmp;
   gchar *uri;
   
-  if (!json_reader_read_member (reader, "resource-protocol"))
-    return; /* Invalid message */
-  protocol = json_reader_get_string_value (reader);
-  json_reader_end_member (reader);
+  protocol = gst_structure_get_string (s, "resource-protocol");
+  path = gst_structure_get_string (s, "resource-path");
 
-  if (!json_reader_read_member (reader, "resource-port"))
+  if (protocol == NULL || path == NULL)
     return; /* Invalid message */
-  port = json_reader_get_int_value (reader);
-  json_reader_end_member (reader);
 
-  if (!json_reader_read_member (reader, "resource-path"))
-    return; /* Invalid message */
-  path = json_reader_get_string_value (reader);
-  json_reader_end_member (reader);
+  if (!snra_json_structure_get_int (s, "resource-port", &port))
+    return;
 
-  if (!json_reader_read_member (reader, "base-time"))
+  if (!snra_json_structure_get_int64 (s, "base-time", &tmp))
     return; /* Invalid message */
-  base_time = json_reader_get_int_value (reader);
-  json_reader_end_member (reader);
+  base_time = (GstClockTime)(tmp);
 
   if (client->player == NULL) {
     construct_player (client);
@@ -273,14 +261,14 @@ handle_play_media_message (SnraClient *client, JsonReader *reader)
 }
 
 static void
-handle_play_message (SnraClient *client, JsonReader *reader)
+handle_play_message (SnraClient *client, GstStructure *s)
 {
   GstClockTime base_time;
+  gint64 tmp;
 
-  if (!json_reader_read_member (reader, "base-time"))
+  if (!snra_json_structure_get_int64 (s, "base-time", &tmp))
     return; /* Invalid message */
-  base_time = json_reader_get_int_value (reader);
-  json_reader_end_member (reader);
+  base_time = (GstClockTime)(tmp);
 
   if (client->player) {
     GstClockTime stream_time = gst_clock_get_time (client->net_clock) - base_time;
@@ -292,22 +280,15 @@ handle_play_message (SnraClient *client, JsonReader *reader)
 }
 
 static void
-handle_set_volume_message (SnraClient *client, JsonReader *reader)
+handle_set_volume_message (SnraClient *client, GstStructure *s)
 {
   gdouble new_vol;
 
-  if (!json_reader_read_member (reader, "level"))
-    return; /* Invalid message */
-  new_vol = json_reader_get_double_value (reader);
+  if (!snra_json_structure_get_double (s, "level", &new_vol)) 
+    return;
 
-  json_reader_end_member (reader);
-
-  if (new_vol == 0) {
-    if (!json_reader_read_member (reader, "level"))
-      return; /* Invalid message */
-    new_vol = (double)(json_reader_get_int_value (reader));
-    json_reader_end_member (reader);
-  }
+  if (client->player == NULL) 
+    construct_player (client);
 
   if (client->player) {
     g_print ("New volume %g\n", new_vol);
@@ -337,25 +318,31 @@ handle_received_chunk (G_GNUC_UNUSED SoupMessage *msg, SoupBuffer *chunk, SnraCl
   }
 #endif
   if (json_parser_load_from_data (client->json, chunk->data, chunk->length, NULL)) {
-    JsonReader *reader = json_reader_new (json_parser_get_root (client->json));
-    if (json_reader_read_member (reader, "msg-type")) {
-      const char *msg_type = json_reader_get_string_value (reader);
-      json_reader_end_member (reader);
-      g_print ("event of type %s\n", msg_type);
-      if (g_str_equal (msg_type, "enrol"))
-        handle_enrol_message (client, reader);
-      else if (g_str_equal (msg_type, "play-media"))
-        handle_play_media_message (client, reader);
-      else if (g_str_equal (msg_type, "play"))
-        handle_play_message (client, reader);
-      else if (g_str_equal (msg_type, "pause")) {
-        if (client->player)
-            gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PAUSED);
-      }
-      else if (g_str_equal (msg_type, "volume"))
-        handle_set_volume_message (client, reader);
+    JsonNode *root = json_parser_get_root (client->json);
+    GstStructure *s = snra_json_to_gst_structure(root);
+    const char *msg_type;
+
+    if (s == NULL)
+      return; /* Invalid chunk */
+
+    msg_type = gst_structure_get_string (s, "msg-type");
+    if (msg_type == NULL) {
+      gst_structure_free (s);
+      return;
     }
-    g_object_unref (reader);
+    g_print ("event of type %s\n", msg_type);
+    if (g_str_equal (msg_type, "enrol"))
+      handle_enrol_message (client, s);
+    else if (g_str_equal (msg_type, "play-media"))
+      handle_play_media_message (client, s);
+    else if (g_str_equal (msg_type, "play"))
+      handle_play_message (client, s);
+    else if (g_str_equal (msg_type, "pause")) {
+       if (client->player)
+          gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PAUSED);
+    }
+    else if (g_str_equal (msg_type, "volume"))
+      handle_set_volume_message (client, s);
   }
 }
 

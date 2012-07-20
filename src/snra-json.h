@@ -27,6 +27,12 @@ G_BEGIN_DECLS
 
 GstStructure *snra_json_to_gst_structure (JsonNode *root);
 JsonNode *snra_json_from_gst_structure (const GstStructure *s);
+gboolean snra_json_structure_get_int (const GstStructure *structure,
+    const gchar *fieldname, gint *value);
+gboolean snra_json_structure_get_int64 (const GstStructure *structure,
+    const gchar *fieldname, gint64 *value);
+gboolean snra_json_structure_get_double (const GstStructure *structure,
+    const gchar *fieldname, gdouble *value);
 
 G_END_DECLS
 

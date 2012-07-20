@@ -27,7 +27,7 @@
 #include <gst/rtsp-server/rtsp-server.h>
 #endif
 
-#include "snra-types.h"
+#include <src/snra-types.h>
 #include "snra-avahi.h"
 
 G_BEGIN_DECLS

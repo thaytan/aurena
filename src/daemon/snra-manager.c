@@ -157,13 +157,13 @@ control_callback (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
     }
     case SNRA_CONTROL_PAUSE: {
       if (!manager->paused)
-        snra_server_send_pause (manager->server);
+        snra_server_send_pause (manager->server, NULL);
       manager->paused = TRUE;
       break;
     }
     case SNRA_CONTROL_PLAY: {
       if (manager->paused)
-        snra_server_send_play (manager->server);
+        snra_server_send_play (manager->server, NULL);
       manager->paused = FALSE;
       break;
     }
@@ -177,7 +177,7 @@ control_callback (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
 
       if (vol_str && sscanf (vol_str, "%lf", &new_vol)) {
         new_vol = CLAMP (new_vol, 0.0, 10.0);
-        snra_server_send_volume (manager->server, new_vol);
+        snra_server_send_volume (manager->server, NULL, new_vol);
       }
 
       break;

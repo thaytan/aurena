@@ -24,7 +24,7 @@
 #include <gst/net/gstnet.h>
 #include <libsoup/soup-types.h>
 
-#include "snra-types.h"
+#include <src/snra-types.h>
 
 G_BEGIN_DECLS
 

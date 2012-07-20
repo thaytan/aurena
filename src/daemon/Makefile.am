@@ -10,7 +10,6 @@ libsnra_daemon_la_SOURCES = \
     snra-resource.c \
     snra-resource.h \
     snra-server.c \
-    snra-server.h \
-    snra-types.h
+    snra-server.h 
 libsnra_daemon_la_CPPFLAGS = $(SNRA_COMMON_CFLAGS) $(GST_CFLAGS) $(GST_RTSP_CFLAGS) $(EXTRA_CFLAGS)
 libsnra_daemon_la_LIBADD  = 

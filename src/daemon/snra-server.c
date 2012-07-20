@@ -27,8 +27,9 @@
 #include <libsoup/soup-message.h>
 #include <libsoup/soup-socket.h>
 #include <libsoup/soup-address.h>
-
 #include <json-glib/json-glib.h>
+
+#include <src/snra-json.h>
 
 #include "snra-server.h"
 #include "snra-resource.h"
@@ -55,29 +56,36 @@ static void snra_server_set_property (GObject * object, guint prop_id,
 static void snra_server_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
+static void snra_soup_message_set_redirect (SoupMessage *msg,
+    guint status_code, const char *redirect_uri);
 static void snra_server_finalize(GObject *object);
 static void snra_server_dispose(GObject *object);
 static void free_client_connection (gpointer data);
 
 static void
-server_send_json_to_client (SnraServer *server, SnraClientConnection *client, JsonBuilder *builder)
+server_send_msg_to_client (SnraServer *server, SnraClientConnection *client,
+    GstStructure *msg)
 {
   JsonGenerator *gen;
-  JsonNode * root;
+  JsonNode *root;
   gchar *body;
+  gsize len;
+
+  root = snra_json_from_gst_structure(msg);
+  gst_structure_free(msg);
 
   gen = json_generator_new ();
-  root = json_builder_get_root (builder);
 
   json_generator_set_root (gen, root);
-  body = json_generator_to_data (gen, NULL);
 
-  json_node_free (root);
+  body = json_generator_to_data (gen, &len);
+
   g_object_unref (gen);
-  g_object_unref (builder);
+  json_node_free (root);
 
   if (client) {
-    soup_message_body_append (client->msg->response_body,/* "application/json", */ SOUP_MEMORY_TAKE, body, strlen(body));
+    soup_message_body_append (client->msg->response_body,/* "application/json", */
+        SOUP_MEMORY_TAKE, body, len);
     soup_server_unpause_message (server->soup, client->msg);
   }
   else {
@@ -85,7 +93,8 @@ server_send_json_to_client (SnraServer *server, SnraClientConnection *client, Js
     GList *cur;
     for (cur = server->clients; cur != NULL; cur = g_list_next (cur)) {
       client = (SnraClientConnection *)(cur->data);
-      soup_message_body_append (client->msg->response_body,/* "application/json", */ SOUP_MEMORY_COPY, body, strlen(body));
+      soup_message_body_append (client->msg->response_body,/* "application/json", */
+          SOUP_MEMORY_COPY, body, len);
       soup_server_unpause_message (server->soup, client->msg);
     }
     g_free (body);
@@ -95,70 +104,41 @@ server_send_json_to_client (SnraServer *server, SnraClientConnection *client, Js
 void
 server_send_enrol_msg (SnraServer *server, SnraClientConnection *client)
 {
-  JsonBuilder *builder = json_builder_new ();
   int clock_port;
   GstClock *clock;
   GstClockTime cur_time;
+  GstStructure *msg;
 
   g_object_get (server->net_clock, "clock", &clock, NULL);
   cur_time = gst_clock_get_time (clock);
   gst_object_unref (clock);
 
-  json_builder_begin_object (builder);
-
-  json_builder_set_member_name (builder, "msg-type");
-  json_builder_add_string_value (builder, "enrol");
-
   g_object_get (server->net_clock, "port", &clock_port, NULL);
-  json_builder_set_member_name (builder, "clock-port");
-  json_builder_add_int_value (builder, clock_port);
 
-  json_builder_set_member_name (builder, "current-time");
-  json_builder_add_int_value (builder, (gint64)(cur_time));
+  msg = gst_structure_new ("json",
+            "msg-type", G_TYPE_STRING, "enrol",
+            "clock-port", G_TYPE_INT, clock_port,
+            "current-time", G_TYPE_INT64, (gint64)(cur_time),
+            "volume-level", G_TYPE_DOUBLE, server->current_volume,
+            NULL);
 
-  json_builder_set_member_name (builder, "volume-level");
-  json_builder_add_double_value (builder, server->current_volume);
-
-  json_builder_end_object (builder);
-
-  server_send_json_to_client (server, client, builder);
+  server_send_msg_to_client (server, client, msg);
 }
 
 static void
-server_send_play_media_msg (SnraServer *server, SnraClientConnection *client, guint resource_id)
+server_send_play_media_msg (SnraServer *server, SnraClientConnection *client,
+    guint resource_id)
 {
-  JsonBuilder *builder = json_builder_new ();
   GstClock *clock;
   GstClockTime cur_time;
   gchar *resource_path;
+  GstStructure *msg;
 
   g_object_get (server->net_clock, "clock", &clock, NULL);
   cur_time = gst_clock_get_time (clock);
   gst_object_unref (clock);
 
-  json_builder_begin_object (builder);
-
-  json_builder_set_member_name (builder, "msg-type");
-  json_builder_add_string_value (builder, "play-media");
-
-#if 1
-  /* Serve via HTTP */
-  json_builder_set_member_name (builder, "resource-protocol");
-  json_builder_add_string_value (builder, "http");
-  json_builder_set_member_name (builder, "resource-port");
-  json_builder_add_int_value (builder, server->port);
-#else
-  /* Serve via RTSP */
-  json_builder_set_member_name (builder, "resource-protocol");
-  json_builder_add_string_value (builder, "rtsp");
-  json_builder_set_member_name (builder, "resource-port");
-  json_builder_add_int_value (builder, server->rtsp_port);
-#endif
-
   resource_path = g_strdup_printf ("/resource/%u", resource_id);
-  json_builder_set_member_name (builder, "resource-path");
-  json_builder_add_string_value (builder, resource_path);
-  g_free (resource_path);
 
   if (server->base_time == GST_CLOCK_TIME_NONE) {
     // configure a base time 0.25 seconds in the future
@@ -167,12 +147,22 @@ server_send_play_media_msg (SnraServer *server, SnraClientConnection *client, gu
     g_print ("Base time now %" G_GUINT64_FORMAT "\n", server->base_time);
   }
 
-  json_builder_set_member_name (builder, "base-time");
-  json_builder_add_int_value (builder, (gint64)(server->base_time));
+  msg = gst_structure_new ("json",
+            "msg-type", G_TYPE_STRING, "play-media",
+#if 1
+            "resource-protocol", G_TYPE_STRING, "http",
+            "resource-port", G_TYPE_INT, server->port,
+#else
+            "resource-protocol", G_TYPE_STRING, "rtsp",
+            "resource-port", G_TYPE_INT, server->rtsp_port,
+#endif
+            "resource-path", G_TYPE_STRING, resource_path,
+            "base-time", G_TYPE_INT64, (gint64)(server->base_time),
+            NULL);
 
-  json_builder_end_object (builder);
+  g_free (resource_path);
 
-  server_send_json_to_client (server, client, builder);
+  server_send_msg_to_client (server, client, msg);
 }
 
 static gint
@@ -216,12 +206,30 @@ server_client_cb (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
 }
 
 static void
+snra_soup_message_set_redirect (SoupMessage *msg, guint status_code,
+    const char *redirect_uri)
+{
+        SoupURI *location;
+        char *location_str;
+
+        location = soup_uri_new_with_base (soup_message_get_uri (msg), redirect_uri);
+        g_return_if_fail (location != NULL);
+
+        soup_message_set_status (msg, status_code);
+        location_str = soup_uri_to_string (location, FALSE);
+        soup_message_headers_replace (msg->response_headers, "Location",
+                                      location_str);
+        g_free (location_str);
+        soup_uri_free (location);
+}
+
+static void
 server_fallback_cb (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
   G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable *query,
   G_GNUC_UNUSED SoupClientContext *client, G_GNUC_UNUSED SnraServer *server)
 {
   if (g_str_equal (path, "/")) {
-    soup_message_set_redirect (msg, SOUP_STATUS_MOVED_PERMANENTLY, "/ui/");
+    snra_soup_message_set_redirect (msg, SOUP_STATUS_MOVED_PERMANENTLY, "/ui/");
   }
   else {
     soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
@@ -284,7 +292,7 @@ server_ui_cb (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
     goto fail;
 
   if (g_str_equal (file_path, "")) {
-    soup_message_set_redirect (msg, SOUP_STATUS_MOVED_PERMANENTLY, "/ui/");
+    snra_soup_message_set_redirect (msg, SOUP_STATUS_MOVED_PERMANENTLY, "/ui/");
     return;
   }
 
@@ -408,7 +416,7 @@ snra_server_dispose(GObject *object)
 #if GLIB_CHECK_VERSION(2,28,0)
   g_list_free_full (server->clients, free_client_connection);
 #else
-  g_list_foreach (server->clients, free_client_connection);
+  g_list_foreach (server->clients, (GFunc) free_client_connection, NULL);
   g_list_free (server->clients);
 #endif
   server->clients = NULL;
@@ -500,15 +508,11 @@ snra_server_play_resource (SnraServer *server, guint resource_id)
   server_send_play_media_msg (server, NULL, resource_id);
 }
 
-void snra_server_send_play (SnraServer *server)
+void
+snra_server_send_play (SnraServer *server, SnraClientConnection *client)
 {
-  JsonBuilder *builder = json_builder_new ();
   GstClock *clock;
-
-  json_builder_begin_object (builder);
-
-  json_builder_set_member_name (builder, "msg-type");
-  json_builder_add_string_value (builder, "play");
+  GstStructure *msg;
 
   /* Update base time to match length of time paused */
   g_object_get (server->net_clock, "clock", &clock, NULL);
@@ -516,27 +520,25 @@ void snra_server_send_play (SnraServer *server)
   gst_object_unref (clock);
   server->stream_time = GST_CLOCK_TIME_NONE;
 
-  json_builder_set_member_name (builder, "base-time");
-  json_builder_add_int_value (builder, (gint64)(server->base_time));
+  msg = gst_structure_new ("json",
+            "msg-type", G_TYPE_STRING, "play",
+            "base-time", G_TYPE_INT64, (gint64)(server->base_time),
+            NULL);
 
-  json_builder_end_object (builder);
-
-  server_send_json_to_client (server, NULL, builder);
+  server_send_msg_to_client (server, client, msg);
 }
 
-void snra_server_send_pause (SnraServer *server)
+void
+snra_server_send_pause (SnraServer *server, SnraClientConnection *client)
 {
-  JsonBuilder *builder = json_builder_new ();
   GstClock *clock;
+  GstStructure *msg;
 
-  json_builder_begin_object (builder);
+  msg = gst_structure_new ("json",
+            "msg-type", G_TYPE_STRING, "pause",
+            NULL);
 
-  json_builder_set_member_name (builder, "msg-type");
-  json_builder_add_string_value (builder, "pause");
-
-  json_builder_end_object (builder);
-
-  server_send_json_to_client (server, NULL, builder);
+  server_send_msg_to_client (server, client, msg);
 
   if (server->stream_time == GST_CLOCK_TIME_NONE) {
     g_object_get (server->net_clock, "clock", &clock, NULL);
@@ -547,21 +549,17 @@ void snra_server_send_pause (SnraServer *server)
   }
 }
 
-void snra_server_send_volume (SnraServer *server, gdouble volume)
+void
+snra_server_send_volume (SnraServer *server, SnraClientConnection *client, gdouble volume)
 {
-  JsonBuilder *builder = json_builder_new ();
+  GstStructure *msg;
 
   server->current_volume = volume;
 
-  json_builder_begin_object (builder);
+  msg = gst_structure_new ("json",
+            "msg-type", G_TYPE_STRING, "volume",
+            "level", G_TYPE_DOUBLE, volume,
+            NULL);
 
-  json_builder_set_member_name (builder, "msg-type");
-  json_builder_add_string_value (builder, "volume");
-
-  json_builder_set_member_name (builder, "level");
-  json_builder_add_double_value (builder, volume);
-
-  json_builder_end_object (builder);
-
-  server_send_json_to_client (server, NULL, builder);
+  server_send_msg_to_client (server, client, msg);
 }

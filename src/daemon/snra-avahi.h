@@ -22,7 +22,7 @@
 #include <glib.h>
 #include <glib-object.h>
 
-#include "snra-types.h"
+#include <src/snra-types.h>
 
 G_BEGIN_DECLS
 

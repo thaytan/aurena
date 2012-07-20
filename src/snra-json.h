@@ -16,14 +16,17 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  */
-#ifndef __SRNA_CLIENT_TYPES_H__
-#define __SRNA_CLIENT_TYPES_H__
 
-#include <glib.h>
+#ifndef __SNRA_JSON_H__
+#define __SNRA_JSON_H__
+
+#include <gst/gst.h>
+#include <json-glib/json-glib.h>
 
 G_BEGIN_DECLS
 
-typedef struct _SnraClient SnraClient;
+GstStructure *snra_json_to_gst_structure (JsonNode *root);
+JsonNode *snra_json_from_gst_structure (const GstStructure *s);
 
 G_END_DECLS
 

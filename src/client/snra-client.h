@@ -12,7 +12,7 @@
 #include <avahi-common/error.h>
 #include <avahi-glib/glib-watch.h>
 
-#include "snra-client-types.h"
+#include <src/snra-types.h>
 
 G_BEGIN_DECLS
 

@@ -50,8 +50,6 @@ struct _SnraClientConnection
   SoupMessage *msg;
 };
 
-static GParamSpec *obj_properties[PROP_LAST] = { NULL, };
-
 static void snra_server_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void snra_server_get_property (GObject * object, guint prop_id,
@@ -334,7 +332,7 @@ snra_server_init (SnraServer *server)
   server->base_time = GST_CLOCK_TIME_NONE;
   server->stream_time = GST_CLOCK_TIME_NONE;
   server->port = 5457;
-  server->current_volume = 1.0;
+  server->current_volume = 0.1;
 
   server->soup = soup_server_new(SOUP_SERVER_PORT, server->port, NULL);
   soup_server_add_handler (server->soup, "/", (SoupServerCallback) server_fallback_cb, g_object_ref (server), g_object_unref);
@@ -364,22 +362,21 @@ snra_server_class_init (SnraServerClass *server_class)
   gobject_class->set_property = snra_server_set_property;
   gobject_class->get_property = snra_server_get_property;
 
-  obj_properties[PROP_PORT] =
+  g_object_class_install_property (gobject_class, PROP_PORT,
     g_param_spec_int ("port", "port",
                          "port for Sonarea service",
                          1, 65535, 5457,
-                         G_PARAM_READWRITE);
-  obj_properties[PROP_RTSP_PORT] =
+                         G_PARAM_READWRITE));
+  g_object_class_install_property (gobject_class, PROP_RTSP_PORT,
     g_param_spec_int ("rtsp-port", "RTSP port",
                          "port for RTSP service",
                          1, 65535, 5458,
-                         G_PARAM_READWRITE);
-  obj_properties[PROP_CLOCK] =
+                         G_PARAM_READWRITE));
+  g_object_class_install_property (gobject_class, PROP_CLOCK,
     g_param_spec_object ("clock", "clock",
                          "clock to synchronise playback",
                          GST_TYPE_NET_TIME_PROVIDER,
-                         G_PARAM_READWRITE);
-  g_object_class_install_properties (gobject_class, PROP_LAST, obj_properties);
+                         G_PARAM_READWRITE));
 }
 
 static void
@@ -408,7 +405,12 @@ snra_server_dispose(GObject *object)
 {
   SnraServer *server = (SnraServer *)(object);
 
+#if GLIB_CHECK_VERSION(2,28,0)
   g_list_free_full (server->clients, free_client_connection);
+#else
+  g_list_foreach (server->clients, free_client_connection);
+  g_list_free (server->clients);
+#endif
   server->clients = NULL;
 
   soup_server_quit (server->soup);

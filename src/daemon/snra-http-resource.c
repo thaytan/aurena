@@ -39,8 +39,6 @@ enum
   PROP_LAST
 };
 
-static GParamSpec *obj_properties[PROP_LAST] = { NULL, };
-
 static void snra_http_resource_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void snra_http_resource_get_property (GObject * object, guint prop_id,
@@ -49,7 +47,6 @@ static void snra_http_resource_get_property (GObject * object, guint prop_id,
 typedef struct _SnraTransfer
 {
   SnraHttpResource *resource;
-  gsize position;
 } SnraTransfer;
 
 static gboolean
@@ -76,19 +73,29 @@ snra_http_resource_close(SnraHttpResource *resource)
     resource->use_count--;
     if (resource->use_count == 0) {
       g_print ("Releasing resource %s\n", resource->source_path);
+#if GLIB_CHECK_VERSION(2,22,0)
       g_mapped_file_unref (resource->data);
+#else
+      g_mapped_file_free (resource->data);
+#endif
       resource->data = NULL;
     }
   }
 }
 
 static void
+resource_wrote_body (G_GNUC_UNUSED SoupMessage *msg, SnraTransfer *transfer)
+{
+  g_print ("Got wrote-body for %s. Use count now %d\n", transfer->resource->source_path, transfer->resource->use_count);
+}
+
+static void
 resource_finished (G_GNUC_UNUSED SoupMessage *msg, SnraTransfer *transfer)
 {
+  g_print ("Completed transfer of %s. Use count now %d\n", transfer->resource->source_path, transfer->resource->use_count-1);
+
   /* Close the resource, destroy the transfer */
   snra_http_resource_close(transfer->resource);
-
-  g_print ("Completed transfer of %s. Use count now %d\n", transfer->resource->source_path, transfer->resource->use_count);
 
   g_object_unref (transfer->resource);
   g_free (transfer);
@@ -114,6 +121,7 @@ snra_http_resource_new_transfer (SnraHttpResource *resource, SoupMessage *msg)
     gchar *chunk = g_mapped_file_get_contents (transfer->resource->data); 
 
     g_signal_connect (msg, "finished", G_CALLBACK (resource_finished), transfer);
+    g_signal_connect (msg, "wrote-body", G_CALLBACK (resource_wrote_body), transfer);
 
     soup_message_set_status (msg, SOUP_STATUS_OK);
     soup_message_headers_set_encoding (msg->response_headers,
@@ -123,6 +131,7 @@ snra_http_resource_new_transfer (SnraHttpResource *resource, SoupMessage *msg)
 
     soup_message_headers_set_content_length (msg->response_headers, len);
     soup_message_body_append (msg->response_body, SOUP_MEMORY_TEMPORARY, chunk, len);
+    soup_message_body_complete (msg->response_body);
   }
 }
 
@@ -139,12 +148,11 @@ snra_http_resource_class_init (SnraHttpResourceClass *resource_class)
   gobject_class->set_property = snra_http_resource_set_property;
   gobject_class->get_property = snra_http_resource_get_property;
 
-  obj_properties[PROP_SOURCE_PATH] =
+  g_object_class_install_property (gobject_class, PROP_SOURCE_PATH,
     g_param_spec_string ("source-path", "Source Path",
                          "Source file path resource",
                          NULL,
-                         G_PARAM_READWRITE);
-  g_object_class_install_properties (gobject_class, PROP_LAST, obj_properties);
+                         G_PARAM_READWRITE));
 }
 
 static void

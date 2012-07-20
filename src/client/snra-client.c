@@ -31,6 +31,14 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <glib.h>
+
+#if !GLIB_CHECK_VERSION(2,22,0)
+/* GResolver not available */
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#endif
 
 #include "snra-client.h"
 
@@ -42,8 +50,6 @@ enum
   PROP_SERVER_HOST,
   PROP_LAST
 };
-
-static GParamSpec *obj_properties[PROP_LAST] = { NULL, };
 
 static void snra_client_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
@@ -96,8 +102,7 @@ handle_enrol_message (SnraClient *client, JsonReader *reader)
 {
   int clock_port;
   GstClockTime cur_time;
-  GResolver *resolver;
-  GList *names;
+  gchar *server_ip_str = NULL;
  
   if (!json_reader_read_member (reader, "clock-port"))
     return; /* Invalid message */
@@ -127,23 +132,45 @@ handle_enrol_message (SnraClient *client, JsonReader *reader)
     }
   }
 
-  resolver = g_resolver_get_default ();
-  if (resolver == NULL)
-    return;
+#if GLIB_CHECK_VERSION(2,22,0)
+  {
+    GResolver *resolver = g_resolver_get_default ();
+    GList *names;
 
-  names = g_resolver_lookup_by_name (resolver, client->connected_server, NULL, NULL);
-  if (names) {
-    gchar *name = g_inet_address_to_string ((GInetAddress *)(names->data));
+    if (resolver == NULL)
+      return;
 
+    names = g_resolver_lookup_by_name (resolver, client->connected_server, NULL, NULL);
+    if (names) {
+      server_ip_str = g_inet_address_to_string ((GInetAddress *)(names->data));
+      g_resolver_free_addresses (names);
+    }
+    g_object_unref (resolver);
+  }
+#else
+  {
+    struct addrinfo *names = NULL;
+    if (getaddrinfo (client->connected_server, NULL, NULL, &names))
+      return;
+    if (names) {
+      char hbuf[NI_MAXHOST];
+      if (getnameinfo(names->ai_addr, names->ai_addrlen,
+          hbuf, sizeof(hbuf), NULL, 0, NI_NUMERICHOST) == 0) {
+        server_ip_str = g_strdup (hbuf);
+      }
+      freeaddrinfo(names);
+    }
+  }
+#endif
+  if (server_ip_str) {
+    g_print ("Creating net clock at %s:%d time %" GST_TIME_FORMAT "\n",
+        server_ip_str, clock_port, GST_TIME_ARGS (cur_time));
     if (client->net_clock)
       gst_object_unref (client->net_clock);
-    g_print ("Creating net clock at %s:%d time %" GST_TIME_FORMAT "\n", name, clock_port, GST_TIME_ARGS (cur_time));
-    client->net_clock = gst_net_client_clock_new ("net_clock", name, clock_port, cur_time);
-
-    g_resolver_free_addresses (names);
+    client->net_clock = gst_net_client_clock_new ("net_clock", server_ip_str,
+        clock_port, cur_time);
+    g_free (server_ip_str);
   }
-
-  g_object_unref (resolver);
 }
 
 static void
@@ -290,23 +317,15 @@ handle_set_volume_message (SnraClient *client, JsonReader *reader)
 }
 
 static void
-handle_network_event (G_GNUC_UNUSED SoupMessage *msg, GSocketClientEvent event,
-    G_GNUC_UNUSED GIOStream *connection, SnraClient *client)
-{
-  if (event == G_SOCKET_CLIENT_COMPLETE) {
-    /* Successful server connection, stop avahi discovery */
-    if (client->avahi_client) {
-      avahi_client_free (client->avahi_client);
-      client->avahi_sb = NULL;
-      client->avahi_client = NULL;
-    }
-  }
-}
-
-static void
 handle_received_chunk (G_GNUC_UNUSED SoupMessage *msg, SoupBuffer *chunk, SnraClient *client)
 {
   client->was_connected = TRUE;
+  /* Successful server connection, stop avahi discovery */
+  if (client->avahi_client) {
+    avahi_client_free (client->avahi_client);
+    client->avahi_sb = NULL;
+    client->avahi_client = NULL;
+  }
 
   if (client->json == NULL)
     client->json = json_parser_new();
@@ -353,7 +372,6 @@ connect_to_server (SnraClient *client, const gchar *server, int port)
 
   msg = soup_message_new ("GET", url);
   soup_message_body_set_accumulate (msg->response_body, FALSE);
-  g_signal_connect (msg, "network-event", (GCallback) handle_network_event, client);
   g_signal_connect (msg, "got-chunk", (GCallback) handle_received_chunk, client);
   soup_session_queue_message (client->soup, msg, (SoupSessionCallback) handle_connection_closed_cb, client);
   g_free (url);
@@ -388,10 +406,9 @@ snra_client_class_init (SnraClientClass *client_class)
   gobject_class->set_property = snra_client_set_property;
   gobject_class->get_property = snra_client_get_property;
 
-  obj_properties[PROP_SERVER_HOST] =
+  g_object_class_install_property (gobject_class, PROP_SERVER_HOST,
     g_param_spec_string ("server-host", "Sonarea Server", "Sonarea Server hostname or IP",
-                         NULL, G_PARAM_READWRITE | G_PARAM_CONSTRUCT);
-  g_object_class_install_properties (gobject_class, PROP_LAST, obj_properties);
+                         NULL, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
 }
 
 static void

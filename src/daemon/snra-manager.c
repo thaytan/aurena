@@ -199,7 +199,7 @@ done:
 static void
 snra_manager_init (SnraManager *manager)
 {
-  manager->playlist = g_ptr_array_new_with_free_func (g_free);
+  manager->playlist = g_ptr_array_new ();
   manager->rtsp_port = 5458;
   manager->net_clock = create_net_clock();
 #ifdef HAVE_GST_RTSP
@@ -228,6 +228,7 @@ snra_manager_finalize(GObject *object)
 {
   SnraManager *manager = (SnraManager *)(object);
 
+  g_ptr_array_foreach (manager->playlist, (GFunc) g_free, NULL);
   g_ptr_array_free (manager->playlist, TRUE);
 }
 

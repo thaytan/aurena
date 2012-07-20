@@ -1,5 +1,6 @@
-noinst_PROGRAMS = simple-client
-simple_client_SOURCES = simple-client.c \
+noinst_LTLIBRARIES = libsnra_client.la
+
+libsnra_client_la_SOURCES = \
         snra-client.c snra-client.h
-simple_client_CPPFLAGS = $(SNRA_COMMON_CFLAGS) $(GST_CFLAGS) $(EXTRA_CFLAGS)
-simple_client_LDADD = $(SNRA_COMMON_LIBS) $(GST_LIBS)
+libsnra_client_la_CPPFLAGS = $(SNRA_COMMON_CFLAGS) $(GST_CFLAGS) $(EXTRA_CFLAGS)
+libsnra_client_la_LIBADD  = 

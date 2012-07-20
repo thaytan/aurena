@@ -29,7 +29,7 @@
 
 #include <avahi-glib/glib-malloc.h>
 
-#include "snra-client.h"
+#include <src/client/snra-client.h>
 
 static GMainLoop *ml = NULL;
 static gint sigint_received;

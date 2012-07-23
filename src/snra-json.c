@@ -26,6 +26,10 @@
 
 #include <src/snra-json.h>
 
+#ifndef G_VALUE_INIT
+#define G_VALUE_INIT {{0,}, {0,}}
+#endif
+
 static void
 snra_gst_struct_from_object (G_GNUC_UNUSED JsonObject *o,
     const gchar *member_name, JsonNode *member_node,

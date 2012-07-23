@@ -376,7 +376,8 @@ snra_client_constructed (GObject *object)
 {
   SnraClient *client = (SnraClient *)(object);
 
-  G_OBJECT_CLASS (snra_client_parent_class)->constructed (G_OBJECT (client));
+  if (G_OBJECT_CLASS (snra_client_parent_class)->constructed != NULL)
+    G_OBJECT_CLASS (snra_client_parent_class)->constructed (object);
 
   try_reconnect (client);
 }
@@ -563,6 +564,26 @@ browse_callback (AVAHI_GCC_UNUSED AvahiServiceBrowser *b,
 }
 
 static void
+snra_avahi_client_callback (AvahiClient *s, AvahiClientState state, SnraClient *client)
+{
+  switch (state) {
+    case AVAHI_CLIENT_S_RUNNING: {
+      if (client->avahi_sb == NULL) {
+        client->avahi_sb = avahi_service_browser_new (s, AVAHI_IF_UNSPEC,
+            AVAHI_PROTO_UNSPEC, "_sonarea._tcp", NULL, 0, browse_callback, client);
+        if (client->avahi_sb == NULL) {
+          fprintf (stderr, "Failed to create service browser: %s\n",
+              avahi_strerror (avahi_client_errno (client->avahi_client)));
+        }
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+static void
 search_for_server (SnraClient *client)
 {
   const AvahiPoll *poll_api;
@@ -579,20 +600,11 @@ search_for_server (SnraClient *client)
   if (client->avahi_client == NULL) {
     client->avahi_client =
         avahi_client_new (poll_api, AVAHI_CLIENT_NO_FAIL,
-            NULL, NULL, &error);
+            (AvahiClientCallback) snra_avahi_client_callback, client, &error);
     if (client->avahi_client == NULL) {
-      g_error ("Failed to create client: %s", avahi_strerror (error));
+      fprintf (stderr, "Failed to connect to Avahi: %s", avahi_strerror (error));
       return;
     }
   }
 
-  if (client->avahi_sb == NULL) {
-    client->avahi_sb = avahi_service_browser_new (client->avahi_client, AVAHI_IF_UNSPEC,
-        AVAHI_PROTO_UNSPEC, "_sonarea._tcp", NULL, 0, browse_callback, client);
-    if (client->avahi_sb == NULL) {
-      fprintf (stderr, "Failed to create service browser: %s\n",
-          avahi_strerror (avahi_client_errno (client->avahi_client)));
-      return;
-    }
-  }
 }

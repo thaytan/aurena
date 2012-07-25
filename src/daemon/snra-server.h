@@ -32,6 +32,12 @@ G_BEGIN_DECLS
 
 typedef struct _SnraServerClass SnraServerClass;
 
+struct _SnraServerClient
+{
+  guint client_id;
+  SoupMessage *event_pipe;
+};
+
 struct _SnraServer
 {
   GObject parent;
@@ -50,6 +56,7 @@ struct _SnraServer
   guint current_resource;
 
   GList *clients;
+  guint next_client_id;
 
   SnraHttpResource *(*get_resource)(SnraServer *server, guint resource_id, void *cb_data);
   void *get_resource_userdata;
@@ -74,9 +81,12 @@ void snra_server_set_resource_cb (SnraServer *server,
 void snra_server_add_handler (SnraServer *server, const gchar *path, SoupServerCallback callback, gpointer user_data, GDestroyNotify destroy_notify);
 
 void snra_server_play_resource (SnraServer *server, guint resource_id);
-void snra_server_send_play (SnraServer *server, SnraClientConnection *client);
-void snra_server_send_pause (SnraServer *server, SnraClientConnection *client);
-void snra_server_send_volume (SnraServer *server, SnraClientConnection *client, gdouble volume);
+
+SnraServerClient *snra_server_get_client (SnraServer *server, guint client_id);
+
+void snra_server_send_play (SnraServer *server, SnraServerClient *client);
+void snra_server_send_pause (SnraServer *server, SnraServerClient *client);
+void snra_server_send_volume (SnraServer *server, SnraServerClient *client, gdouble volume);
 
 G_END_DECLS
 #endif

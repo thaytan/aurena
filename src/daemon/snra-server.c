@@ -46,11 +46,6 @@ enum
   PROP_LAST
 };
 
-struct _SnraClientConnection
-{
-  SoupMessage *msg;
-};
-
 static void snra_server_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void snra_server_get_property (GObject * object, guint prop_id,
@@ -63,7 +58,7 @@ static void snra_server_dispose(GObject *object);
 static void free_client_connection (gpointer data);
 
 static void
-server_send_msg_to_client (SnraServer *server, SnraClientConnection *client,
+server_send_msg_to_client (SnraServer *server, SnraServerClient *client,
     GstStructure *msg)
 {
   JsonGenerator *gen;
@@ -84,25 +79,25 @@ server_send_msg_to_client (SnraServer *server, SnraClientConnection *client,
   json_node_free (root);
 
   if (client) {
-    soup_message_body_append (client->msg->response_body,/* "application/json", */
+    soup_message_body_append (client->event_pipe->response_body,/* "application/json", */
         SOUP_MEMORY_TAKE, body, len);
-    soup_server_unpause_message (server->soup, client->msg);
+    soup_server_unpause_message (server->soup, client->event_pipe);
   }
   else {
     /* client == NULL - send to all clients */
     GList *cur;
     for (cur = server->clients; cur != NULL; cur = g_list_next (cur)) {
-      client = (SnraClientConnection *)(cur->data);
-      soup_message_body_append (client->msg->response_body,/* "application/json", */
+      client = (SnraServerClient *)(cur->data);
+      soup_message_body_append (client->event_pipe->response_body,/* "application/json", */
           SOUP_MEMORY_COPY, body, len);
-      soup_server_unpause_message (server->soup, client->msg);
+      soup_server_unpause_message (server->soup, client->event_pipe);
     }
     g_free (body);
   }
 }
 
 void
-server_send_enrol_msg (SnraServer *server, SnraClientConnection *client)
+server_send_enrol_msg (SnraServer *server, SnraServerClient *client)
 {
   int clock_port;
   GstClock *clock;
@@ -126,7 +121,7 @@ server_send_enrol_msg (SnraServer *server, SnraClientConnection *client)
 }
 
 static void
-server_send_play_media_msg (SnraServer *server, SnraClientConnection *client,
+server_send_play_media_msg (SnraServer *server, SnraServerClient *client,
     guint resource_id)
 {
   GstClock *clock;
@@ -166,9 +161,19 @@ server_send_play_media_msg (SnraServer *server, SnraClientConnection *client,
 }
 
 static gint
-find_client_by_message (SnraClientConnection *client, SoupMessage *wanted)
+find_client_by_pipe (SnraServerClient *client, SoupMessage *wanted)
 {
-  if (client->msg == wanted)
+  if (client->event_pipe == wanted)
+    return 0;
+  return 1;
+}
+
+static gint
+find_client_by_id (SnraServerClient *client, void *wanted_id)
+{
+  guint client_id = GPOINTER_TO_INT (wanted_id);
+
+  if (client->client_id == client_id)
     return 0;
   return 1;
 }
@@ -176,10 +181,10 @@ find_client_by_message (SnraClientConnection *client, SoupMessage *wanted)
 static void
 server_client_disconnect (SoupMessage *message, SnraServer *server)
 {
-  GList *client = g_list_find_custom (server->clients, message, (GCompareFunc)(find_client_by_message));
+  GList *client = g_list_find_custom (server->clients, message, (GCompareFunc)(find_client_by_pipe));
 
   if (client) {
-    free_client_connection ((SnraClientConnection *)(client->data));
+    free_client_connection ((SnraServerClient *)(client->data));
     server->clients = g_list_delete_link (server->clients, client);
   }
 }
@@ -189,9 +194,9 @@ server_client_cb (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
   G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable *query,
   G_GNUC_UNUSED SoupClientContext *client, SnraServer *server)
 {
-  SnraClientConnection *client_conn = g_new0(SnraClientConnection, 1);
+  SnraServerClient *client_conn = g_new0(SnraServerClient, 1);
 
-  client_conn->msg = msg;
+  client_conn->event_pipe = msg;
 
   soup_message_headers_set_encoding (msg->response_headers, SOUP_ENCODING_CHUNKED);
   soup_message_set_status (msg, SOUP_STATUS_OK);
@@ -358,6 +363,7 @@ snra_server_init (SnraServer *server)
   server->resources = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL, g_object_unref);
 
   server->current_resource = 0;
+  server->next_client_id = 1;
 }
 
 static void
@@ -403,8 +409,8 @@ snra_server_finalize(GObject *object)
 static void
 free_client_connection (gpointer data)
 {
-  SnraClientConnection *client = (SnraClientConnection *)(data);
-  soup_message_body_complete (client->msg->response_body);
+  SnraServerClient *client = (SnraServerClient *)(data);
+  soup_message_body_complete (client->event_pipe->response_body);
   g_free (client);
 }
 
@@ -509,7 +515,7 @@ snra_server_play_resource (SnraServer *server, guint resource_id)
 }
 
 void
-snra_server_send_play (SnraServer *server, SnraClientConnection *client)
+snra_server_send_play (SnraServer *server, SnraServerClient *client)
 {
   GstClock *clock;
   GstStructure *msg;
@@ -529,7 +535,7 @@ snra_server_send_play (SnraServer *server, SnraClientConnection *client)
 }
 
 void
-snra_server_send_pause (SnraServer *server, SnraClientConnection *client)
+snra_server_send_pause (SnraServer *server, SnraServerClient *client)
 {
   GstClock *clock;
   GstStructure *msg;
@@ -550,7 +556,7 @@ snra_server_send_pause (SnraServer *server, SnraClientConnection *client)
 }
 
 void
-snra_server_send_volume (SnraServer *server, SnraClientConnection *client, gdouble volume)
+snra_server_send_volume (SnraServer *server, SnraServerClient *client, gdouble volume)
 {
   GstStructure *msg;
 
@@ -562,4 +568,17 @@ snra_server_send_volume (SnraServer *server, SnraClientConnection *client, gdoub
             NULL);
 
   server_send_msg_to_client (server, client, msg);
+}
+
+SnraServerClient *
+snra_server_get_client (SnraServer *server, guint client_id)
+{
+  GList *item =
+      g_list_find_custom (server->clients, GINT_TO_POINTER (client_id),
+           (GCompareFunc)(find_client_by_id));
+
+  if (item == NULL)
+    return NULL;
+
+  return (SnraServerClient *)(item->data); 
 }

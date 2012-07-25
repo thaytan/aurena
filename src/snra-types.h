@@ -27,8 +27,8 @@ typedef struct _SnraAvahi SnraAvahi;
 typedef struct _SnraHttpResource SnraHttpResource;
 typedef struct _SnraManager SnraManager;
 typedef struct _SnraServer SnraServer;
+typedef struct _SnraServerClient SnraServerClient;
 typedef struct _SnraClient SnraClient;
-typedef struct _SnraClientConnection SnraClientConnection;
 
 G_END_DECLS
 

@@ -18,4 +18,4 @@ simple_client_SOURCES = simple-client.c \
 simple_client_CPPFLAGS = $(SNRA_COMMON_CFLAGS) $(GST_CFLAGS) $(EXTRA_CFLAGS)
 simple_client_LDADD = client/libsnra_client.la $(SNRA_COMMON_LIBS) $(GST_LIBS)
 
-DIST_SUBDIRS=client daemon
+DIST_SUBDIRS=client daemon static

@@ -1,0 +1,4 @@
+[server]
+port=5457
+playlist=playlist.txt
+database=media.db

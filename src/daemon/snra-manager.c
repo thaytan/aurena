@@ -29,14 +29,28 @@
 #include "config.h"
 #endif
 
-#include "snra-manager.h"
-#include "snra-server.h"
+#include "snra-config.h"
 #include "snra-http-resource.h"
+#include "snra-manager.h"
+#include "snra-media-db.h"
+#include "snra-server.h"
+
+enum
+{
+  PROP_0,
+  PROP_CONFIG,
+  PROP_LAST
+};
 
 G_DEFINE_TYPE (SnraManager, snra_manager, G_TYPE_OBJECT);
 
 static void snra_manager_finalize(GObject *object);
-static SnraHttpResource * snra_manager_get_resource_cb (SnraServer *server, guint resource_id, void *userdata);
+static SnraHttpResource *snra_manager_get_resource_cb (SnraServer *server, guint resource_id, void *userdata);
+static void snra_manager_set_property (GObject * object, guint prop_id,
+    const GValue * value, GParamSpec * pspec);
+static void snra_manager_get_property (GObject * object, guint prop_id,
+    GValue * value, GParamSpec * pspec);
+
 
 static GstNetTimeProvider *
 create_net_clock()
@@ -200,19 +214,36 @@ static void
 snra_manager_init (SnraManager *manager)
 {
   manager->playlist = g_ptr_array_new ();
-  manager->rtsp_port = 5458;
   manager->net_clock = create_net_clock();
+
+  manager->avahi = g_object_new (SNRA_TYPE_AVAHI, NULL);
+}
+
+static void
+snra_manager_constructed (GObject *object)
+{
+  SnraManager *manager = (SnraManager *)(object);
+  gchar *db_file;
+
+  if (G_OBJECT_CLASS (snra_manager_parent_class)->constructed != NULL)
+    G_OBJECT_CLASS (snra_manager_parent_class)->constructed (object);
+
 #ifdef HAVE_GST_RTSP
   manager->rtsp = create_rtsp_server(manager);
 #endif
 
-  manager->avahi = g_object_new (SNRA_TYPE_AVAHI, NULL);
-
   manager->server = g_object_new (SNRA_TYPE_SERVER,
-      "rtsp-port", manager->rtsp_port, "clock", manager->net_clock, NULL);
-  snra_server_set_resource_cb (manager->server, snra_manager_get_resource_cb, manager);
-  snra_server_add_handler (manager->server, "/control", (SoupServerCallback) control_callback,
+      "config", manager->config, "clock", manager->net_clock,
+      NULL);
+  snra_server_set_resource_cb (manager->server,
+      snra_manager_get_resource_cb, manager);
+  snra_server_add_handler (manager->server, "/control",
+      (SoupServerCallback) control_callback,
       g_object_ref (G_OBJECT(manager)), g_object_unref);
+
+  g_object_get (manager->config, "database", &db_file, NULL);
+  manager->media_db = snra_media_db_new (db_file);
+  g_free (db_file);
 }
 
 static void
@@ -220,7 +251,16 @@ snra_manager_class_init (SnraManagerClass *manager_class)
 {
   GObjectClass *object_class = (GObjectClass *)(manager_class);
 
+  object_class->constructed = snra_manager_constructed;
+  object_class->set_property = snra_manager_set_property;
+  object_class->get_property = snra_manager_get_property;
   object_class->finalize = snra_manager_finalize;
+
+  g_object_class_install_property (object_class, PROP_CONFIG,
+    g_param_spec_object ("config", "config",
+                         "Sonarea service configuration object",
+                         SNRA_TYPE_CONFIG,
+                         G_PARAM_READWRITE|G_PARAM_CONSTRUCT));
 }
 
 static void
@@ -230,6 +270,41 @@ snra_manager_finalize(GObject *object)
 
   g_ptr_array_foreach (manager->playlist, (GFunc) g_free, NULL);
   g_ptr_array_free (manager->playlist, TRUE);
+
+  g_object_unref (manager->config);
+  g_object_unref (manager->media_db);
+}
+
+static void
+snra_manager_set_property (GObject * object, guint prop_id,
+    const GValue * value, GParamSpec * pspec)
+{
+  SnraManager *manager = (SnraManager *)(object);
+
+  switch (prop_id) {
+    case PROP_CONFIG:
+      manager->config = g_value_dup_object (value);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
+}
+
+static void
+snra_manager_get_property (GObject * object, guint prop_id,
+    GValue * value, GParamSpec * pspec)
+{
+  SnraManager *manager = (SnraManager *)(object);
+
+  switch (prop_id) {
+    case PROP_CONFIG:
+      g_value_set_object (value, manager->config);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
 }
 
 #ifdef HAVE_GST_RTSP
@@ -301,11 +376,23 @@ read_playlist_file(SnraManager *manager, const char *filename)
 
 
 SnraManager *
-snra_manager_new(const char *playlist_file)
+snra_manager_new(const char *config_file)
 {
-  SnraManager *manager = g_object_new (SNRA_TYPE_MANAGER, NULL);
+  SnraConfig *config;
+  SnraManager *manager;
+  gchar *playlist_file;
 
-  read_playlist_file (manager, playlist_file);
+  config = snra_config_new (config_file);
+  if (config == NULL)
+    return NULL;
+
+  manager = g_object_new (SNRA_TYPE_MANAGER, "config", config, NULL);
+
+  g_object_get (config, "playlist", &playlist_file, NULL);
+  if (playlist_file) {
+    read_playlist_file (manager, playlist_file);
+    g_free (playlist_file);
+  }
 
   if (manager->playlist->len) {
 #ifdef HAVE_GST_RTSP

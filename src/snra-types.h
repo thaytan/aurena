@@ -24,11 +24,13 @@
 G_BEGIN_DECLS
 
 typedef struct _SnraAvahi SnraAvahi;
+typedef struct _SnraClient SnraClient;
+typedef struct _SnraConfig SnraConfig;
 typedef struct _SnraHttpResource SnraHttpResource;
 typedef struct _SnraManager SnraManager;
+typedef struct _SnraMediaDB SnraMediaDB;
 typedef struct _SnraServer SnraServer;
 typedef struct _SnraServerClient SnraServerClient;
-typedef struct _SnraClient SnraClient;
 
 G_END_DECLS
 

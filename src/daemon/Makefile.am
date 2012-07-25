@@ -3,10 +3,14 @@ noinst_LTLIBRARIES        = libsnra_daemon.la
 libsnra_daemon_la_SOURCES = \
     snra-avahi.c \
     snra-avahi.h \
+    snra-config.c \
+    snra-config.h \
     snra-http-resource.c \
     snra-http-resource.h \
     snra-manager.c \
     snra-manager.h \
+    snra-media-db.c \
+    snra-media-db.h \
     snra-resource.c \
     snra-resource.h \
     snra-server.c \

@@ -31,6 +31,7 @@
 
 #include <src/snra-json.h>
 
+#include "snra-config.h"
 #include "snra-server.h"
 #include "snra-resource.h"
 #include "snra-http-resource.h"
@@ -40,8 +41,7 @@ G_DEFINE_TYPE (SnraServer, snra_server, G_TYPE_OBJECT);
 enum
 {
   PROP_0,
-  PROP_PORT,
-  PROP_RTSP_PORT,
+  PROP_CONFIG,
   PROP_CLOCK,
   PROP_LAST
 };
@@ -128,6 +128,7 @@ server_send_play_media_msg (SnraServer *server, SnraServerClient *client,
   GstClockTime cur_time;
   gchar *resource_path;
   GstStructure *msg;
+  gint port;
 
   g_object_get (server->net_clock, "clock", &clock, NULL);
   cur_time = gst_clock_get_time (clock);
@@ -142,14 +143,20 @@ server_send_play_media_msg (SnraServer *server, SnraServerClient *client,
     g_print ("Base time now %" G_GUINT64_FORMAT "\n", server->base_time);
   }
 
+#if 1
+  g_object_get (server->config, "snra-port", &port, NULL);
+#else
+  g_object_get (server->config, "rtsp-port", &port, NULL);
+#endif
+
   msg = gst_structure_new ("json",
             "msg-type", G_TYPE_STRING, "play-media",
 #if 1
             "resource-protocol", G_TYPE_STRING, "http",
-            "resource-port", G_TYPE_INT, server->port,
+            "resource-port", G_TYPE_INT, port,
 #else
             "resource-protocol", G_TYPE_STRING, "rtsp",
-            "resource-port", G_TYPE_INT, server->rtsp_port,
+            "resource-port", G_TYPE_INT, port,
 #endif
             "resource-path", G_TYPE_STRING, resource_path,
             "base-time", G_TYPE_INT64, (gint64)(server->base_time),
@@ -340,30 +347,53 @@ snra_server_set_clock (SnraServer *server, GstNetTimeProvider *net_clock)
 static void
 snra_server_init (SnraServer *server)
 {
-  SoupSocket *socket;
-
   server->base_time = GST_CLOCK_TIME_NONE;
   server->stream_time = GST_CLOCK_TIME_NONE;
-  server->port = 5457;
   server->current_volume = 0.1;
 
-  server->soup = soup_server_new(SOUP_SERVER_PORT, server->port, NULL);
-  soup_server_add_handler (server->soup, "/", (SoupServerCallback) server_fallback_cb, g_object_ref (server), g_object_unref);
-  soup_server_add_handler (server->soup, "/ui", (SoupServerCallback) server_ui_cb, g_object_ref (server), g_object_unref);
-  soup_server_add_handler (server->soup, "/client", (SoupServerCallback) server_client_cb, g_object_ref (server), g_object_unref);
-  soup_server_add_handler (server->soup, "/resource", (SoupServerCallback) server_resource_cb, g_object_ref (server), g_object_unref);
+  server->resources =
+      g_hash_table_new_full (g_direct_hash,
+          g_direct_equal, NULL, g_object_unref);
+
+  server->current_resource = 0;
+  server->next_client_id = 1;
+}
+
+static void
+snra_server_constructed(GObject *object)
+{
+  SnraServer *server = (SnraServer *)(object);
+  SoupSocket *socket;
+  gint port;
+
+  if (G_OBJECT_CLASS (snra_server_parent_class)->constructed != NULL)
+    G_OBJECT_CLASS (snra_server_parent_class)->constructed (object);
+
+  g_object_get (server->config, "snra-port", &port, NULL);
+
+  server->soup = soup_server_new (SOUP_SERVER_PORT, port, NULL);
+
+  soup_server_add_handler (server->soup, "/",
+      (SoupServerCallback) server_fallback_cb,
+      g_object_ref (server), g_object_unref);
+  soup_server_add_handler (server->soup, "/ui",
+      (SoupServerCallback) server_ui_cb,
+      g_object_ref (server), g_object_unref);
+  soup_server_add_handler (server->soup, "/client",
+      (SoupServerCallback) server_client_cb,
+      g_object_ref (server), g_object_unref);
+  soup_server_add_handler (server->soup, "/resource",
+      (SoupServerCallback) server_resource_cb,
+      g_object_ref (server), g_object_unref);
+
   socket = soup_server_get_listener(server->soup);
   if (socket) {
     SoupAddress *addr;
     g_object_get (socket, SOUP_SOCKET_LOCAL_ADDRESS, &addr, NULL);
-    g_print ("Now listening on %s:%u\n", soup_address_get_name(addr), soup_address_get_port(addr));
+    g_print ("Now listening on %s:%u\n",
+        soup_address_get_name(addr), soup_address_get_port(addr));
     g_object_unref (addr);
   }
-
-  server->resources = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL, g_object_unref);
-
-  server->current_resource = 0;
-  server->next_client_id = 1;
 }
 
 static void
@@ -371,21 +401,17 @@ snra_server_class_init (SnraServerClass *server_class)
 {
   GObjectClass *gobject_class = (GObjectClass *)(server_class);
 
+  gobject_class->constructed = snra_server_constructed;
   gobject_class->dispose = snra_server_dispose;
   gobject_class->finalize = snra_server_finalize;
   gobject_class->set_property = snra_server_set_property;
   gobject_class->get_property = snra_server_get_property;
 
-  g_object_class_install_property (gobject_class, PROP_PORT,
-    g_param_spec_int ("port", "port",
-                         "port for Sonarea service",
-                         1, 65535, 5457,
-                         G_PARAM_READWRITE));
-  g_object_class_install_property (gobject_class, PROP_RTSP_PORT,
-    g_param_spec_int ("rtsp-port", "RTSP port",
-                         "port for RTSP service",
-                         1, 65535, 5458,
-                         G_PARAM_READWRITE));
+  g_object_class_install_property (gobject_class, PROP_CONFIG,
+    g_param_spec_object ("config", "config",
+                         "Sonarea service configuration object",
+                         SNRA_TYPE_CONFIG,
+                         G_PARAM_READWRITE|G_PARAM_CONSTRUCT));
   g_object_class_install_property (gobject_class, PROP_CLOCK,
     g_param_spec_object ("clock", "clock",
                          "clock to synchronise playback",
@@ -399,6 +425,9 @@ snra_server_finalize(GObject *object)
   SnraServer *server = (SnraServer *)(object);
   g_object_unref (server->soup);
   g_hash_table_remove_all (server->resources);
+
+  if (server->config)
+    g_object_unref (server->config);
 
   if (server->net_clock)
     gst_object_unref (server->net_clock);
@@ -439,11 +468,8 @@ snra_server_set_property (GObject * object, guint prop_id,
   SnraServer *server = (SnraServer *)(object);
 
   switch (prop_id) {
-    case PROP_PORT:
-      server->port = g_value_get_int (value);
-      break;
-    case PROP_RTSP_PORT:
-      server->rtsp_port = g_value_get_int (value);
+    case PROP_CONFIG:
+      server->config = g_value_dup_object (value);
       break;
     case PROP_CLOCK:
       if (server->net_clock)
@@ -463,11 +489,8 @@ snra_server_get_property (GObject * object, guint prop_id,
   SnraServer *server = (SnraServer *)(object);
 
   switch (prop_id) {
-    case PROP_PORT:
-      g_value_set_int (value, server->port);
-      break;
-    case PROP_RTSP_PORT:
-      g_value_set_int (value, server->rtsp_port);
+    case PROP_CONFIG:
+      g_value_set_object (value, server->config);
       break;
     case PROP_CLOCK:
       g_value_set_object (value, server->net_clock);
@@ -502,7 +525,8 @@ void
 snra_server_add_handler (SnraServer *server, const gchar *path, SoupServerCallback callback, gpointer user_data,
     GDestroyNotify destroy_notify)
 {
-  soup_server_add_handler (server->soup, path, callback, user_data, destroy_notify);
+  soup_server_add_handler (server->soup, path, callback,
+      user_data, destroy_notify);
 }
 
 void

@@ -36,7 +36,7 @@ else
 fi
 
 AC_MSG_NOTICE([Checking whether to build server])
-PKG_CHECK_MODULES(SNRA_SERVER, [sqlite3],
+PKG_CHECK_MODULES(SNRA_SERVER, [sqlite3 >= 3.3],
     [BUILD_SNRA_SERVER=yes], [BUILD_SNRA_SERVER=no])
 AM_CONDITIONAL(BUILD_SNRA_SERVER, test "x$BUILD_SNRA_SERVER" = "xyes")
 

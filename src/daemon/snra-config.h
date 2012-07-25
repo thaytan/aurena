@@ -17,30 +17,41 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#ifndef __SNRA_CONFIG_H__
+#define __SNRA_CONFIG_H__
 
-#include "snra-resource.h"
+#include <glib.h>
+#include <glib-object.h>
 
-const gchar *
-snra_resource_get_mime_type (const gchar *filename)
+#include <src/snra-types.h>
+
+G_BEGIN_DECLS
+
+#define SNRA_TYPE_CONFIG (snra_config_get_type ())
+
+typedef struct _SnraConfigClass SnraConfigClass;
+
+struct _SnraConfig
 {
-  const gchar *extension;
+  GObject parent;
 
-  extension = g_strrstr (filename, ".");
-  if (extension) {
-    if (g_str_equal (extension, ".html"))
-      return "text/html";
-    if (g_str_equal (extension, ".png"))
-      return "image/png";
-    if (g_str_equal (extension, ".css"))
-      return "text/css";
-    if (g_str_equal (extension, ".jpg"))
-      return "image/jpeg";
-    if (g_str_equal (extension, ".js"))
-      return "text/javascript";
-  }
+  gchar *config_file;
 
-  return "text/plain";
-}
+  int snra_port;
+  int rtsp_port;
+
+  gchar *database_location;
+  gchar *playlist_location;
+};
+
+struct _SnraConfigClass
+{
+  GObjectClass parent;
+};
+
+GType snra_config_get_type(void);
+SnraConfig *snra_config_new(const char *config_path);
+
+G_END_DECLS
+
+#endif

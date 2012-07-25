@@ -73,18 +73,17 @@ int
 main (int argc, char *argv[])
 {
   SnraManager *manager;
+  char *config_file = NULL;
 
   gst_init (&argc, &argv);
 
-  if (argc < 2) {
-    g_message ("usage: %s <uri>", argv[0]);
-    return -1;
-  }
+  if (argc > 1) 
+    config_file = argv[1];
 
   g_timeout_add(250, sigint_check, NULL);
   sigint_setup();
 
-  manager = snra_manager_new(argv[1]);
+  manager = snra_manager_new(config_file);
   if (manager == NULL)
     return -1;
 

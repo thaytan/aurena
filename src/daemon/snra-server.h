@@ -42,8 +42,6 @@ struct _SnraServer
 {
   GObject parent;
   SoupServer *soup;
-  int port;
-  int rtsp_port;
 
   GstClockTime base_time;
   GstClockTime stream_time;
@@ -61,6 +59,7 @@ struct _SnraServer
   SnraHttpResource *(*get_resource)(SnraServer *server, guint resource_id, void *cb_data);
   void *get_resource_userdata;
 
+  SnraConfig *config;
 };
 
 struct _SnraServerClass

@@ -1,0 +1,33 @@
+Server TODO
+ * Implement /status handler
+ * Track metadata discovery
+ * Send out client volume events, play/pause, current song info,
+   play position
+ * Support seeking.
+ * Provide library hooks
+
+Control UI
+ * Reflect client events in the UI, starting with volume, play/pause, song
+   info then position updates
+ * Song library, searching, enqueueing
+
+sqlite DB schema:
+
+table: paths
+id INTEGER PRIMARY KEY
+base_path TEXT
+
+table: files
+id INTEGER PRIMARY KEY
+base_path_id INTEGER
+filename TEXT
+timestamp TEXT
+duration INTEGER (nanoseconds)
+is_video INTEGER (0 or 1)
+
+table: songs
+id INTEGER PRIMARY KEY
+media_id INTEGER
+title TEXT
+artist TEXT
+

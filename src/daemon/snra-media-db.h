@@ -17,30 +17,19 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
+#ifndef __SNRA_MEDIA_DB_H__
+#define __SNRA_MEDIA_DB_H__
+
+#include <glib.h>
+#include <glib-object.h>
+#include <sqlite3.h>
+
+#include <src/snra-types.h>
+
+G_BEGIN_DECLS
+
+SnraMediaDB *snra_media_db_new(const char *db_path);
+
+G_END_DECLS
+
 #endif
-
-#include "snra-resource.h"
-
-const gchar *
-snra_resource_get_mime_type (const gchar *filename)
-{
-  const gchar *extension;
-
-  extension = g_strrstr (filename, ".");
-  if (extension) {
-    if (g_str_equal (extension, ".html"))
-      return "text/html";
-    if (g_str_equal (extension, ".png"))
-      return "image/png";
-    if (g_str_equal (extension, ".css"))
-      return "text/css";
-    if (g_str_equal (extension, ".jpg"))
-      return "image/jpeg";
-    if (g_str_equal (extension, ".js"))
-      return "text/javascript";
-  }
-
-  return "text/plain";
-}

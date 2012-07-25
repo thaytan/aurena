@@ -35,6 +35,11 @@ else
   PKG_CHECK_MODULES(GST_RTSP, [gst-rtsp-server-0.10], [HAVE_GST_RTSP=yes], [HAVE_GST_RTSP=no])
 fi
 
+AC_MSG_NOTICE([Checking whether to build server])
+PKG_CHECK_MODULES(SNRA_SERVER, [sqlite3],
+    [BUILD_SNRA_SERVER=yes], [BUILD_SNRA_SERVER=no])
+AM_CONDITIONAL(BUILD_SNRA_SERVER, test "x$BUILD_SNRA_SERVER" = "xyes")
+
 if test "x$HAVE_GST_RTSP" = "xyes"; then
   AC_DEFINE([HAVE_GST_RTSP], 1, [Define if gstreamer-rtsp-server is available])
 fi

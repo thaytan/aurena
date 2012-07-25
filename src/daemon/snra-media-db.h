@@ -28,6 +28,14 @@
 
 G_BEGIN_DECLS
 
+typedef struct _SnraMediaDBPriv SnraMediaDBPriv;
+
+struct _SnraMediaDB
+{
+  GObject parent;
+  SnraMediaDBPriv *priv;
+};
+
 SnraMediaDB *snra_media_db_new(const char *db_path);
 
 G_END_DECLS

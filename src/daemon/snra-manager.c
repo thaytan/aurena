@@ -319,9 +319,7 @@ new_stream_constructed_cb (G_GNUC_UNUSED GstRTSPMediaFactory *factory,
     GstRTSPMedia *media, SnraManager *mgr)
 {
   g_print ("Media constructed: %p\n", media);
-  // snra_server_set_base_time (mgr->server, GST_CLOCK_TIME_NONE);
   g_signal_connect (media, "prepared", G_CALLBACK (rtsp_media_prepared), mgr);
-
 }
 
 static void

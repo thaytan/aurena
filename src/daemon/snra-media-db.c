@@ -33,7 +33,7 @@ enum {
   PROP_LAST
 };
 
-struct _SnraMediaDB
+struct _SnraMediaDBPriv
 {
   GObject parent;
 
@@ -58,8 +58,10 @@ static void snra_media_db_get_property (GObject * object, guint prop_id,
 G_DEFINE_TYPE (SnraMediaDB, snra_media_db, G_TYPE_OBJECT);
 
 static void
-snra_media_db_init (G_GNUC_UNUSED SnraMediaDB *media_db)
+snra_media_db_init (SnraMediaDB *media_db)
 {
+  media_db->priv = G_TYPE_INSTANCE_GET_PRIVATE (media_db,
+      SNRA_TYPE_MEDIA_DB, SnraMediaDBPriv);
 }
 
 static void
@@ -71,18 +73,18 @@ snra_media_db_constructed (G_GNUC_UNUSED GObject *object)
   if (G_OBJECT_CLASS (snra_media_db_parent_class)->constructed != NULL)
     G_OBJECT_CLASS (snra_media_db_parent_class)->constructed (object);
 
-  g_mkdir_with_parents (g_path_get_dirname (media_db->db_file), 0755); 
+  g_mkdir_with_parents (g_path_get_dirname (media_db->priv->db_file), 0755); 
 
-  if (sqlite3_open (media_db->db_file, &handle) != SQLITE_OK) {
-    g_warning ("Could not open media DB %s\n", media_db->db_file);
-    media_db->errored = TRUE;
+  if (sqlite3_open (media_db->priv->db_file, &handle) != SQLITE_OK) {
+    g_warning ("Could not open media DB %s\n", media_db->priv->db_file);
+    media_db->priv->errored = TRUE;
   }
 
-  media_db->handle = handle;
+  media_db->priv->handle = handle;
 
   if (!media_db_create_tables(media_db))
-    media_db->errored = TRUE;
-  g_print ("media DB ready at %s\n", media_db->db_file);
+    media_db->priv->errored = TRUE;
+  g_print ("media DB ready at %s\n", media_db->priv->db_file);
 }
 
 static void
@@ -100,6 +102,7 @@ snra_media_db_class_init (SnraMediaDBClass *media_db_class)
     g_param_spec_string ("db-file", "Database file",
                          "Location for media DB file", NULL,
                          G_PARAM_READWRITE|G_PARAM_CONSTRUCT_ONLY));
+  g_type_class_add_private (object_class, sizeof (SnraMediaDBPriv));
 }
 
 static void
@@ -107,8 +110,8 @@ snra_media_db_finalize(GObject *object)
 {
   SnraMediaDB *media_db = (SnraMediaDB *)(object);
 
-  if (media_db->handle)
-    sqlite3_close (media_db->handle);
+  if (media_db->priv->handle)
+    sqlite3_close (media_db->priv->handle);
 }
 
 static void
@@ -119,8 +122,8 @@ snra_media_db_set_property (GObject * object, guint prop_id,
 
   switch (prop_id) {
     case PROP_DB_FILE:
-      g_free (media_db->db_file);
-      media_db->db_file = g_value_dup_string (value);
+      g_free (media_db->priv->db_file);
+      media_db->priv->db_file = g_value_dup_string (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -136,7 +139,7 @@ snra_media_db_get_property (GObject * object, guint prop_id,
 
   switch (prop_id) {
     case PROP_DB_FILE:
-      g_value_set_string (value, media_db->db_file);
+      g_value_set_string (value, media_db->priv->db_file);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -147,18 +150,19 @@ snra_media_db_get_property (GObject * object, guint prop_id,
 static gboolean
 media_db_create_tables (SnraMediaDB *media_db)
 {
-  if (sqlite3_exec (media_db->handle,
+  sqlite3 *handle = media_db->priv->handle;
+  if (sqlite3_exec (handle,
       "Create table if not exists paths"
       "(id INTEGER PRIMARY KEY, base_path TEXT)",
       NULL, NULL, NULL) != SQLITE_OK)
     return FALSE;
-  if (sqlite3_exec (media_db->handle,
+  if (sqlite3_exec (handle,
       "Create table if not exists files"
       "(id INTEGER PRIMARY KEY, base_path_id INTEGER, "
       "filename TEXT, timestamp TEXT, "
       "duration INTEGER, is_video INTEGER)", NULL, NULL, NULL) != SQLITE_OK)
     return FALSE;
-  if (sqlite3_exec (media_db->handle,
+  if (sqlite3_exec (handle,
       "Create table if not exists songs"
       "(id INTEGER PRIMARY KEY, media_id INTEGER, "
       "timestamp TEXT, duration INTEGER, "
@@ -177,7 +181,7 @@ snra_media_db_new(const char *db_path)
   if (media_db == NULL)
     return NULL;
 
-  if (media_db->errored) {
+  if (media_db->priv->errored) {
     g_object_unref (media_db);
     media_db = NULL;
   }

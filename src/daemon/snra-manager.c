@@ -127,6 +127,12 @@ str_to_control_event_type (const gchar *str)
   return SNRA_CONTROL_NONE;
 }
 
+static guint
+get_playlist_len (SnraManager *mgr)
+{
+  return snra_media_db_get_file_count(mgr->media_db);
+}
+
 static void
 control_callback (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg, 
   const char *path, GHashTable *query,
@@ -160,10 +166,10 @@ control_callback (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
 
       if (id_str == NULL || !sscanf (id_str, "%d", &resource_id)) {
          /* No or invalid resource id: skip to another random track */
-         resource_id = (guint) g_random_int_range (0, manager->playlist->len) + 1;
+         resource_id = (guint) g_random_int_range (0, get_playlist_len (manager)) + 1;
       }
       else {
-        resource_id = CLAMP (resource_id, 1, manager->playlist->len);
+        resource_id = CLAMP (resource_id, 1, get_playlist_len (manager));
       }
       manager->paused = FALSE;
       snra_server_play_resource (manager->server, resource_id);
@@ -365,6 +371,7 @@ read_playlist_file(SnraManager *manager, const char *filename)
       break;
     g_strchomp (line);
     g_ptr_array_add (manager->playlist, line);
+    snra_media_db_add_file (manager->media_db, line);
   } while (TRUE);
 
   g_print ("Read %u entries\n", manager->playlist->len);
@@ -392,14 +399,15 @@ snra_manager_new(const char *config_file)
     g_free (playlist_file);
   }
 
-  if (manager->playlist->len) {
+  if (get_playlist_len (manager)) {
 #ifdef HAVE_GST_RTSP
     char *rtsp_uri = g_strdup_printf("file://%s", (gchar *)(g_ptr_array_index (manager->playlist, 0)));
     add_rtsp_uri (manager, 1, rtsp_uri);
     g_free (rtsp_uri);
 #endif
 
-    snra_server_play_resource (manager->server, g_random_int_range (0, manager->playlist->len) + 1);
+    snra_server_play_resource (manager->server,
+        g_random_int_range (0, get_playlist_len (manager) + 1));
   }
 
   snra_server_start (manager->server);
@@ -411,14 +419,20 @@ static SnraHttpResource *
 snra_manager_get_resource_cb (G_GNUC_UNUSED SnraServer *server, guint resource_id, void *userdata)
 {
   SnraManager *manager = (SnraManager *)(userdata);
-  const gchar *file;
+  SnraHttpResource *ret;
+  gchar *file;
 
-  if (resource_id < 1 || resource_id > manager->playlist->len)
+  if (resource_id < 1 || resource_id > get_playlist_len (manager))
     return NULL;
 
-  file = g_ptr_array_index (manager->playlist, resource_id - 1);
+  file = snra_media_db_get_file_by_id (manager->media_db, resource_id);
+  if (file == NULL)
+    return NULL;
 
   g_print ("Creating resource %u for %s\n", resource_id, file);
 
-  return g_object_new (SNRA_TYPE_HTTP_RESOURCE, "source-path", file, NULL);
+  ret = g_object_new (SNRA_TYPE_HTTP_RESOURCE, "source-path", file, NULL);
+  g_free (file);
+
+  return ret;
 }

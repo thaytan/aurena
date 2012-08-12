@@ -52,22 +52,22 @@ static void snra_server_set_property (GObject * object, guint prop_id,
 static void snra_server_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-static void snra_soup_message_set_redirect (SoupMessage *msg,
+static void snra_soup_message_set_redirect (SoupMessage * msg,
     guint status_code, const char *redirect_uri);
-static void snra_server_finalize(GObject *object);
-static void snra_server_dispose(GObject *object);
+static void snra_server_finalize (GObject * object);
+static void snra_server_dispose (GObject * object);
 
 static void
-server_send_msg_to_client (SnraServer *server, SnraServerClient *client,
-    GstStructure *msg)
+server_send_msg_to_client (SnraServer * server, SnraServerClient * client,
+    GstStructure * msg)
 {
   JsonGenerator *gen;
   JsonNode *root;
   gchar *body;
   gsize len;
 
-  root = snra_json_from_gst_structure(msg);
-  gst_structure_free(msg);
+  root = snra_json_from_gst_structure (msg);
+  gst_structure_free (msg);
 
   gen = json_generator_new ();
 
@@ -80,12 +80,11 @@ server_send_msg_to_client (SnraServer *server, SnraServerClient *client,
 
   if (client) {
     snra_server_client_send_message (client, body, len);
-  }
-  else {
+  } else {
     /* client == NULL - send to all clients */
     GList *cur;
     for (cur = server->player_clients; cur != NULL; cur = g_list_next (cur)) {
-      client = (SnraServerClient *)(cur->data);
+      client = (SnraServerClient *) (cur->data);
       snra_server_client_send_message (client, body, len);
     }
   }
@@ -93,7 +92,7 @@ server_send_msg_to_client (SnraServer *server, SnraServerClient *client,
 }
 
 void
-server_send_enrol_msg (SnraServer *server, SnraServerClient *client)
+server_send_enrol_msg (SnraServer * server, SnraServerClient * client)
 {
   int clock_port;
   GstClock *clock;
@@ -107,17 +106,16 @@ server_send_enrol_msg (SnraServer *server, SnraServerClient *client)
   g_object_get (server->net_clock, "port", &clock_port, NULL);
 
   msg = gst_structure_new ("json",
-            "msg-type", G_TYPE_STRING, "enrol",
-            "clock-port", G_TYPE_INT, clock_port,
-            "current-time", G_TYPE_INT64, (gint64)(cur_time),
-            "volume-level", G_TYPE_DOUBLE, server->current_volume,
-            NULL);
+      "msg-type", G_TYPE_STRING, "enrol",
+      "clock-port", G_TYPE_INT, clock_port,
+      "current-time", G_TYPE_INT64, (gint64) (cur_time),
+      "volume-level", G_TYPE_DOUBLE, server->current_volume, NULL);
 
   server_send_msg_to_client (server, client, msg);
 }
 
 static void
-server_send_play_media_msg (SnraServer *server, SnraServerClient *client,
+server_send_play_media_msg (SnraServer * server, SnraServerClient * client,
     guint resource_id)
 {
   GstClock *clock;
@@ -138,25 +136,22 @@ server_send_play_media_msg (SnraServer *server, SnraServerClient *client,
     server->stream_time = GST_CLOCK_TIME_NONE;
     g_print ("Base time now %" G_GUINT64_FORMAT "\n", server->base_time);
   }
-
 #if 1
   g_object_get (server->config, "snra-port", &port, NULL);
 #else
   g_object_get (server->config, "rtsp-port", &port, NULL);
 #endif
 
-  msg = gst_structure_new ("json",
-            "msg-type", G_TYPE_STRING, "play-media",
+  msg = gst_structure_new ("json", "msg-type", G_TYPE_STRING, "play-media",
 #if 1
-            "resource-protocol", G_TYPE_STRING, "http",
-            "resource-port", G_TYPE_INT, port,
+      "resource-protocol", G_TYPE_STRING, "http",
+      "resource-port", G_TYPE_INT, port,
 #else
-            "resource-protocol", G_TYPE_STRING, "rtsp",
-            "resource-port", G_TYPE_INT, port,
+      "resource-protocol", G_TYPE_STRING, "rtsp",
+      "resource-port", G_TYPE_INT, port,
 #endif
-            "resource-path", G_TYPE_STRING, resource_path,
-            "base-time", G_TYPE_INT64, (gint64)(server->base_time),
-            NULL);
+      "resource-path", G_TYPE_STRING, resource_path,
+      "base-time", G_TYPE_INT64, (gint64) (server->base_time), NULL);
 
   g_free (resource_path);
 
@@ -164,7 +159,7 @@ server_send_play_media_msg (SnraServer *server, SnraServerClient *client,
 }
 
 static gint
-find_client_by_pipe (SnraServerClient *client, SoupMessage *wanted)
+find_client_by_pipe (SnraServerClient * client, SoupMessage * wanted)
 {
   if (client->event_pipe == wanted)
     return 0;
@@ -172,7 +167,7 @@ find_client_by_pipe (SnraServerClient *client, SoupMessage *wanted)
 }
 
 static gint
-find_client_by_id (SnraServerClient *client, void *wanted_id)
+find_client_by_id (SnraServerClient * client, void *wanted_id)
 {
   guint client_id = GPOINTER_TO_INT (wanted_id);
 
@@ -182,110 +177,118 @@ find_client_by_id (SnraServerClient *client, void *wanted_id)
 }
 
 static void
-server_client_disconnect (SoupMessage *message, SnraServer *server)
+server_client_disconnect (SoupMessage * message, SnraServer * server)
 {
-  GList *client = g_list_find_custom (server->player_clients, message, (GCompareFunc)(find_client_by_pipe));
+  GList *client =
+      g_list_find_custom (server->player_clients, message,
+      (GCompareFunc) (find_client_by_pipe));
 
   if (client) {
-    snra_server_client_free ((SnraServerClient *)(client->data));
-    server->player_clients = g_list_delete_link (server->player_clients, client);
+    snra_server_client_free ((SnraServerClient *) (client->data));
+    server->player_clients =
+        g_list_delete_link (server->player_clients, client);
   }
 }
 
 static void
-server_client_cb (SoupServer *soup, SoupMessage *msg,
-  G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable *query,
-  G_GNUC_UNUSED SoupClientContext *client, SnraServer *server)
+server_client_cb (SoupServer * soup, SoupMessage * msg,
+    G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable * query,
+    G_GNUC_UNUSED SoupClientContext * client, SnraServer * server)
 {
-  SnraServerClient *client_conn = g_new0(SnraServerClient, 1);
+  SnraServerClient *client_conn = g_new0 (SnraServerClient, 1);
 
   client_conn->soup = soup;
   client_conn->event_pipe = msg;
   client_conn->client_id = server->next_client_id++;
 
-  soup_message_headers_set_encoding (msg->response_headers, SOUP_ENCODING_CHUNKED);
+  soup_message_headers_set_encoding (msg->response_headers,
+      SOUP_ENCODING_CHUNKED);
   soup_message_set_status (msg, SOUP_STATUS_OK);
 
-  g_signal_connect (msg, "finished", G_CALLBACK (server_client_disconnect), server);
+  g_signal_connect (msg, "finished", G_CALLBACK (server_client_disconnect),
+      server);
 
   server->player_clients = g_list_prepend (server->player_clients, client_conn);
 
-  server_send_enrol_msg(server, client_conn);
+  server_send_enrol_msg (server, client_conn);
   if (server->current_resource)
     server_send_play_media_msg (server, client_conn, server->current_resource);
 }
 
 static void
-snra_soup_message_set_redirect (SoupMessage *msg, guint status_code,
+snra_soup_message_set_redirect (SoupMessage * msg, guint status_code,
     const char *redirect_uri)
 {
-        SoupURI *location;
-        char *location_str;
+  SoupURI *location;
+  char *location_str;
 
-        location = soup_uri_new_with_base (soup_message_get_uri (msg), redirect_uri);
-        g_return_if_fail (location != NULL);
+  location = soup_uri_new_with_base (soup_message_get_uri (msg), redirect_uri);
+  g_return_if_fail (location != NULL);
 
-        soup_message_set_status (msg, status_code);
-        location_str = soup_uri_to_string (location, FALSE);
-        soup_message_headers_replace (msg->response_headers, "Location",
-                                      location_str);
-        g_free (location_str);
-        soup_uri_free (location);
+  soup_message_set_status (msg, status_code);
+  location_str = soup_uri_to_string (location, FALSE);
+  soup_message_headers_replace (msg->response_headers, "Location",
+      location_str);
+  g_free (location_str);
+  soup_uri_free (location);
 }
 
 static void
-server_fallback_cb (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
-  G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable *query,
-  G_GNUC_UNUSED SoupClientContext *client, G_GNUC_UNUSED SnraServer *server)
+server_fallback_cb (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
+    G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable * query,
+    G_GNUC_UNUSED SoupClientContext * client, G_GNUC_UNUSED SnraServer * server)
 {
   if (g_str_equal (path, "/")) {
     snra_soup_message_set_redirect (msg, SOUP_STATUS_MOVED_PERMANENTLY, "/ui/");
-  }
-  else {
+  } else {
     soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
   }
 }
 
 static SnraHttpResource *
-snra_server_get_resource(SnraServer *server, guint resource_id)
+snra_server_get_resource (SnraServer * server, guint resource_id)
 {
   SnraHttpResource *resource = NULL;
 
-  resource = g_hash_table_lookup (server->resources, GINT_TO_POINTER (resource_id));
+  resource =
+      g_hash_table_lookup (server->resources, GINT_TO_POINTER (resource_id));
   if (resource == NULL) {
-    resource = server->get_resource (server, resource_id, server->get_resource_userdata);
-    g_hash_table_insert (server->resources, GINT_TO_POINTER (resource_id), resource);
+    resource =
+        server->get_resource (server, resource_id,
+        server->get_resource_userdata);
+    g_hash_table_insert (server->resources, GINT_TO_POINTER (resource_id),
+        resource);
   }
   return resource;
 }
 
 static void
-server_resource_cb (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg, 
-  const char *path, G_GNUC_UNUSED GHashTable *query,
-  G_GNUC_UNUSED SoupClientContext *client, SnraServer *server)
+server_resource_cb (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
+    const char *path, G_GNUC_UNUSED GHashTable * query,
+    G_GNUC_UNUSED SoupClientContext * client, SnraServer * server)
 {
   guint resource_id = 0;
   SnraHttpResource *resource;
 
-  if (!sscanf(path, "/resource/%u", &resource_id))
+  if (!sscanf (path, "/resource/%u", &resource_id))
     goto error;
 
-  resource = snra_server_get_resource(server, resource_id);
+  resource = snra_server_get_resource (server, resource_id);
   if (resource == NULL)
     goto error;
 
   g_print ("Hit on resource %u\n", resource_id);
   snra_http_resource_new_transfer (resource, msg);
-  
+
   return;
 error:
   soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
 }
 
 static void
-server_ui_cb (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg, 
-  const char *path, G_GNUC_UNUSED GHashTable *query,
-  G_GNUC_UNUSED SoupClientContext *client, G_GNUC_UNUSED SnraServer *server)
+server_ui_cb (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
+    const char *path, G_GNUC_UNUSED GHashTable * query,
+    G_GNUC_UNUSED SoupClientContext * client, G_GNUC_UNUSED SnraServer * server)
 {
   const gchar *file_path;
   gchar *filename = NULL;
@@ -331,19 +334,19 @@ fail:
 }
 
 void
-snra_server_set_base_time(SnraServer *server, GstClockTime base_time)
+snra_server_set_base_time (SnraServer * server, GstClockTime base_time)
 {
   server->base_time = base_time;
 }
 
 void
-snra_server_set_clock (SnraServer *server, GstNetTimeProvider *net_clock)
+snra_server_set_clock (SnraServer * server, GstNetTimeProvider * net_clock)
 {
   server->net_clock = net_clock;
 }
 
 static void
-snra_server_init (SnraServer *server)
+snra_server_init (SnraServer * server)
 {
   server->base_time = GST_CLOCK_TIME_NONE;
   server->stream_time = GST_CLOCK_TIME_NONE;
@@ -351,16 +354,16 @@ snra_server_init (SnraServer *server)
 
   server->resources =
       g_hash_table_new_full (g_direct_hash,
-          g_direct_equal, NULL, g_object_unref);
+      g_direct_equal, NULL, g_object_unref);
 
   server->current_resource = 0;
   server->next_client_id = 1;
 }
 
 static void
-snra_server_constructed(GObject *object)
+snra_server_constructed (GObject * object)
 {
-  SnraServer *server = (SnraServer *)(object);
+  SnraServer *server = (SnraServer *) (object);
   SoupSocket *socket;
   gint port;
 
@@ -375,8 +378,7 @@ snra_server_constructed(GObject *object)
       (SoupServerCallback) server_fallback_cb,
       g_object_ref (server), g_object_unref);
   soup_server_add_handler (server->soup, "/ui",
-      (SoupServerCallback) server_ui_cb,
-      g_object_ref (server), g_object_unref);
+      (SoupServerCallback) server_ui_cb, g_object_ref (server), g_object_unref);
   soup_server_add_handler (server->soup, "/client",
       (SoupServerCallback) server_client_cb,
       g_object_ref (server), g_object_unref);
@@ -384,20 +386,20 @@ snra_server_constructed(GObject *object)
       (SoupServerCallback) server_resource_cb,
       g_object_ref (server), g_object_unref);
 
-  socket = soup_server_get_listener(server->soup);
+  socket = soup_server_get_listener (server->soup);
   if (socket) {
     SoupAddress *addr;
     g_object_get (socket, SOUP_SOCKET_LOCAL_ADDRESS, &addr, NULL);
     g_print ("Now listening on %s:%u\n",
-        soup_address_get_name(addr), soup_address_get_port(addr));
+        soup_address_get_name (addr), soup_address_get_port (addr));
     g_object_unref (addr);
   }
 }
 
 static void
-snra_server_class_init (SnraServerClass *server_class)
+snra_server_class_init (SnraServerClass * server_class)
 {
-  GObjectClass *gobject_class = (GObjectClass *)(server_class);
+  GObjectClass *gobject_class = (GObjectClass *) (server_class);
 
   gobject_class->constructed = snra_server_constructed;
   gobject_class->dispose = snra_server_dispose;
@@ -406,21 +408,19 @@ snra_server_class_init (SnraServerClass *server_class)
   gobject_class->get_property = snra_server_get_property;
 
   g_object_class_install_property (gobject_class, PROP_CONFIG,
-    g_param_spec_object ("config", "config",
-                         "Sonarea service configuration object",
-                         SNRA_TYPE_CONFIG,
-                         G_PARAM_READWRITE|G_PARAM_CONSTRUCT));
+      g_param_spec_object ("config", "config",
+          "Sonarea service configuration object",
+          SNRA_TYPE_CONFIG, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
   g_object_class_install_property (gobject_class, PROP_CLOCK,
-    g_param_spec_object ("clock", "clock",
-                         "clock to synchronise playback",
-                         GST_TYPE_NET_TIME_PROVIDER,
-                         G_PARAM_READWRITE));
+      g_param_spec_object ("clock", "clock",
+          "clock to synchronise playback",
+          GST_TYPE_NET_TIME_PROVIDER, G_PARAM_READWRITE));
 }
 
 static void
-snra_server_finalize(GObject *object)
+snra_server_finalize (GObject * object)
 {
-  SnraServer *server = (SnraServer *)(object);
+  SnraServer *server = (SnraServer *) (object);
   g_object_unref (server->soup);
   g_hash_table_remove_all (server->resources);
 
@@ -434,11 +434,12 @@ snra_server_finalize(GObject *object)
 }
 
 static void
-snra_server_dispose(GObject *object)
+snra_server_dispose (GObject * object)
 {
-  SnraServer *server = (SnraServer *)(object);
+  SnraServer *server = (SnraServer *) (object);
 
-  g_list_foreach (server->player_clients, (GFunc) snra_server_client_free, NULL);
+  g_list_foreach (server->player_clients, (GFunc) snra_server_client_free,
+      NULL);
   g_list_free (server->player_clients);
   server->player_clients = NULL;
 
@@ -451,7 +452,7 @@ static void
 snra_server_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  SnraServer *server = (SnraServer *)(object);
+  SnraServer *server = (SnraServer *) (object);
 
   switch (prop_id) {
     case PROP_CONFIG:
@@ -472,7 +473,7 @@ static void
 snra_server_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  SnraServer *server = (SnraServer *)(object);
+  SnraServer *server = (SnraServer *) (object);
 
   switch (prop_id) {
     case PROP_CONFIG:
@@ -488,27 +489,29 @@ snra_server_get_property (GObject * object, guint prop_id,
 }
 
 void
-snra_server_start (SnraServer *server)
+snra_server_start (SnraServer * server)
 {
   soup_server_run_async (server->soup);
 }
 
 void
-snra_server_stop (SnraServer *server)
+snra_server_stop (SnraServer * server)
 {
   soup_server_quit (server->soup);
 }
 
 void
-snra_server_set_resource_cb (SnraServer *server, 
-  SnraHttpResource *(*callback)(SnraServer *server, guint resource_id, void *cb_data), void *userdata)
+snra_server_set_resource_cb (SnraServer * server,
+    SnraHttpResource * (*callback) (SnraServer * server, guint resource_id,
+        void *cb_data), void *userdata)
 {
   server->get_resource = callback;
   server->get_resource_userdata = userdata;
 }
 
 void
-snra_server_add_handler (SnraServer *server, const gchar *path, SoupServerCallback callback, gpointer user_data,
+snra_server_add_handler (SnraServer * server, const gchar * path,
+    SoupServerCallback callback, gpointer user_data,
     GDestroyNotify destroy_notify)
 {
   soup_server_add_handler (server->soup, path, callback,
@@ -516,7 +519,7 @@ snra_server_add_handler (SnraServer *server, const gchar *path, SoupServerCallba
 }
 
 void
-snra_server_play_resource (SnraServer *server, guint resource_id)
+snra_server_play_resource (SnraServer * server, guint resource_id)
 {
   server->current_resource = resource_id;
   server->base_time = GST_CLOCK_TIME_NONE;
@@ -525,70 +528,70 @@ snra_server_play_resource (SnraServer *server, guint resource_id)
 }
 
 void
-snra_server_send_play (SnraServer *server, SnraServerClient *client)
+snra_server_send_play (SnraServer * server, SnraServerClient * client)
 {
   GstClock *clock;
   GstStructure *msg;
 
   /* Update base time to match length of time paused */
   g_object_get (server->net_clock, "clock", &clock, NULL);
-  server->base_time = gst_clock_get_time (clock) + (GST_SECOND / 4) - server->stream_time;
+  server->base_time =
+      gst_clock_get_time (clock) + (GST_SECOND / 4) - server->stream_time;
   gst_object_unref (clock);
   server->stream_time = GST_CLOCK_TIME_NONE;
 
   msg = gst_structure_new ("json",
-            "msg-type", G_TYPE_STRING, "play",
-            "base-time", G_TYPE_INT64, (gint64)(server->base_time),
-            NULL);
+      "msg-type", G_TYPE_STRING, "play",
+      "base-time", G_TYPE_INT64, (gint64) (server->base_time), NULL);
 
   server_send_msg_to_client (server, client, msg);
 }
 
 void
-snra_server_send_pause (SnraServer *server, SnraServerClient *client)
+snra_server_send_pause (SnraServer * server, SnraServerClient * client)
 {
   GstClock *clock;
   GstStructure *msg;
 
-  msg = gst_structure_new ("json",
-            "msg-type", G_TYPE_STRING, "pause",
-            NULL);
+  msg = gst_structure_new ("json", "msg-type", G_TYPE_STRING, "pause", NULL);
 
   server_send_msg_to_client (server, client, msg);
 
   if (server->stream_time == GST_CLOCK_TIME_NONE) {
     g_object_get (server->net_clock, "clock", &clock, NULL);
     /* Calculate how much of the current file we played up until now, and store */
-    server->stream_time = gst_clock_get_time (clock) + (GST_SECOND / 4) - server->base_time;
+    server->stream_time =
+        gst_clock_get_time (clock) + (GST_SECOND / 4) - server->base_time;
     gst_object_unref (clock);
-    g_print ("Storing stream_time %" GST_TIME_FORMAT "\n", GST_TIME_ARGS (server->stream_time));
+    g_print ("Storing stream_time %" GST_TIME_FORMAT "\n",
+        GST_TIME_ARGS (server->stream_time));
   }
 }
 
 void
-snra_server_send_volume (SnraServer *server, SnraServerClient *client, gdouble volume)
+snra_server_send_volume (SnraServer * server, SnraServerClient * client,
+    gdouble volume)
 {
   GstStructure *msg;
 
   server->current_volume = volume;
 
   msg = gst_structure_new ("json",
-            "msg-type", G_TYPE_STRING, "volume",
-            "level", G_TYPE_DOUBLE, volume,
-            NULL);
+      "msg-type", G_TYPE_STRING, "volume",
+      "level", G_TYPE_DOUBLE, volume, NULL);
 
   server_send_msg_to_client (server, client, msg);
 }
 
 SnraServerClient *
-snra_server_get_client (SnraServer *server, guint client_id)
+snra_server_get_client (SnraServer * server, guint client_id)
 {
   GList *item =
       g_list_find_custom (server->player_clients, GINT_TO_POINTER (client_id),
-           (GCompareFunc)(find_client_by_id));
+      (GCompareFunc) (find_client_by_id));
 
   if (item == NULL)
     return NULL;
 
-  return (SnraServerClient *)(item->data); 
+  return (SnraServerClient *) (item->data);
 }

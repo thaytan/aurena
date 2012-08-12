@@ -47,7 +47,7 @@ struct _SnraServer
   GHashTable *resources;
   guint current_resource;
 
-  GList *clients;
+  GList *player_clients;
   guint next_client_id;
 
   SnraHttpResource *(*get_resource)(SnraServer *server, guint resource_id, void *cb_data);

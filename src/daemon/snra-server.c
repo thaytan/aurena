@@ -84,7 +84,7 @@ server_send_msg_to_client (SnraServer *server, SnraServerClient *client,
   else {
     /* client == NULL - send to all clients */
     GList *cur;
-    for (cur = server->clients; cur != NULL; cur = g_list_next (cur)) {
+    for (cur = server->player_clients; cur != NULL; cur = g_list_next (cur)) {
       client = (SnraServerClient *)(cur->data);
       snra_server_client_send_message (client, body, len);
     }
@@ -184,11 +184,11 @@ find_client_by_id (SnraServerClient *client, void *wanted_id)
 static void
 server_client_disconnect (SoupMessage *message, SnraServer *server)
 {
-  GList *client = g_list_find_custom (server->clients, message, (GCompareFunc)(find_client_by_pipe));
+  GList *client = g_list_find_custom (server->player_clients, message, (GCompareFunc)(find_client_by_pipe));
 
   if (client) {
     snra_server_client_free ((SnraServerClient *)(client->data));
-    server->clients = g_list_delete_link (server->clients, client);
+    server->player_clients = g_list_delete_link (server->player_clients, client);
   }
 }
 
@@ -208,7 +208,7 @@ server_client_cb (SoupServer *soup, SoupMessage *msg,
 
   g_signal_connect (msg, "finished", G_CALLBACK (server_client_disconnect), server);
 
-  server->clients = g_list_prepend (server->clients, client_conn);
+  server->player_clients = g_list_prepend (server->player_clients, client_conn);
 
   server_send_enrol_msg(server, client_conn);
   if (server->current_resource)
@@ -438,9 +438,9 @@ snra_server_dispose(GObject *object)
 {
   SnraServer *server = (SnraServer *)(object);
 
-  g_list_foreach (server->clients, (GFunc) snra_server_client_free, NULL);
-  g_list_free (server->clients);
-  server->clients = NULL;
+  g_list_foreach (server->player_clients, (GFunc) snra_server_client_free, NULL);
+  g_list_free (server->player_clients);
+  server->player_clients = NULL;
 
   soup_server_quit (server->soup);
 
@@ -584,7 +584,7 @@ SnraServerClient *
 snra_server_get_client (SnraServer *server, guint client_id)
 {
   GList *item =
-      g_list_find_custom (server->clients, GINT_TO_POINTER (client_id),
+      g_list_find_custom (server->player_clients, GINT_TO_POINTER (client_id),
            (GCompareFunc)(find_client_by_id));
 
   if (item == NULL)

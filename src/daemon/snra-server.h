@@ -32,12 +32,6 @@ G_BEGIN_DECLS
 
 typedef struct _SnraServerClass SnraServerClass;
 
-struct _SnraServerClient
-{
-  guint client_id;
-  SoupMessage *event_pipe;
-};
-
 struct _SnraServer
 {
   GObject parent;

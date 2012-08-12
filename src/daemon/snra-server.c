@@ -33,6 +33,7 @@
 
 #include "snra-config.h"
 #include "snra-server.h"
+#include "snra-server-client.h"
 #include "snra-resource.h"
 #include "snra-http-resource.h"
 
@@ -55,7 +56,6 @@ static void snra_soup_message_set_redirect (SoupMessage *msg,
     guint status_code, const char *redirect_uri);
 static void snra_server_finalize(GObject *object);
 static void snra_server_dispose(GObject *object);
-static void free_client_connection (gpointer data);
 
 static void
 server_send_msg_to_client (SnraServer *server, SnraServerClient *client,
@@ -79,21 +79,17 @@ server_send_msg_to_client (SnraServer *server, SnraServerClient *client,
   json_node_free (root);
 
   if (client) {
-    soup_message_body_append (client->event_pipe->response_body,/* "application/json", */
-        SOUP_MEMORY_TAKE, body, len);
-    soup_server_unpause_message (server->soup, client->event_pipe);
+    snra_server_client_send_message (client, body, len);
   }
   else {
     /* client == NULL - send to all clients */
     GList *cur;
     for (cur = server->clients; cur != NULL; cur = g_list_next (cur)) {
       client = (SnraServerClient *)(cur->data);
-      soup_message_body_append (client->event_pipe->response_body,/* "application/json", */
-          SOUP_MEMORY_COPY, body, len);
-      soup_server_unpause_message (server->soup, client->event_pipe);
+      snra_server_client_send_message (client, body, len);
     }
-    g_free (body);
   }
+  g_free (body);
 }
 
 void
@@ -191,19 +187,21 @@ server_client_disconnect (SoupMessage *message, SnraServer *server)
   GList *client = g_list_find_custom (server->clients, message, (GCompareFunc)(find_client_by_pipe));
 
   if (client) {
-    free_client_connection ((SnraServerClient *)(client->data));
+    snra_server_client_free ((SnraServerClient *)(client->data));
     server->clients = g_list_delete_link (server->clients, client);
   }
 }
 
 static void
-server_client_cb (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
+server_client_cb (SoupServer *soup, SoupMessage *msg,
   G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable *query,
   G_GNUC_UNUSED SoupClientContext *client, SnraServer *server)
 {
   SnraServerClient *client_conn = g_new0(SnraServerClient, 1);
 
+  client_conn->soup = soup;
   client_conn->event_pipe = msg;
+  client_conn->client_id = server->next_client_id++;
 
   soup_message_headers_set_encoding (msg->response_headers, SOUP_ENCODING_CHUNKED);
   soup_message_set_status (msg, SOUP_STATUS_OK);
@@ -436,24 +434,12 @@ snra_server_finalize(GObject *object)
 }
 
 static void
-free_client_connection (gpointer data)
-{
-  SnraServerClient *client = (SnraServerClient *)(data);
-  soup_message_body_complete (client->event_pipe->response_body);
-  g_free (client);
-}
-
-static void
 snra_server_dispose(GObject *object)
 {
   SnraServer *server = (SnraServer *)(object);
 
-#if GLIB_CHECK_VERSION(2,28,0)
-  g_list_free_full (server->clients, free_client_connection);
-#else
-  g_list_foreach (server->clients, (GFunc) free_client_connection, NULL);
+  g_list_foreach (server->clients, (GFunc) snra_server_client_free, NULL);
   g_list_free (server->clients);
-#endif
   server->clients = NULL;
 
   soup_server_quit (server->soup);

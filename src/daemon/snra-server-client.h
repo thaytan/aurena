@@ -16,58 +16,38 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  */
-#ifndef __SNRA_MANAGER_H__
-#define __SNRA_MANAGER_H__
 
-#include <stdio.h>
+#ifndef __SNRA_SERVER_CLIENT_H__
+#define __SNRA_SERVER_CLIENT_H__
+
 #include <gst/gst.h>
 #include <gst/net/gstnet.h>
-#include <libsoup/soup-types.h>
-
-#ifdef HAVE_GST_RTSP
-#include <gst/rtsp-server/rtsp-server.h>
-#endif
+#include <libsoup/soup.h>
 
 #include <src/snra-types.h>
-#include "snra-avahi.h"
 
 G_BEGIN_DECLS
 
-#define SNRA_TYPE_MANAGER (snra_manager_get_type ())
+typedef enum _SnraServerClientType SnraServerClientType;
 
-typedef struct _SnraManagerClass SnraManagerClass;
+enum _SnraServerClientType {
+  SNRA_SERVER_CLIENT_CHUNKED,
+  SNRA_SERVER_CLIENT_WEBSOCKET
+};
 
-struct _SnraManager
+struct _SnraServerClient
 {
-  GObject parent;
+  SnraServerClientType type;
 
-  SnraServer *server;
-  GstNetTimeProvider *net_clock;
-#ifdef HAVE_GST_RTSP
-  GstRTSPServer *rtsp;
-#endif
-  int rtsp_port;
-
-  SnraAvahi *avahi;
-
-  SnraConfig *config;
-  SnraMediaDB *media_db;
-
-  GPtrArray *playlist;
-  gboolean paused;
-  guint current_resource;
-
-  GList *ctrl_clients;
+  guint client_id;
+  SoupMessage *event_pipe;
   SoupServer *soup;
 };
 
-struct _SnraManagerClass
-{
-  GObjectClass parent;
-};
-
-GType snra_manager_get_type(void);
-SnraManager *snra_manager_new(const char *config_file);
+void snra_server_client_send_message (SnraServerClient *client,
+  gchar *body, gsize len);
+void snra_server_client_free (SnraServerClient *client);
 
 G_END_DECLS
+
 #endif

@@ -44,8 +44,9 @@ enum
 
 G_DEFINE_TYPE (SnraManager, snra_manager, G_TYPE_OBJECT);
 
-static void snra_manager_finalize(GObject *object);
-static SnraHttpResource *snra_manager_get_resource_cb (SnraServer *server, guint resource_id, void *userdata);
+static void snra_manager_finalize (GObject * object);
+static SnraHttpResource *snra_manager_get_resource_cb (SnraServer * server,
+    guint resource_id, void *userdata);
 static void snra_manager_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void snra_manager_get_property (GObject * object, guint prop_id,
@@ -53,12 +54,12 @@ static void snra_manager_get_property (GObject * object, guint prop_id,
 
 
 static GstNetTimeProvider *
-create_net_clock()
+create_net_clock ()
 {
   GstClock *clock;
   GstNetTimeProvider *net_time;
 
-  clock = gst_system_clock_obtain();
+  clock = gst_system_clock_obtain ();
   net_time = gst_net_time_provider_new (clock, NULL, 0);
   gst_object_unref (clock);
 
@@ -67,7 +68,7 @@ create_net_clock()
 
 #ifdef HAVE_GST_RTSP
 static GstRTSPServer *
-create_rtsp_server (G_GNUC_UNUSED SnraManager *mgr)
+create_rtsp_server (G_GNUC_UNUSED SnraManager * mgr)
 {
   GstRTSPServer *server = NULL;
 
@@ -93,7 +94,8 @@ failed:
 
 typedef enum _SnraControlEvent SnraControlEvent;
 
-enum _SnraControlEvent {
+enum _SnraControlEvent
+{
   SNRA_CONTROL_NONE,
   SNRA_CONTROL_NEXT,
   SNRA_CONTROL_PREV,
@@ -103,20 +105,24 @@ enum _SnraControlEvent {
   SNRA_CONTROL_VOLUME
 };
 
-static const
-struct { const char *name; SnraControlEvent type; } control_event_names[] = 
+static const struct
 {
-  { "next", SNRA_CONTROL_NEXT },
-  { "previous", SNRA_CONTROL_PREV },
-  { "play", SNRA_CONTROL_PLAY },
-  { "pause", SNRA_CONTROL_PAUSE },
-  { "enqueue", SNRA_CONTROL_ENQUEUE },
-  { "volume", SNRA_CONTROL_VOLUME }
+  const char *name;
+  SnraControlEvent type;
+} control_event_names[] = {
+  {
+  "next", SNRA_CONTROL_NEXT}, {
+  "previous", SNRA_CONTROL_PREV}, {
+  "play", SNRA_CONTROL_PLAY}, {
+  "pause", SNRA_CONTROL_PAUSE}, {
+  "enqueue", SNRA_CONTROL_ENQUEUE}, {
+  "volume", SNRA_CONTROL_VOLUME}
 };
+
 static const gint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
 
 static SnraControlEvent
-str_to_control_event_type (const gchar *str)
+str_to_control_event_type (const gchar * str)
 {
   gint i;
   for (i = 0; i < N_CONTROL_EVENTS; i++) {
@@ -128,15 +134,15 @@ str_to_control_event_type (const gchar *str)
 }
 
 static guint
-get_playlist_len (SnraManager *mgr)
+get_playlist_len (SnraManager * mgr)
 {
-  return snra_media_db_get_file_count(mgr->media_db);
+  return snra_media_db_get_file_count (mgr->media_db);
 }
 
 static void
-control_callback (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg, 
-  const char *path, GHashTable *query,
-  G_GNUC_UNUSED SoupClientContext *client, SnraManager *manager)
+control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
+    const char *path, GHashTable * query,
+    G_GNUC_UNUSED SoupClientContext * client, SnraManager * manager)
 {
   gchar **parts = g_strsplit (path, "/", 3);
   guint n_parts = g_strv_length (parts);
@@ -145,7 +151,7 @@ control_callback (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
   const gchar *content_type;
 
   if (n_parts < 3)
-    return; /* Invalid request */
+    return;                     /* Invalid request */
   g_return_if_fail (g_str_equal ("control", parts[1]));
 
   event_type = str_to_control_event_type (parts[2]);
@@ -154,10 +160,10 @@ control_callback (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
   if (g_str_equal (msg->method, "POST") &&
       content_type &&
       g_str_equal (content_type, SOUP_FORM_MIME_TYPE_URLENCODED))
-    post_params = soup_form_decode(msg->request_body->data);
-  
+    post_params = soup_form_decode (msg->request_body->data);
+
   switch (event_type) {
-    case SNRA_CONTROL_NEXT: {
+    case SNRA_CONTROL_NEXT:{
       gchar *id_str = NULL;
       guint resource_id;
 
@@ -165,29 +171,29 @@ control_callback (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
         id_str = g_hash_table_lookup (query, "id");
 
       if (id_str == NULL || !sscanf (id_str, "%d", &resource_id)) {
-         /* No or invalid resource id: skip to another random track */
-         resource_id = (guint) g_random_int_range (0, get_playlist_len (manager)) + 1;
-      }
-      else {
+        /* No or invalid resource id: skip to another random track */
+        resource_id =
+            (guint) g_random_int_range (0, get_playlist_len (manager)) + 1;
+      } else {
         resource_id = CLAMP (resource_id, 1, get_playlist_len (manager));
       }
       manager->paused = FALSE;
       snra_server_play_resource (manager->server, resource_id);
       break;
     }
-    case SNRA_CONTROL_PAUSE: {
+    case SNRA_CONTROL_PAUSE:{
       if (!manager->paused)
         snra_server_send_pause (manager->server, NULL);
       manager->paused = TRUE;
       break;
     }
-    case SNRA_CONTROL_PLAY: {
+    case SNRA_CONTROL_PLAY:{
       if (manager->paused)
         snra_server_send_play (manager->server, NULL);
       manager->paused = FALSE;
       break;
     }
-    case SNRA_CONTROL_VOLUME: {
+    case SNRA_CONTROL_VOLUME:{
       gchar *vol_str = NULL;
       gdouble new_vol;
       if (query)
@@ -213,39 +219,208 @@ control_callback (G_GNUC_UNUSED SoupServer *soup, SoupMessage *msg,
 done:
   if (post_params)
     g_hash_table_destroy (post_params);
-  g_strfreev(parts);
+  g_strfreev (parts);
+}
+
+static gint
+find_client_by_pipe (SoupMessage * client, SoupMessage * wanted)
+{
+  if (client == wanted)
+    return 0;
+  return 1;
 }
 
 static void
-snra_manager_init (SnraManager *manager)
+manager_ctrl_client_disconnect (SoupMessage * message, SnraManager * manager)
+{
+  GList *client = g_list_find_custom (manager->ctrl_clients, message,
+      (GCompareFunc) (find_client_by_pipe));
+
+  g_print ("/status client disconnected. Looking for state info\n");
+
+  if (client) {
+    SoupMessage *msg = (SoupMessage *) (client->data);
+    soup_message_body_complete (msg->response_body);
+    manager->ctrl_clients = g_list_delete_link (manager->ctrl_clients, client);
+    g_print ("Found state. Removing lost controller connection\n");
+  }
+}
+
+static void
+manager_ctrl_client_network_event (SoupMessage * msg, GSocketClientEvent event,
+    GIOStream * connection, SnraManager * manager)
+{
+  g_print ("/status client network event %d\n", event);
+}
+
+static gboolean
+is_websocket_request (SoupMessage * msg)
+{
+  /* Check for request headers. Example:
+   * Upgrade: websocket
+   * Connection: Upgrade, Keep-Alive
+   * Sec-WebSocket-Key: XYZABC123
+   * Sec-WebSocket-Protocol: sonarea
+   * Sec-WebSocket-Version: 13
+   */
+  SoupMessageHeaders *req_hdrs = msg->request_headers;
+  const gchar *val;
+
+  if ((val = soup_message_headers_get_one (req_hdrs, "Upgrade")) == NULL)
+    return FALSE;
+  if (g_ascii_strcasecmp (val, "websocket") != 0)
+    return FALSE;
+  if ((val = soup_message_headers_get_list (req_hdrs, "Connection")) == NULL)
+    return FALSE;
+
+  {
+    /* Connection params list must request upgrade to websocket */
+    gchar **tmp = g_strsplit (val, ",", 0);
+    gchar **cur;
+    gboolean found_upgrade = FALSE;
+    for (cur = tmp; *cur != NULL; cur++) {
+      g_strstrip (*cur);
+      if (g_ascii_strcasecmp (*cur, "upgrade") == 0) {
+        found_upgrade = TRUE;
+        break;
+      }
+    }
+    g_strfreev (tmp);
+    if (!found_upgrade)
+      return FALSE;
+  }
+  if ((val =
+          soup_message_headers_get_one (req_hdrs, "Sec-WebSocket-Key")) == NULL)
+    return FALSE;
+  if ((val =
+          soup_message_headers_get_one (req_hdrs,
+              "Sec-WebSocket-Protocol")) == NULL
+      || (g_ascii_strcasecmp (val, "sonarea") != 0))
+    return FALSE;
+
+  /* Requested protocol version must be 13 or 8 */
+  if ((val =
+          soup_message_headers_get_one (req_hdrs,
+              "Sec-WebSocket-Version")) == NULL)
+    return FALSE;
+  if ((g_ascii_strcasecmp (val, "13") != 0)
+      && (g_ascii_strcasecmp (val, "8") != 0))
+    return FALSE;
+
+  return TRUE;
+}
+
+static void
+manager_ctrl_client_wrote_headers (SoupMessage * msg, SnraManager * manager)
+{
+  /* Pause the message so Soup doesn't do any more responding */
+  soup_server_pause_message (manager->soup, msg);
+  g_print ("Wrote headers to client\n");
+}
+
+static gchar *
+calc_websocket_challenge_reply (const gchar * key)
+{
+  const gchar *guid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+  gchar *ret = NULL;
+  gchar *concat = g_strconcat (key, guid, NULL);
+  GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA1);
+
+  guint8 sha1[20];
+  gsize len = 20;
+
+  g_print ("challenge: %s\n", key);
+
+  g_checksum_update (checksum, (guchar *) (concat), -1);
+  g_checksum_get_digest (checksum, sha1, &len);
+
+  g_free (concat);
+
+  ret = g_base64_encode (sha1, len);
+
+  g_checksum_free (checksum);
+  g_print ("reply: %s\n", ret);
+
+  return ret;
+}
+
+static void
+status_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
+    G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable * query,
+    G_GNUC_UNUSED SoupClientContext * client, SnraManager * manager)
+{
+  const gchar *accept_challenge;
+  gchar *accept_reply;
+
+  manager->soup = soup;
+
+  /* Check if the request is a websocket request, if not, just return 404 */
+  if (!is_websocket_request (msg)) {
+    /* FIXME: Handle as a chunked reply */
+    soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
+    return;
+  }
+
+  g_print ("New controller connection\n");
+  accept_challenge =
+      soup_message_headers_get_one (msg->request_headers, "Sec-WebSocket-Key");
+  accept_reply = calc_websocket_challenge_reply (accept_challenge);
+
+  soup_message_headers_set_encoding (msg->response_headers, SOUP_ENCODING_EOF);
+
+  soup_message_set_status (msg, SOUP_STATUS_SWITCHING_PROTOCOLS);
+  soup_message_headers_replace (msg->response_headers, "Upgrade", "websocket");
+  soup_message_headers_replace (msg->response_headers, "Connection", "Upgrade");
+  soup_message_headers_replace (msg->response_headers, "Sec-WebSocket-Accept",
+      accept_reply);
+  soup_message_headers_replace (msg->response_headers, "Sec-WebSocket-Protocol",
+      "sonarea");
+
+  g_free (accept_reply);
+
+  g_signal_connect (msg, "finished",
+      G_CALLBACK (manager_ctrl_client_disconnect), manager);
+  g_signal_connect (msg, "network-event",
+      G_CALLBACK (manager_ctrl_client_network_event), manager);
+  g_signal_connect (msg, "wrote-informational",
+      G_CALLBACK (manager_ctrl_client_wrote_headers), manager);
+
+  manager->ctrl_clients = g_list_prepend (manager->ctrl_clients, msg);
+}
+
+static void
+snra_manager_init (SnraManager * manager)
 {
   manager->playlist = g_ptr_array_new ();
-  manager->net_clock = create_net_clock();
+  manager->net_clock = create_net_clock ();
+  manager->paused = TRUE;
 
   manager->avahi = g_object_new (SNRA_TYPE_AVAHI, NULL);
 }
 
 static void
-snra_manager_constructed (GObject *object)
+snra_manager_constructed (GObject * object)
 {
-  SnraManager *manager = (SnraManager *)(object);
+  SnraManager *manager = (SnraManager *) (object);
   gchar *db_file;
 
   if (G_OBJECT_CLASS (snra_manager_parent_class)->constructed != NULL)
     G_OBJECT_CLASS (snra_manager_parent_class)->constructed (object);
 
 #ifdef HAVE_GST_RTSP
-  manager->rtsp = create_rtsp_server(manager);
+  manager->rtsp = create_rtsp_server (manager);
 #endif
 
   manager->server = g_object_new (SNRA_TYPE_SERVER,
-      "config", manager->config, "clock", manager->net_clock,
-      NULL);
+      "config", manager->config, "clock", manager->net_clock, NULL);
   snra_server_set_resource_cb (manager->server,
       snra_manager_get_resource_cb, manager);
   snra_server_add_handler (manager->server, "/control",
       (SoupServerCallback) control_callback,
-      g_object_ref (G_OBJECT(manager)), g_object_unref);
+      g_object_ref (G_OBJECT (manager)), g_object_unref);
+  snra_server_add_handler (manager->server, "/status",
+      (SoupServerCallback) status_callback,
+      g_object_ref (G_OBJECT (manager)), g_object_unref);
 
   g_object_get (manager->config, "database", &db_file, NULL);
   manager->media_db = snra_media_db_new (db_file);
@@ -253,9 +428,9 @@ snra_manager_constructed (GObject *object)
 }
 
 static void
-snra_manager_class_init (SnraManagerClass *manager_class)
+snra_manager_class_init (SnraManagerClass * manager_class)
 {
-  GObjectClass *object_class = (GObjectClass *)(manager_class);
+  GObjectClass *object_class = (GObjectClass *) (manager_class);
 
   object_class->constructed = snra_manager_constructed;
   object_class->set_property = snra_manager_set_property;
@@ -263,16 +438,15 @@ snra_manager_class_init (SnraManagerClass *manager_class)
   object_class->finalize = snra_manager_finalize;
 
   g_object_class_install_property (object_class, PROP_CONFIG,
-    g_param_spec_object ("config", "config",
-                         "Sonarea service configuration object",
-                         SNRA_TYPE_CONFIG,
-                         G_PARAM_READWRITE|G_PARAM_CONSTRUCT));
+      g_param_spec_object ("config", "config",
+          "Sonarea service configuration object",
+          SNRA_TYPE_CONFIG, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
 }
 
 static void
-snra_manager_finalize(GObject *object)
+snra_manager_finalize (GObject * object)
 {
-  SnraManager *manager = (SnraManager *)(object);
+  SnraManager *manager = (SnraManager *) (object);
 
   g_ptr_array_foreach (manager->playlist, (GFunc) g_free, NULL);
   g_ptr_array_free (manager->playlist, TRUE);
@@ -285,7 +459,7 @@ static void
 snra_manager_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  SnraManager *manager = (SnraManager *)(object);
+  SnraManager *manager = (SnraManager *) (object);
 
   switch (prop_id) {
     case PROP_CONFIG:
@@ -301,7 +475,7 @@ static void
 snra_manager_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  SnraManager *manager = (SnraManager *)(object);
+  SnraManager *manager = (SnraManager *) (object);
 
   switch (prop_id) {
     case PROP_CONFIG:
@@ -315,21 +489,22 @@ snra_manager_get_property (GObject * object, guint prop_id,
 
 #ifdef HAVE_GST_RTSP
 static void
-rtsp_media_prepared(GstRTSPMedia *media, G_GNUC_UNUSED SnraManager *mgr)
+rtsp_media_prepared (GstRTSPMedia * media, G_GNUC_UNUSED SnraManager * mgr)
 {
   g_object_set (media->rtpbin, "use-pipeline-clock", TRUE, NULL);
 }
 
 static void
-new_stream_constructed_cb (G_GNUC_UNUSED GstRTSPMediaFactory *factory,
-    GstRTSPMedia *media, SnraManager *mgr)
+new_stream_constructed_cb (G_GNUC_UNUSED GstRTSPMediaFactory * factory,
+    GstRTSPMedia * media, SnraManager * mgr)
 {
   g_print ("Media constructed: %p\n", media);
   g_signal_connect (media, "prepared", G_CALLBACK (rtsp_media_prepared), mgr);
 }
 
 static void
-add_rtsp_uri (SnraManager *manager, guint resource_id, const gchar *source_uri)
+add_rtsp_uri (SnraManager * manager, guint resource_id,
+    const gchar * source_uri)
 {
   GstRTSPMediaMapping *mapping;
   GstRTSPMediaFactoryURI *factory;
@@ -339,10 +514,12 @@ add_rtsp_uri (SnraManager *manager, guint resource_id, const gchar *source_uri)
   factory = gst_rtsp_media_factory_uri_new ();
   /* Set up the URI, and set as shared (all viewers see the same stream) */
   gst_rtsp_media_factory_uri_set_uri (factory, source_uri);
-  gst_rtsp_media_factory_set_shared ( GST_RTSP_MEDIA_FACTORY (factory), TRUE);
-  g_signal_connect (factory, "media-constructed", G_CALLBACK (new_stream_constructed_cb), manager);
+  gst_rtsp_media_factory_set_shared (GST_RTSP_MEDIA_FACTORY (factory), TRUE);
+  g_signal_connect (factory, "media-constructed",
+      G_CALLBACK (new_stream_constructed_cb), manager);
   /* attach the test factory to the test url */
-  gst_rtsp_media_mapping_add_factory (mapping, rtsp_uri, GST_RTSP_MEDIA_FACTORY (factory));
+  gst_rtsp_media_mapping_add_factory (mapping, rtsp_uri,
+      GST_RTSP_MEDIA_FACTORY (factory));
   g_object_unref (mapping);
 
   g_free (rtsp_uri);
@@ -350,7 +527,7 @@ add_rtsp_uri (SnraManager *manager, guint resource_id, const gchar *source_uri)
 #endif
 
 static void
-read_playlist_file(SnraManager *manager, const char *filename)
+read_playlist_file (SnraManager * manager, const char *filename)
 {
   GError *error = NULL;
   GIOChannel *io = g_io_channel_new_file (filename, "r", &error);
@@ -364,10 +541,10 @@ read_playlist_file(SnraManager *manager, const char *filename)
   }
 
   do {
-    result = g_io_channel_read_line(io, &line, NULL, NULL, NULL);
+    result = g_io_channel_read_line (io, &line, NULL, NULL, NULL);
     if (result == G_IO_STATUS_AGAIN)
       continue;
-    if (result != G_IO_STATUS_NORMAL) 
+    if (result != G_IO_STATUS_NORMAL)
       break;
     g_strchomp (line);
     g_ptr_array_add (manager->playlist, line);
@@ -376,12 +553,12 @@ read_playlist_file(SnraManager *manager, const char *filename)
 
   g_print ("Read %u entries\n", manager->playlist->len);
 
-  g_io_channel_unref (io); 
+  g_io_channel_unref (io);
 }
 
 
 SnraManager *
-snra_manager_new(const char *config_file)
+snra_manager_new (const char *config_file)
 {
   SnraConfig *config;
   SnraManager *manager;
@@ -401,13 +578,17 @@ snra_manager_new(const char *config_file)
 
   if (get_playlist_len (manager)) {
 #ifdef HAVE_GST_RTSP
-    char *rtsp_uri = g_strdup_printf("file://%s", (gchar *)(g_ptr_array_index (manager->playlist, 0)));
+    char *rtsp_uri =
+        g_strdup_printf ("file://%s",
+        (gchar *) (g_ptr_array_index (manager->playlist, 0)));
     add_rtsp_uri (manager, 1, rtsp_uri);
     g_free (rtsp_uri);
 #endif
 
-    snra_server_play_resource (manager->server,
-        g_random_int_range (0, get_playlist_len (manager) + 1));
+    if (!manager->paused) {
+      snra_server_play_resource (manager->server,
+          g_random_int_range (0, get_playlist_len (manager) + 1));
+    }
   }
 
   snra_server_start (manager->server);
@@ -416,9 +597,10 @@ snra_manager_new(const char *config_file)
 }
 
 static SnraHttpResource *
-snra_manager_get_resource_cb (G_GNUC_UNUSED SnraServer *server, guint resource_id, void *userdata)
+snra_manager_get_resource_cb (G_GNUC_UNUSED SnraServer * server,
+    guint resource_id, void *userdata)
 {
-  SnraManager *manager = (SnraManager *)(userdata);
+  SnraManager *manager = (SnraManager *) (userdata);
   SnraHttpResource *ret;
   gchar *file;
 

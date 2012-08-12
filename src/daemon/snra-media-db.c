@@ -79,7 +79,6 @@ snra_media_db_constructed (G_GNUC_UNUSED GObject *object)
     g_warning ("Could not open media DB %s\n", media_db->priv->db_file);
     media_db->priv->errored = TRUE;
   }
-
   media_db->priv->handle = handle;
 
   if (!media_db_create_tables(media_db))
@@ -314,7 +313,7 @@ snra_media_db_get_file_count (SnraMediaDB *media_db)
   }
  
 done:
-  g_print ("Got count %d\n", count);
+  g_print ("%d media files in DB\n", count);
   return count;
 }
 

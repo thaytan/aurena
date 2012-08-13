@@ -58,15 +58,16 @@ static void snra_client_set_property (GObject * object, guint prop_id,
 static void snra_client_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-static void snra_client_finalize(GObject *object);
-static void snra_client_dispose(GObject *object);
+static void snra_client_finalize (GObject * object);
+static void snra_client_dispose (GObject * object);
 
-static void search_for_server (SnraClient *client);
-static void connect_to_server (SnraClient *client, const gchar *server, int port);
-static void construct_player (SnraClient *client);
+static void search_for_server (SnraClient * client);
+static void connect_to_server (SnraClient * client, const gchar * server,
+    int port);
+static void construct_player (SnraClient * client);
 
 static gboolean
-try_reconnect (SnraClient *client)
+try_reconnect (SnraClient * client)
 {
   client->timeout = 0;
 
@@ -79,7 +80,8 @@ try_reconnect (SnraClient *client)
 }
 
 static void
-handle_connection_closed_cb (G_GNUC_UNUSED SoupSession *session, SoupMessage *msg, SnraClient *client)
+handle_connection_closed_cb (G_GNUC_UNUSED SoupSession * session,
+    SoupMessage * msg, SnraClient * client)
 {
   client->connecting = FALSE;
 
@@ -88,44 +90,44 @@ handle_connection_closed_cb (G_GNUC_UNUSED SoupSession *session, SoupMessage *ms
 
   if (client->was_connected) {
     g_print ("Disconnected from server. Reason %s status %d\n",
-      msg->reason_phrase, msg->status_code);
+        msg->reason_phrase, msg->status_code);
   }
   client->was_connected = FALSE;
 
   if (client->player)
     gst_element_set_state (client->player, GST_STATE_READY);
   if (client->timeout == 0) {
-    client->timeout = g_timeout_add_seconds (1, (GSourceFunc) try_reconnect, client);
+    client->timeout =
+        g_timeout_add_seconds (1, (GSourceFunc) try_reconnect, client);
   }
 }
 
 static void
-handle_enrol_message (SnraClient *client, GstStructure *s)
+handle_enrol_message (SnraClient * client, GstStructure * s)
 {
   int clock_port;
   gint64 tmp;
   GstClockTime cur_time;
   gchar *server_ip_str = NULL;
   gdouble new_vol;
- 
+
   if (!snra_json_structure_get_int (s, "clock-port", &clock_port))
-    return; /* Invalid message */
+    return;                     /* Invalid message */
 
   if (!snra_json_structure_get_int64 (s, "current-time", &tmp))
-    return; /* Invalid message */
-  cur_time = (GstClockTime)(tmp);
+    return;                     /* Invalid message */
+  cur_time = (GstClockTime) (tmp);
 
   if (snra_json_structure_get_double (s, "volume-level", &new_vol)) {
-    if (client->player == NULL) 
+    if (client->player == NULL)
       construct_player (client);
 
     if (client->player) {
       g_print ("New volume %g\n", new_vol);
       g_object_set (G_OBJECT (client->player), "volume", new_vol,
-          "mute", (gboolean)(new_vol == 0.0), NULL);
+          "mute", (gboolean) (new_vol == 0.0), NULL);
     }
   }
-
 #if GLIB_CHECK_VERSION(2,22,0)
   {
     GResolver *resolver = g_resolver_get_default ();
@@ -134,9 +136,11 @@ handle_enrol_message (SnraClient *client, GstStructure *s)
     if (resolver == NULL)
       return;
 
-    names = g_resolver_lookup_by_name (resolver, client->connected_server, NULL, NULL);
+    names =
+        g_resolver_lookup_by_name (resolver, client->connected_server, NULL,
+        NULL);
     if (names) {
-      server_ip_str = g_inet_address_to_string ((GInetAddress *)(names->data));
+      server_ip_str = g_inet_address_to_string ((GInetAddress *) (names->data));
       g_resolver_free_addresses (names);
     }
     g_object_unref (resolver);
@@ -148,11 +152,11 @@ handle_enrol_message (SnraClient *client, GstStructure *s)
       return;
     if (names) {
       char hbuf[NI_MAXHOST];
-      if (getnameinfo(names->ai_addr, names->ai_addrlen,
-          hbuf, sizeof(hbuf), NULL, 0, NI_NUMERICHOST) == 0) {
+      if (getnameinfo (names->ai_addr, names->ai_addrlen,
+              hbuf, sizeof (hbuf), NULL, 0, NI_NUMERICHOST) == 0) {
         server_ip_str = g_strdup (hbuf);
       }
-      freeaddrinfo(names);
+      freeaddrinfo (names);
     }
   }
 #endif
@@ -168,12 +172,13 @@ handle_enrol_message (SnraClient *client, GstStructure *s)
 }
 
 static void
-on_eos_msg (G_GNUC_UNUSED GstBus *bus, G_GNUC_UNUSED GstMessage *msg, SnraClient *client)
+on_eos_msg (G_GNUC_UNUSED GstBus * bus, G_GNUC_UNUSED GstMessage * msg,
+    SnraClient * client)
 {
   SoupMessage *soup_msg;
   /* FIXME: Next song should all be handled server side */
   char *url = g_strdup_printf ("http://%s:%u/control/next",
-                  client->connected_server, client->connected_port);
+      client->connected_server, client->connected_port);
 
   g_print ("Got EOS message\n");
 
@@ -183,11 +188,12 @@ on_eos_msg (G_GNUC_UNUSED GstBus *bus, G_GNUC_UNUSED GstMessage *msg, SnraClient
 }
 
 static void
-on_error_msg (G_GNUC_UNUSED GstBus *bus, GstMessage *msg, G_GNUC_UNUSED SnraClient *client)
+on_error_msg (G_GNUC_UNUSED GstBus * bus, GstMessage * msg,
+    G_GNUC_UNUSED SnraClient * client)
 {
   GError *err;
   gchar *dbg_info = NULL;
-    
+
   gst_message_parse_error (msg, &err, &dbg_info);
   g_printerr ("ERROR from element %s: %s\n",
       GST_OBJECT_NAME (msg->src), err->message);
@@ -197,11 +203,11 @@ on_error_msg (G_GNUC_UNUSED GstBus *bus, GstMessage *msg, G_GNUC_UNUSED SnraClie
 }
 
 static void
-construct_player (SnraClient *client)
+construct_player (SnraClient * client)
 {
   GstBus *bus;
 
-  if (GST_CHECK_VERSION(0,11,1))
+  if (GST_CHECK_VERSION (0, 11, 1))
     client->player = gst_element_factory_make ("playbin", NULL);
   else
     client->player = gst_element_factory_make ("playbin2", NULL);
@@ -212,95 +218,104 @@ construct_player (SnraClient *client)
   }
   bus = gst_element_get_bus (GST_ELEMENT (client->player));
   gst_bus_add_signal_watch (bus);
-  g_signal_connect (bus, "message::eos", (GCallback)(on_eos_msg), client);
-  g_signal_connect (bus, "message::error", (GCallback)(on_error_msg), client);
+  g_signal_connect (bus, "message::eos", (GCallback) (on_eos_msg), client);
+  g_signal_connect (bus, "message::error", (GCallback) (on_error_msg), client);
   gst_object_unref (bus);
 }
 
 static void
-handle_play_media_message (SnraClient *client, GstStructure *s)
+handle_play_media_message (SnraClient * client, GstStructure * s)
 {
   const gchar *protocol, *path;
   int port;
   GstClockTime base_time;
   gint64 tmp;
   gchar *uri;
-  
+
   protocol = gst_structure_get_string (s, "resource-protocol");
   path = gst_structure_get_string (s, "resource-path");
 
   if (protocol == NULL || path == NULL)
-    return; /* Invalid message */
+    return;                     /* Invalid message */
 
   if (!snra_json_structure_get_int (s, "resource-port", &port))
     return;
 
   if (!snra_json_structure_get_int64 (s, "base-time", &tmp))
-    return; /* Invalid message */
-  base_time = (GstClockTime)(tmp);
+    return;                     /* Invalid message */
+  base_time = (GstClockTime) (tmp);
 
   if (client->player == NULL) {
     construct_player (client);
     if (client->player == NULL)
       return;
-  }
-  else {
+  } else {
     gst_element_set_state (client->player, GST_STATE_NULL);
   }
 
-  uri = g_strdup_printf ("%s://%s:%d%s", protocol, client->connected_server, port, path);
-  g_print ("Playing URI %s base_time %" GST_TIME_FORMAT "\n", uri, GST_TIME_ARGS (base_time));
+  uri =
+      g_strdup_printf ("%s://%s:%d%s", protocol, client->connected_server, port,
+      path);
+  g_print ("Playing URI %s base_time %" GST_TIME_FORMAT "\n", uri,
+      GST_TIME_ARGS (base_time));
   g_object_set (client->player, "uri", uri, NULL);
   g_free (uri);
 
   gst_element_set_start_time (client->player, GST_CLOCK_TIME_NONE);
   gst_element_set_base_time (client->player, base_time);
   gst_pipeline_use_clock (GST_PIPELINE (client->player), client->net_clock);
-  
+
   gst_element_set_state (client->player, GST_STATE_PLAYING);
 }
 
 static void
-handle_play_message (SnraClient *client, GstStructure *s)
+handle_play_message (SnraClient * client, GstStructure * s)
 {
   GstClockTime base_time;
   gint64 tmp;
 
   if (!snra_json_structure_get_int64 (s, "base-time", &tmp))
-    return; /* Invalid message */
-  base_time = (GstClockTime)(tmp);
+    return;                     /* Invalid message */
+  base_time = (GstClockTime) (tmp);
 
   if (client->player) {
-    GstClockTime stream_time = gst_clock_get_time (client->net_clock) - base_time;
-    g_print ("Playing base_time %" GST_TIME_FORMAT " (offset %" GST_TIME_FORMAT ")\n",
-        GST_TIME_ARGS (base_time), GST_TIME_ARGS (stream_time));
+    GstClockTime stream_time =
+        gst_clock_get_time (client->net_clock) - base_time;
+    g_print ("Playing base_time %" GST_TIME_FORMAT " (offset %" GST_TIME_FORMAT
+        ")\n", GST_TIME_ARGS (base_time), GST_TIME_ARGS (stream_time));
     gst_element_set_base_time (GST_ELEMENT (client->player), base_time);
     gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PLAYING);
   }
 }
 
 static void
-handle_set_volume_message (SnraClient *client, GstStructure *s)
+handle_set_volume_message (SnraClient * client, GstStructure * s)
 {
   gdouble new_vol;
 
-  if (!snra_json_structure_get_double (s, "level", &new_vol)) 
+  if (!snra_json_structure_get_double (s, "level", &new_vol))
     return;
 
-  if (client->player == NULL) 
+  if (client->player == NULL)
     construct_player (client);
 
   if (client->player) {
     g_print ("New volume %g\n", new_vol);
     g_object_set (G_OBJECT (client->player), "volume", new_vol,
-        "mute", (gboolean)(new_vol == 0.0), NULL);
+        "mute", (gboolean) (new_vol == 0.0), NULL);
   }
 }
 
 static void
-handle_received_chunk (G_GNUC_UNUSED SoupMessage *msg, SoupBuffer *chunk, SnraClient *client)
+handle_received_chunk (G_GNUC_UNUSED SoupMessage * msg, SoupBuffer * chunk,
+    SnraClient * client)
 {
-  client->was_connected = TRUE;
+  if (client->was_connected == FALSE) {
+    g_print ("Successfully connected to server %s:%d\n",
+        client->connected_server, client->connected_port);
+
+    client->was_connected = TRUE;
+  }
   /* Successful server connection, stop avahi discovery */
   if (client->avahi_client) {
     avahi_client_free (client->avahi_client);
@@ -309,7 +324,7 @@ handle_received_chunk (G_GNUC_UNUSED SoupMessage *msg, SoupBuffer *chunk, SnraCl
   }
 
   if (client->json == NULL)
-    client->json = json_parser_new();
+    client->json = json_parser_new ();
 #if 0
   {
     gchar *tmp = g_strndup (chunk->data, chunk->length);
@@ -317,13 +332,14 @@ handle_received_chunk (G_GNUC_UNUSED SoupMessage *msg, SoupBuffer *chunk, SnraCl
     g_free (tmp);
   }
 #endif
-  if (json_parser_load_from_data (client->json, chunk->data, chunk->length, NULL)) {
+  if (json_parser_load_from_data (client->json, chunk->data, chunk->length,
+          NULL)) {
     JsonNode *root = json_parser_get_root (client->json);
-    GstStructure *s = snra_json_to_gst_structure(root);
+    GstStructure *s = snra_json_to_gst_structure (root);
     const char *msg_type;
 
     if (s == NULL)
-      return; /* Invalid chunk */
+      return;                   /* Invalid chunk */
 
     msg_type = gst_structure_get_string (s, "msg-type");
     if (msg_type == NULL) {
@@ -338,43 +354,47 @@ handle_received_chunk (G_GNUC_UNUSED SoupMessage *msg, SoupBuffer *chunk, SnraCl
     else if (g_str_equal (msg_type, "play"))
       handle_play_message (client, s);
     else if (g_str_equal (msg_type, "pause")) {
-       if (client->player)
-          gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PAUSED);
-    }
-    else if (g_str_equal (msg_type, "volume"))
+      if (client->player)
+        gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PAUSED);
+    } else if (g_str_equal (msg_type, "volume"))
       handle_set_volume_message (client, s);
   }
 }
 
 static void
-connect_to_server (SnraClient *client, const gchar *server, int port)
+connect_to_server (SnraClient * client, const gchar * server, int port)
 {
   SoupMessage *msg;
   char *url = g_strdup_printf ("http://%s:%u/client", server, port);
 
-  client->connecting = TRUE;
+  if (client->connecting == FALSE) {
+    g_print ("Attemping to connect to server %s:%d\n", server, port);
+    client->connecting = TRUE;
+  }
   g_free (client->connected_server);
   client->connected_server = g_strdup (server);
   client->connected_port = port;
 
   msg = soup_message_new ("GET", url);
   soup_message_body_set_accumulate (msg->response_body, FALSE);
-  g_signal_connect (msg, "got-chunk", (GCallback) handle_received_chunk, client);
-  soup_session_queue_message (client->soup, msg, (SoupSessionCallback) handle_connection_closed_cb, client);
+  g_signal_connect (msg, "got-chunk", (GCallback) handle_received_chunk,
+      client);
+  soup_session_queue_message (client->soup, msg,
+      (SoupSessionCallback) handle_connection_closed_cb, client);
   g_free (url);
 }
 
 static void
-snra_client_init (SnraClient *client)
+snra_client_init (SnraClient * client)
 {
-  client->soup = soup_session_async_new();
+  client->soup = soup_session_async_new ();
   client->server_port = 5457;
 }
 
 static void
-snra_client_constructed (GObject *object)
+snra_client_constructed (GObject * object)
 {
-  SnraClient *client = (SnraClient *)(object);
+  SnraClient *client = (SnraClient *) (object);
 
   if (G_OBJECT_CLASS (snra_client_parent_class)->constructed != NULL)
     G_OBJECT_CLASS (snra_client_parent_class)->constructed (object);
@@ -383,9 +403,9 @@ snra_client_constructed (GObject *object)
 }
 
 static void
-snra_client_class_init (SnraClientClass *client_class)
+snra_client_class_init (SnraClientClass * client_class)
 {
-  GObjectClass *gobject_class = (GObjectClass *)(client_class);
+  GObjectClass *gobject_class = (GObjectClass *) (client_class);
 
   gobject_class->constructed = snra_client_constructed;
   gobject_class->dispose = snra_client_dispose;
@@ -395,14 +415,15 @@ snra_client_class_init (SnraClientClass *client_class)
   gobject_class->get_property = snra_client_get_property;
 
   g_object_class_install_property (gobject_class, PROP_SERVER_HOST,
-    g_param_spec_string ("server-host", "Sonarea Server", "Sonarea Server hostname or IP",
-                         NULL, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
+      g_param_spec_string ("server-host", "Sonarea Server",
+          "Sonarea Server hostname or IP", NULL,
+          G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
 }
 
 static void
-snra_client_finalize(GObject *object)
+snra_client_finalize (GObject * object)
 {
-  SnraClient *client = (SnraClient *)(object);
+  SnraClient *client = (SnraClient *) (object);
 
   if (client->avahi_sb)
     avahi_service_browser_free (client->avahi_sb);
@@ -431,9 +452,9 @@ snra_client_finalize(GObject *object)
 }
 
 static void
-snra_client_dispose(GObject *object)
+snra_client_dispose (GObject * object)
 {
-  SnraClient *client = (SnraClient *)(object);
+  SnraClient *client = (SnraClient *) (object);
 
   if (client->soup)
     soup_session_abort (client->soup);
@@ -444,11 +465,11 @@ snra_client_dispose(GObject *object)
 }
 
 static void
-split_server_host (SnraClient *client)
+split_server_host (SnraClient * client)
 {
   /* See if the client->server_host string has a : and split into
    * server:port if so */
-  gchar *sep = g_strrstr(client->server_host, ":");
+  gchar *sep = g_strrstr (client->server_host, ":");
 
   if (sep) {
     gchar *server = g_strndup (client->server_host, sep - client->server_host);
@@ -463,7 +484,7 @@ static void
 snra_client_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  SnraClient *client = (SnraClient *)(object);
+  SnraClient *client = (SnraClient *) (object);
 
   switch (prop_id) {
     case PROP_SERVER_HOST:
@@ -483,11 +504,12 @@ static void
 snra_client_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  SnraClient *client = (SnraClient *)(object);
+  SnraClient *client = (SnraClient *) (object);
 
   switch (prop_id) {
-    case PROP_SERVER_HOST: {
-      gchar *tmp = g_strdup_printf ("%s:%u", client->server_host, client->server_port);
+    case PROP_SERVER_HOST:{
+      gchar *tmp =
+          g_strdup_printf ("%s:%u", client->server_host, client->server_port);
       g_value_take_string (value, tmp);
       break;
     }
@@ -498,23 +520,23 @@ snra_client_get_property (GObject * object, guint prop_id,
 }
 
 SnraClient *
-snra_client_new(const char *server_host)
+snra_client_new (const char *server_host)
 {
   SnraClient *client = g_object_new (SNRA_TYPE_CLIENT,
-                           "server-host", server_host, NULL);
+      "server-host", server_host, NULL);
   return client;
 }
 
 static void
 avahi_resolve_callback (AvahiServiceResolver * r,
-    AVAHI_GCC_UNUSED AvahiIfIndex interface, AVAHI_GCC_UNUSED AvahiProtocol protocol,
-    AvahiResolverEvent event,
-    AVAHI_GCC_UNUSED const char *name,
-    AVAHI_GCC_UNUSED const char *type, AVAHI_GCC_UNUSED const char *domain,
-    const char *host_name,
-    AVAHI_GCC_UNUSED const AvahiAddress * address,
-    uint16_t port, AVAHI_GCC_UNUSED AvahiStringList * txt,
-    AVAHI_GCC_UNUSED AvahiLookupResultFlags flags, AVAHI_GCC_UNUSED void *userdata)
+    AVAHI_GCC_UNUSED AvahiIfIndex interface,
+    AVAHI_GCC_UNUSED AvahiProtocol protocol, AvahiResolverEvent event,
+    AVAHI_GCC_UNUSED const char *name, AVAHI_GCC_UNUSED const char *type,
+    AVAHI_GCC_UNUSED const char *domain, const char *host_name,
+    AVAHI_GCC_UNUSED const AvahiAddress * address, uint16_t port,
+    AVAHI_GCC_UNUSED AvahiStringList * txt,
+    AVAHI_GCC_UNUSED AvahiLookupResultFlags flags,
+    AVAHI_GCC_UNUSED void *userdata)
 {
   SnraClient *client = userdata;
 
@@ -534,7 +556,7 @@ avahi_resolve_callback (AvahiServiceResolver * r,
 }
 
 static void
-browse_callback (AVAHI_GCC_UNUSED AvahiServiceBrowser *b,
+browse_callback (AVAHI_GCC_UNUSED AvahiServiceBrowser * b,
     AvahiIfIndex interface, AvahiProtocol protocol,
     AvahiBrowserEvent event,
     const char *name, const char *type, const char *domain,
@@ -552,8 +574,8 @@ browse_callback (AVAHI_GCC_UNUSED AvahiServiceBrowser *b,
 
     case AVAHI_BROWSER_NEW:{
       avahi_service_resolver_new (client->avahi_client, interface,
-                  protocol, name, type, domain, AVAHI_PROTO_UNSPEC, 0,
-                  avahi_resolve_callback, client);
+          protocol, name, type, domain, AVAHI_PROTO_UNSPEC, 0,
+          avahi_resolve_callback, client);
       break;
     }
     case AVAHI_BROWSER_REMOVE:
@@ -564,13 +586,15 @@ browse_callback (AVAHI_GCC_UNUSED AvahiServiceBrowser *b,
 }
 
 static void
-snra_avahi_client_callback (AvahiClient *s, AvahiClientState state, SnraClient *client)
+snra_avahi_client_callback (AvahiClient * s, AvahiClientState state,
+    SnraClient * client)
 {
   switch (state) {
-    case AVAHI_CLIENT_S_RUNNING: {
+    case AVAHI_CLIENT_S_RUNNING:{
       if (client->avahi_sb == NULL) {
         client->avahi_sb = avahi_service_browser_new (s, AVAHI_IF_UNSPEC,
-            AVAHI_PROTO_UNSPEC, "_sonarea._tcp", NULL, 0, browse_callback, client);
+            AVAHI_PROTO_UNSPEC, "_sonarea._tcp", NULL, 0, browse_callback,
+            client);
         if (client->avahi_sb == NULL) {
           fprintf (stderr, "Failed to create service browser: %s\n",
               avahi_strerror (avahi_client_errno (client->avahi_client)));
@@ -584,7 +608,7 @@ snra_avahi_client_callback (AvahiClient *s, AvahiClientState state, SnraClient *
 }
 
 static void
-search_for_server (SnraClient *client)
+search_for_server (SnraClient * client)
 {
   const AvahiPoll *poll_api;
   int error;
@@ -600,9 +624,10 @@ search_for_server (SnraClient *client)
   if (client->avahi_client == NULL) {
     client->avahi_client =
         avahi_client_new (poll_api, AVAHI_CLIENT_NO_FAIL,
-            (AvahiClientCallback) snra_avahi_client_callback, client, &error);
+        (AvahiClientCallback) snra_avahi_client_callback, client, &error);
     if (client->avahi_client == NULL) {
-      fprintf (stderr, "Failed to connect to Avahi: %s", avahi_strerror (error));
+      fprintf (stderr, "Failed to connect to Avahi: %s",
+          avahi_strerror (error));
       return;
     }
   }

@@ -592,6 +592,7 @@ snra_avahi_client_callback (AvahiClient * s, AvahiClientState state,
   switch (state) {
     case AVAHI_CLIENT_S_RUNNING:{
       if (client->avahi_sb == NULL) {
+        g_print ("Looking for new broadcast servers\n");
         client->avahi_sb = avahi_service_browser_new (s, AVAHI_IF_UNSPEC,
             AVAHI_PROTO_UNSPEC, "_sonarea._tcp", NULL, 0, browse_callback,
             client);

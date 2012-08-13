@@ -1,3 +1,35 @@
+function web_socket_listener()
+{
+  if (!("WebSocket" in window) && ("MozWebSocket" in window))
+    window.WebSocket = window.MozWebSocket;
+
+  if ("WebSocket" in window)
+  {
+     // Let us open a web socket
+     var ws = new WebSocket("ws://localhost:5457/status", "sonarea");
+     ws.onopen = function()
+     {
+        setInterval (function() {
+          ws.send("{ string: \"short test message\"; }");
+          $("#debug").prepend("<p>Sent test message</p>");
+         }, 10000);
+     };
+     ws.onmessage = function (evt)
+     {
+        var received_msg = evt.data;
+        $("#debug").prepend("<p>Received message: " + received_msg + "</p>");
+     };
+     ws.onclose = function()
+     {
+        $("#debug").prepend("<p>Lost websocket connection</p>");
+     };
+  }
+  else
+  {
+     $("#debug").prepend("<p>websocket connections not available!</p>");
+  }
+}
+
 $(document).ready(function() {
   var sendingVol = false;
   var volChange = false;
@@ -26,4 +58,5 @@ $(document).ready(function() {
   $("#play").click(function() { $.ajax({ url: "../control/play", type: 'POST' }); });
   $("#pause").click(function() { $.ajax({ url: "../control/pause" , type: 'POST'}); });
   $("#next").click(function() { $.ajax({ url: "../control/next" , type: 'POST'}); });
+  web_socket_listener();
 });

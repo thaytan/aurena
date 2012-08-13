@@ -34,6 +34,7 @@
 #include "snra-manager.h"
 #include "snra-media-db.h"
 #include "snra-server.h"
+#include "snra-server-client.h"
 
 enum
 {
@@ -44,6 +45,7 @@ enum
 
 G_DEFINE_TYPE (SnraManager, snra_manager, G_TYPE_OBJECT);
 
+static void snra_manager_dispose (GObject * object);
 static void snra_manager_finalize (GObject * object);
 static SnraHttpResource *snra_manager_get_resource_cb (SnraServer * server,
     guint resource_id, void *userdata);
@@ -223,9 +225,9 @@ done:
 }
 
 static gint
-find_client_by_pipe (SoupMessage * client, SoupMessage * wanted)
+find_client_by_pipe (SnraServerClient *client, SoupMessage * wanted)
 {
-  if (client == wanted)
+  if (client->event_pipe == wanted)
     return 0;
   return 1;
 }
@@ -239,16 +241,19 @@ manager_ctrl_client_disconnect (SoupMessage * message, SnraManager * manager)
   g_print ("/status client disconnected. Looking for state info\n");
 
   if (client) {
-    SoupMessage *msg = (SoupMessage *) (client->data);
-    soup_message_body_complete (msg->response_body);
+    SnraServerClient *client_conn = (SnraServerClient *) (client->data);
+
+    snra_server_client_free (client_conn);
+
     manager->ctrl_clients = g_list_delete_link (manager->ctrl_clients, client);
     g_print ("Found state. Removing lost controller connection\n");
   }
 }
 
 static void
-manager_ctrl_client_network_event (SoupMessage * msg, GSocketClientEvent event,
-    GIOStream * connection, SnraManager * manager)
+manager_ctrl_client_network_event (G_GNUC_UNUSED SoupMessage * msg,
+    G_GNUC_UNUSED GSocketClientEvent event,
+    G_GNUC_UNUSED GIOStream * connection, G_GNUC_UNUSED SnraManager * manager)
 {
   g_print ("/status client network event %d\n", event);
 }
@@ -307,85 +312,34 @@ is_websocket_request (SoupMessage * msg)
       && (g_ascii_strcasecmp (val, "8") != 0))
     return FALSE;
 
+  g_print ("WebSocket connection with protocol %s\n", val);
+
   return TRUE;
 }
 
-static void
-manager_ctrl_client_wrote_headers (SoupMessage * msg, SnraManager * manager)
-{
-  /* Pause the message so Soup doesn't do any more responding */
-  soup_server_pause_message (manager->soup, msg);
-  g_print ("Wrote headers to client\n");
-}
-
-static gchar *
-calc_websocket_challenge_reply (const gchar * key)
-{
-  const gchar *guid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-  gchar *ret = NULL;
-  gchar *concat = g_strconcat (key, guid, NULL);
-  GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA1);
-
-  guint8 sha1[20];
-  gsize len = 20;
-
-  g_print ("challenge: %s\n", key);
-
-  g_checksum_update (checksum, (guchar *) (concat), -1);
-  g_checksum_get_digest (checksum, sha1, &len);
-
-  g_free (concat);
-
-  ret = g_base64_encode (sha1, len);
-
-  g_checksum_free (checksum);
-  g_print ("reply: %s\n", ret);
-
-  return ret;
-}
 
 static void
-status_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
+status_callback (SoupServer * soup, SoupMessage * msg,
     G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable * query,
-    G_GNUC_UNUSED SoupClientContext * client, SnraManager * manager)
+    SoupClientContext * client, SnraManager * manager)
 {
-  const gchar *accept_challenge;
-  gchar *accept_reply;
-
-  manager->soup = soup;
-
-  /* Check if the request is a websocket request, if not, just return 404 */
-  if (!is_websocket_request (msg)) {
-    /* FIXME: Handle as a chunked reply */
-    soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
-    return;
-  }
+  SnraServerClient *client_conn;
 
   g_print ("New controller connection\n");
-  accept_challenge =
-      soup_message_headers_get_one (msg->request_headers, "Sec-WebSocket-Key");
-  accept_reply = calc_websocket_challenge_reply (accept_challenge);
-
-  soup_message_headers_set_encoding (msg->response_headers, SOUP_ENCODING_EOF);
-
-  soup_message_set_status (msg, SOUP_STATUS_SWITCHING_PROTOCOLS);
-  soup_message_headers_replace (msg->response_headers, "Upgrade", "websocket");
-  soup_message_headers_replace (msg->response_headers, "Connection", "Upgrade");
-  soup_message_headers_replace (msg->response_headers, "Sec-WebSocket-Accept",
-      accept_reply);
-  soup_message_headers_replace (msg->response_headers, "Sec-WebSocket-Protocol",
-      "sonarea");
-
-  g_free (accept_reply);
+  /* Check if the request is a websocket request, if not handle as chunked */
+  if (is_websocket_request (msg)) {
+    client_conn = snra_server_client_new_websocket (soup, msg, client);
+  }
+  else {
+    client_conn = snra_server_client_new_chunked (soup, msg);
+  }
 
   g_signal_connect (msg, "finished",
       G_CALLBACK (manager_ctrl_client_disconnect), manager);
   g_signal_connect (msg, "network-event",
       G_CALLBACK (manager_ctrl_client_network_event), manager);
-  g_signal_connect (msg, "wrote-informational",
-      G_CALLBACK (manager_ctrl_client_wrote_headers), manager);
 
-  manager->ctrl_clients = g_list_prepend (manager->ctrl_clients, msg);
+  manager->ctrl_clients = g_list_prepend (manager->ctrl_clients, client_conn);
 }
 
 static void
@@ -435,12 +389,26 @@ snra_manager_class_init (SnraManagerClass * manager_class)
   object_class->constructed = snra_manager_constructed;
   object_class->set_property = snra_manager_set_property;
   object_class->get_property = snra_manager_get_property;
+  object_class->dispose = snra_manager_dispose;
   object_class->finalize = snra_manager_finalize;
 
   g_object_class_install_property (object_class, PROP_CONFIG,
       g_param_spec_object ("config", "config",
           "Sonarea service configuration object",
           SNRA_TYPE_CONFIG, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
+}
+
+static void
+snra_manager_dispose (GObject * object)
+{
+  SnraManager *manager = (SnraManager *) (object);
+
+  g_list_foreach (manager->ctrl_clients, (GFunc) snra_server_client_free,
+      NULL);
+  g_list_free (manager->ctrl_clients);
+  manager->ctrl_clients = NULL;
+
+  G_OBJECT_CLASS (snra_manager_parent_class)->dispose (object);
 }
 
 static void
@@ -578,8 +546,7 @@ snra_manager_new (const char *config_file)
 
   if (get_playlist_len (manager)) {
 #ifdef HAVE_GST_RTSP
-    char *rtsp_uri =
-        g_strdup_printf ("file://%s",
+    char *rtsp_uri = g_strdup_printf ("file://%s",
         (gchar *) (g_ptr_array_index (manager->playlist, 0)));
     add_rtsp_uri (manager, 1, rtsp_uri);
     g_free (rtsp_uri);

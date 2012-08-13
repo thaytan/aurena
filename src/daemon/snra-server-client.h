@@ -42,10 +42,27 @@ struct _SnraServerClient
   guint client_id;
   SoupMessage *event_pipe;
   SoupServer *soup;
+
+  /* For reading from websocket clients */
+  SoupSocket *socket;
+  GIOChannel *io;
+  gchar *in_buf;
+  gchar *in_bufptr;
+  gsize in_bufsize;
+  gsize in_bufavail;
+
+  gchar *out_buf;
+  gsize out_bufsize;
 };
+
+SnraServerClient *snra_server_client_new_websocket (SoupServer *soup,
+    SoupMessage *msg, SoupClientContext *context);
+SnraServerClient *snra_server_client_new_chunked (SoupServer *soup,
+    SoupMessage *msg);
 
 void snra_server_client_send_message (SnraServerClient *client,
   gchar *body, gsize len);
+
 void snra_server_client_free (SnraServerClient *client);
 
 G_END_DECLS

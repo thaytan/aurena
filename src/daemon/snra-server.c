@@ -197,13 +197,7 @@ server_client_cb (SoupServer * soup, SoupMessage * msg,
 {
   SnraServerClient *client_conn = g_new0 (SnraServerClient, 1);
 
-  client_conn->soup = soup;
-  client_conn->event_pipe = msg;
-  client_conn->client_id = server->next_client_id++;
-
-  soup_message_headers_set_encoding (msg->response_headers,
-      SOUP_ENCODING_CHUNKED);
-  soup_message_set_status (msg, SOUP_STATUS_OK);
+  client_conn = snra_server_client_new_chunked (soup, msg);
 
   g_signal_connect (msg, "finished", G_CALLBACK (server_client_disconnect),
       server);
@@ -357,7 +351,6 @@ snra_server_init (SnraServer * server)
       g_direct_equal, NULL, g_object_unref);
 
   server->current_resource = 0;
-  server->next_client_id = 1;
 }
 
 static void

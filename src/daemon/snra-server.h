@@ -48,7 +48,6 @@ struct _SnraServer
   guint current_resource;
 
   GList *player_clients;
-  guint next_client_id;
 
   SnraHttpResource *(*get_resource)(SnraServer *server, guint resource_id, void *cb_data);
   void *get_resource_userdata;

@@ -57,7 +57,7 @@ snra_json_to_gst_structure (JsonNode *root)
   if (!JSON_NODE_HOLDS_OBJECT (root))
     return NULL;
 
-  s = gst_structure_new ("json", NULL);
+  s = gst_structure_new ("json", NULL, NULL);
 
   o = json_node_get_object (root);
   json_object_foreach_member (o,

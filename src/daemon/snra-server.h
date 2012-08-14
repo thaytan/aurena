@@ -37,17 +37,7 @@ struct _SnraServer
   GObject parent;
   SoupServer *soup;
 
-  GstClockTime base_time;
-  GstClockTime stream_time;
-
-  gdouble current_volume;
-
-  GstNetTimeProvider *net_clock;
-
   GHashTable *resources;
-  guint current_resource;
-
-  GList *player_clients;
 
   SnraHttpResource *(*get_resource)(SnraServer *server, guint resource_id, void *cb_data);
   void *get_resource_userdata;
@@ -65,20 +55,10 @@ GType snra_server_get_type(void);
 void snra_server_set_resource_callback (SnraServer *server, void *userdata);
 void snra_server_start (SnraServer *server);
 void snra_server_stop (SnraServer *server);
-void snra_server_set_base_time(SnraServer *server, GstClockTime base_time);
-void snra_server_set_clock (SnraServer *server, GstNetTimeProvider *net_clock);
 void snra_server_set_resource_cb (SnraServer *server, 
   SnraHttpResource *(*get_resource)(SnraServer *server, guint resource_id, void *cb_data), void *userdata);
 
 void snra_server_add_handler (SnraServer *server, const gchar *path, SoupServerCallback callback, gpointer user_data, GDestroyNotify destroy_notify);
-
-void snra_server_play_resource (SnraServer *server, guint resource_id);
-
-SnraServerClient *snra_server_get_client (SnraServer *server, guint client_id);
-
-void snra_server_send_play (SnraServer *server, SnraServerClient *client);
-void snra_server_send_pause (SnraServer *server, SnraServerClient *client);
-void snra_server_send_volume (SnraServer *server, SnraServerClient *client, gdouble volume);
 
 G_END_DECLS
 #endif

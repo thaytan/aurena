@@ -6,7 +6,7 @@ function web_socket_listener()
   if ("WebSocket" in window)
   {
      // Let us open a web socket
-     var ws = new WebSocket("ws://localhost:5457/status", "sonarea");
+     var ws = new WebSocket("ws://localhost:5457/client/control", "sonarea");
      ws.onopen = function()
      {
         //setInterval (function() {

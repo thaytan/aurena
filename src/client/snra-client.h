@@ -24,6 +24,8 @@ struct _SnraClient
 {
   GObject parent;
 
+  GstState state;
+
   GstClock *net_clock;
   gchar *server_host;
   gint server_port;

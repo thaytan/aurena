@@ -58,7 +58,12 @@ struct _SnraManager
   guint current_resource;
 
   GList *ctrl_clients;
-  SoupServer *soup;
+  GList *player_clients;
+
+  GstClockTime base_time;
+  GstClockTime stream_time;
+
+  gdouble current_volume;
 };
 
 struct _SnraManagerClass

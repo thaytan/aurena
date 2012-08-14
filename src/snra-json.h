@@ -33,6 +33,8 @@ gboolean snra_json_structure_get_int64 (const GstStructure *structure,
     const gchar *fieldname, gint64 *value);
 gboolean snra_json_structure_get_double (const GstStructure *structure,
     const gchar *fieldname, gdouble *value);
+gboolean snra_json_structure_get_boolean (const GstStructure *structure,
+    const gchar *fieldname, gboolean *value);
 
 G_END_DECLS
 

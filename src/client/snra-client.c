@@ -224,13 +224,14 @@ construct_player (SnraClient * client)
 }
 
 static void
-handle_play_media_message (SnraClient * client, GstStructure * s)
+handle_set_media_message (SnraClient * client, GstStructure * s)
 {
   const gchar *protocol, *path;
   int port;
   GstClockTime base_time;
   gint64 tmp;
   gchar *uri;
+  gboolean paused;
 
   protocol = gst_structure_get_string (s, "resource-protocol");
   path = gst_structure_get_string (s, "resource-path");
@@ -243,6 +244,10 @@ handle_play_media_message (SnraClient * client, GstStructure * s)
 
   if (!snra_json_structure_get_int64 (s, "base-time", &tmp))
     return;                     /* Invalid message */
+
+  if (!snra_json_structure_get_boolean (s, "paused", &paused))
+    return;
+
   base_time = (GstClockTime) (tmp);
 
   if (client->player == NULL) {
@@ -265,7 +270,12 @@ handle_play_media_message (SnraClient * client, GstStructure * s)
   gst_element_set_base_time (client->player, base_time);
   gst_pipeline_use_clock (GST_PIPELINE (client->player), client->net_clock);
 
-  gst_element_set_state (client->player, GST_STATE_PLAYING);
+  if (paused)
+    client->state = GST_STATE_PAUSED;
+  else
+    client->state = GST_STATE_PLAYING;
+
+  gst_element_set_state (client->player, client->state);
 }
 
 static void
@@ -349,13 +359,14 @@ handle_received_chunk (G_GNUC_UNUSED SoupMessage * msg, SoupBuffer * chunk,
     g_print ("event of type %s\n", msg_type);
     if (g_str_equal (msg_type, "enrol"))
       handle_enrol_message (client, s);
-    else if (g_str_equal (msg_type, "play-media"))
-      handle_play_media_message (client, s);
+    else if (g_str_equal (msg_type, "set-media"))
+      handle_set_media_message (client, s);
     else if (g_str_equal (msg_type, "play"))
       handle_play_message (client, s);
     else if (g_str_equal (msg_type, "pause")) {
+      client->state = GST_STATE_PAUSED;
       if (client->player)
-        gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PAUSED);
+        gst_element_set_state (GST_ELEMENT (client->player), client->state);
     } else if (g_str_equal (msg_type, "volume"))
       handle_set_volume_message (client, s);
   }
@@ -365,7 +376,7 @@ static void
 connect_to_server (SnraClient * client, const gchar * server, int port)
 {
   SoupMessage *msg;
-  char *url = g_strdup_printf ("http://%s:%u/client", server, port);
+  char *url = g_strdup_printf ("http://%s:%u/client/player", server, port);
 
   if (client->connecting == FALSE) {
     g_print ("Attemping to connect to server %s:%d\n", server, port);
@@ -389,6 +400,7 @@ snra_client_init (SnraClient * client)
 {
   client->soup = soup_session_async_new ();
   client->server_port = 5457;
+  client->state = GST_STATE_NULL;
 }
 
 static void

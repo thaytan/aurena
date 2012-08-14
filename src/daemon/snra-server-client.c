@@ -182,10 +182,13 @@ snra_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
 {
   g_print ("Got IO callback for client %p w/ condition %u\n", client,
       (guint) (condition));
-  if (condition == G_IO_HUP || condition == G_IO_ERR)
-    return FALSE;
 
-  if (condition == G_IO_IN) {
+  if (condition & (G_IO_HUP | G_IO_ERR)) {
+    soup_socket_disconnect (client->socket);
+    return FALSE;
+  }
+
+  if (condition & G_IO_IN) {
     gsize bread;
     GIOStatus status;
 
@@ -204,6 +207,7 @@ snra_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
         g_io_channel_read_chars (client->io,
         client->in_buf + client->in_bufavail,
         client->in_bufsize - client->in_bufavail, &bread, NULL);
+
     if (status == G_IO_STATUS_EOF) {
       g_print ("Remote connection closed\n");
       soup_socket_disconnect (client->socket);
@@ -285,18 +289,104 @@ calc_websocket_challenge_reply (const gchar * key)
   return ret;
 }
 
+static gboolean
+http_list_contains_value (const gchar * val, const gchar * needle)
+{
+  /* Connection params list must request upgrade to websocket */
+  gchar **tmp = g_strsplit (val, ",", 0);
+  gchar **cur;
+  gboolean found_needle = FALSE;
+
+  for (cur = tmp; *cur != NULL; cur++) {
+    g_strstrip (*cur);
+    if (g_ascii_strcasecmp (*cur, needle) == 0) {
+      found_needle = TRUE;
+      break;
+    }
+  }
+  g_strfreev (tmp);
+  return found_needle;
+}
+
+static gboolean
+is_websocket_client (SnraServerClient * client)
+{
+  /* Check for request headers. Example:
+   * Upgrade: websocket
+   * Connection: Upgrade, Keep-Alive
+   * Sec-WebSocket-Key: XYZABC123
+   * Sec-WebSocket-Protocol: sonarea
+   * Sec-WebSocket-Version: 13
+   */
+  SoupMessage *msg = client->event_pipe;
+  SoupMessageHeaders *req_hdrs = msg->request_headers;
+  const gchar *val;
+  gint protocol_ver = 0;
+
+  if ((val = soup_message_headers_get_one (req_hdrs, "Upgrade")) == NULL)
+    return FALSE;
+  if (g_ascii_strcasecmp (val, "websocket") != 0)
+    return FALSE;
+  if ((val = soup_message_headers_get_list (req_hdrs, "Connection")) == NULL)
+    return FALSE;
+
+  /* Connection params list must request upgrade to websocket */
+  if (!http_list_contains_value (val, "upgrade"))
+    return FALSE;
+
+  if ((val =
+          soup_message_headers_get_one (req_hdrs, "Sec-WebSocket-Key")) == NULL)
+    return FALSE;
+  if ((val =
+          soup_message_headers_get_list (req_hdrs,
+              "Sec-WebSocket-Protocol")) == NULL)
+    return FALSE;
+
+  if (!http_list_contains_value (val, "sonarea"))
+    return FALSE;
+
+  /* Requested protocol version must be 13 or 8 */
+  if ((val = soup_message_headers_get_list (req_hdrs,
+              "Sec-WebSocket-Version")) == NULL)
+    return FALSE;
+
+  if (http_list_contains_value (val, "13"))
+    protocol_ver = 13;
+  else if (http_list_contains_value (val, "8"))
+    protocol_ver = 8;
+
+  if (protocol_ver == 0)
+    return FALSE;               /* No supported version found */
+
+  g_print ("WebSocket connection with protocol %d\n", protocol_ver);
+  client->websocket_protocol = protocol_ver;
+
+  return TRUE;
+}
+
+
 SnraServerClient *
-snra_server_client_new_websocket (SoupServer * soup, SoupMessage * msg,
+snra_server_client_new (SoupServer * soup, SoupMessage * msg,
     SoupClientContext * context)
 {
   SnraServerClient *client = g_object_new (SNRA_TYPE_SERVER_CLIENT, NULL);
-
   const gchar *accept_challenge;
   gchar *accept_reply;
 
-  client->type = SNRA_SERVER_CLIENT_WEBSOCKET;
   client->soup = soup;
   client->event_pipe = msg;
+
+  if (!is_websocket_client (client)) {
+    client->type = SNRA_SERVER_CLIENT_CHUNKED;
+
+    soup_message_headers_set_encoding (msg->response_headers,
+        SOUP_ENCODING_CHUNKED);
+    soup_message_set_status (msg, SOUP_STATUS_OK);
+    return client;
+  }
+
+  /* Otherwise, it's a websocket client */
+  client->type = SNRA_SERVER_CLIENT_WEBSOCKET;
 
   client->socket = soup_client_context_get_socket (context);
   client->in_bufptr = client->in_buf = g_new0 (gchar, 1024);
@@ -321,23 +411,6 @@ snra_server_client_new_websocket (SoupServer * soup, SoupMessage * msg,
 
   g_signal_connect (msg, "wrote-informational",
       G_CALLBACK (snra_server_client_wrote_headers), client);
-
-  return client;
-}
-
-SnraServerClient *
-snra_server_client_new_chunked (SoupServer * soup, SoupMessage * msg)
-{
-  SnraServerClient *client = g_object_new (SNRA_TYPE_SERVER_CLIENT, NULL);
-
-  client->type = SNRA_SERVER_CLIENT_CHUNKED;
-  client->soup = soup;
-  client->event_pipe = msg;
-  client->client_id = next_client_id++;
-
-  soup_message_headers_set_encoding (msg->response_headers,
-      SOUP_ENCODING_CHUNKED);
-  soup_message_set_status (msg, SOUP_STATUS_OK);
 
   return client;
 }

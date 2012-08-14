@@ -224,66 +224,7 @@ manager_ctrl_client_network_event (G_GNUC_UNUSED SoupMessage * msg,
     G_GNUC_UNUSED GSocketClientEvent event,
     G_GNUC_UNUSED GIOStream * connection, G_GNUC_UNUSED SnraManager * manager)
 {
-  g_print ("/status client network event %d\n", event);
-}
-
-static gboolean
-is_websocket_request (SoupMessage * msg)
-{
-  /* Check for request headers. Example:
-   * Upgrade: websocket
-   * Connection: Upgrade, Keep-Alive
-   * Sec-WebSocket-Key: XYZABC123
-   * Sec-WebSocket-Protocol: sonarea
-   * Sec-WebSocket-Version: 13
-   */
-  SoupMessageHeaders *req_hdrs = msg->request_headers;
-  const gchar *val;
-
-  if ((val = soup_message_headers_get_one (req_hdrs, "Upgrade")) == NULL)
-    return FALSE;
-  if (g_ascii_strcasecmp (val, "websocket") != 0)
-    return FALSE;
-  if ((val = soup_message_headers_get_list (req_hdrs, "Connection")) == NULL)
-    return FALSE;
-
-  {
-    /* Connection params list must request upgrade to websocket */
-    gchar **tmp = g_strsplit (val, ",", 0);
-    gchar **cur;
-    gboolean found_upgrade = FALSE;
-    for (cur = tmp; *cur != NULL; cur++) {
-      g_strstrip (*cur);
-      if (g_ascii_strcasecmp (*cur, "upgrade") == 0) {
-        found_upgrade = TRUE;
-        break;
-      }
-    }
-    g_strfreev (tmp);
-    if (!found_upgrade)
-      return FALSE;
-  }
-  if ((val =
-          soup_message_headers_get_one (req_hdrs, "Sec-WebSocket-Key")) == NULL)
-    return FALSE;
-  if ((val =
-          soup_message_headers_get_one (req_hdrs,
-              "Sec-WebSocket-Protocol")) == NULL
-      || (g_ascii_strcasecmp (val, "sonarea") != 0))
-    return FALSE;
-
-  /* Requested protocol version must be 13 or 8 */
-  if ((val =
-          soup_message_headers_get_one (req_hdrs,
-              "Sec-WebSocket-Version")) == NULL)
-    return FALSE;
-  if ((g_ascii_strcasecmp (val, "13") != 0)
-      && (g_ascii_strcasecmp (val, "8") != 0))
-    return FALSE;
-
-  g_print ("WebSocket connection with protocol %s\n", val);
-
-  return TRUE;
+  g_print ("control client network event %d\n", event);
 }
 
 static void
@@ -299,11 +240,7 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
     goto done;                  /* Invalid request */
 
   /* Check if the request is a websocket request, if not handle as chunked */
-  if (is_websocket_request (msg)) {
-    client_conn = snra_server_client_new_websocket (soup, msg, client);
-  } else {
-    client_conn = snra_server_client_new_chunked (soup, msg);
-  }
+  client_conn = snra_server_client_new (soup, msg, client);
 
   if (g_str_equal (parts[2], "player")) {
     g_signal_connect (msg, "finished",

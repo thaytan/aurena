@@ -48,7 +48,9 @@ struct _SnraServerClient
   SoupMessage *event_pipe;
   SoupServer *soup;
 
-  /* For reading from websocket clients */
+  /* For talking to websocket clients */
+  gint websocket_protocol;
+
   SoupSocket *socket;
   GIOChannel *io;
   gchar *in_buf;
@@ -69,10 +71,8 @@ struct _SnraServerClientClass
 
 GType snra_server_client_get_type(void);
 
-SnraServerClient *snra_server_client_new_websocket (SoupServer *soup,
+SnraServerClient *snra_server_client_new (SoupServer *soup,
     SoupMessage *msg, SoupClientContext *context);
-SnraServerClient *snra_server_client_new_chunked (SoupServer *soup,
-    SoupMessage *msg);
 
 void snra_server_client_send_message (SnraServerClient *client,
   gchar *body, gsize len);

@@ -28,6 +28,9 @@
 
 G_BEGIN_DECLS
 
+#define SNRA_TYPE_SERVER_CLIENT (snra_server_client_get_type ())
+
+typedef struct _SnraServerClientClass SnraServerClientClass;
 typedef enum _SnraServerClientType SnraServerClientType;
 
 enum _SnraServerClientType {
@@ -37,6 +40,8 @@ enum _SnraServerClientType {
 
 struct _SnraServerClient
 {
+  GObject parent;
+
   SnraServerClientType type;
 
   guint client_id;
@@ -55,6 +60,13 @@ struct _SnraServerClient
   gsize out_bufsize;
 };
 
+struct _SnraServerClientClass
+{
+  GObjectClass parent;
+};
+
+GType snra_server_client_get_type(void);
+
 SnraServerClient *snra_server_client_new_websocket (SoupServer *soup,
     SoupMessage *msg, SoupClientContext *context);
 SnraServerClient *snra_server_client_new_chunked (SoupServer *soup,
@@ -62,8 +74,6 @@ SnraServerClient *snra_server_client_new_chunked (SoupServer *soup,
 
 void snra_server_client_send_message (SnraServerClient *client,
   gchar *body, gsize len);
-
-void snra_server_client_free (SnraServerClient *client);
 
 G_END_DECLS
 

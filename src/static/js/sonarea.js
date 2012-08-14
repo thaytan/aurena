@@ -9,10 +9,10 @@ function web_socket_listener()
      var ws = new WebSocket("ws://localhost:5457/status", "sonarea");
      ws.onopen = function()
      {
-        setInterval (function() {
+        //setInterval (function() {
           ws.send("{ string: \"short test message\"; }");
           $("#debug").prepend("<p>Sent test message</p>");
-         }, 10000);
+        //}, 10000);
      };
      ws.onmessage = function (evt)
      {

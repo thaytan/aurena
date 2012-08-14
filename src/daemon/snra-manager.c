@@ -243,7 +243,7 @@ manager_ctrl_client_disconnect (SoupMessage * message, SnraManager * manager)
   if (client) {
     SnraServerClient *client_conn = (SnraServerClient *) (client->data);
 
-    snra_server_client_free (client_conn);
+    g_object_unref (client_conn);
 
     manager->ctrl_clients = g_list_delete_link (manager->ctrl_clients, client);
     g_print ("Found state. Removing lost controller connection\n");
@@ -403,7 +403,7 @@ snra_manager_dispose (GObject * object)
 {
   SnraManager *manager = (SnraManager *) (object);
 
-  g_list_foreach (manager->ctrl_clients, (GFunc) snra_server_client_free,
+  g_list_foreach (manager->ctrl_clients, (GFunc) g_object_unref,
       NULL);
   g_list_free (manager->ctrl_clients);
   manager->ctrl_clients = NULL;

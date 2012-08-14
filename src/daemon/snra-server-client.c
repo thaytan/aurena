@@ -25,7 +25,59 @@
 
 #include "snra-server-client.h"
 
+G_DEFINE_TYPE (SnraServerClient, snra_server_client, G_TYPE_OBJECT);
+
 static guint next_client_id = 1;
+
+static void snra_server_client_finalize (GObject * object);
+static void snra_server_client_dispose (GObject * object);
+
+static void
+snra_server_client_init (SnraServerClient *client)
+{
+  client->client_id = next_client_id++;
+}
+
+static void
+snra_server_client_class_init (SnraServerClientClass *client_class)
+{
+  GObjectClass *gobject_class = (GObjectClass *) (client_class);
+
+  gobject_class->dispose = snra_server_client_dispose;
+  gobject_class->finalize = snra_server_client_finalize;
+}
+
+static void
+snra_server_client_finalize (GObject * object)
+{
+  SnraServerClient *client = (SnraServerClient *) (object);
+
+  if (client->type == SNRA_SERVER_CLIENT_CHUNKED) {
+    soup_message_body_complete (client->event_pipe->response_body);
+  } else {
+    soup_socket_disconnect (client->socket);
+  }
+
+  g_free (client->in_buf);
+  g_free (client->out_buf);
+
+  G_OBJECT_CLASS (snra_server_client_parent_class)->finalize (object);
+}
+
+static void
+snra_server_client_dispose (GObject * object)
+{
+  SnraServerClient *client = (SnraServerClient *) (object);
+
+  if (client->io) {
+    g_io_channel_shutdown (client->io, TRUE, NULL);
+    g_io_channel_unref (client->io);
+    client->io = NULL;
+  }
+
+  G_OBJECT_CLASS (snra_server_client_parent_class)->dispose (object);
+}
+
 
 /* Callbacks used for websocket clients */
 static gboolean
@@ -53,18 +105,14 @@ try_parse_websocket_fragment (SnraServerClient * client)
   if (frag_size < 126) {
     avail -= 2;
   } else if (frag_size == 126) {
-    if (avail < 4) {
-      g_print ("Insufficient bytes\n");
+    if (avail < 4)
       return FALSE;
-    }
     frag_size = GST_READ_UINT16_BE (outptr);
     outptr += 2;
     avail -= 8;
   } else {
-    if (avail < 10) {
-      g_print ("Insufficient bytes\n");
+    if (avail < 10) 
       return FALSE;
-    }
     frag_size = GST_READ_UINT64_BE (outptr);
     outptr += 8;
     avail -= 8;
@@ -121,8 +169,8 @@ skip_out:
 }
 
 static gboolean
-snra_server_client_io_cb (GIOChannel * source, GIOCondition condition,
-    SnraServerClient * client)
+snra_server_client_io_cb (G_GNUC_UNUSED GIOChannel *source, GIOCondition condition,
+    SnraServerClient *client)
 {
   g_print ("Got IO callback for client %p w/ condition %u\n", client,
       (guint) (condition));
@@ -216,14 +264,14 @@ SnraServerClient *
 snra_server_client_new_websocket (SoupServer * soup, SoupMessage * msg,
     SoupClientContext * context)
 {
-  SnraServerClient *client = g_new0 (SnraServerClient, 1);
+  SnraServerClient *client = g_object_new (SNRA_TYPE_SERVER_CLIENT, NULL);
+
   const gchar *accept_challenge;
   gchar *accept_reply;
 
   client->type = SNRA_SERVER_CLIENT_WEBSOCKET;
   client->soup = soup;
   client->event_pipe = msg;
-  client->client_id = next_client_id++;
 
   client->socket = soup_client_context_get_socket (context);
   client->in_bufptr = client->in_buf = g_new0 (gchar, 1024);
@@ -255,7 +303,7 @@ snra_server_client_new_websocket (SoupServer * soup, SoupMessage * msg,
 SnraServerClient *
 snra_server_client_new_chunked (SoupServer * soup, SoupMessage * msg)
 {
-  SnraServerClient *client = g_new0 (SnraServerClient, 1);
+  SnraServerClient *client = g_object_new (SNRA_TYPE_SERVER_CLIENT, NULL);
 
   client->type = SNRA_SERVER_CLIENT_CHUNKED;
   client->soup = soup;
@@ -339,24 +387,4 @@ snra_server_client_send_message (SnraServerClient * client,
   } else {
     write_fragment (client, body, len);
   }
-}
-
-void
-snra_server_client_free (SnraServerClient * client)
-{
-  if (client->type == SNRA_SERVER_CLIENT_CHUNKED) {
-    soup_message_body_complete (client->event_pipe->response_body);
-    soup_server_unpause_message (client->soup, client->event_pipe);
-  } else {
-    if (client->io) {
-      g_io_channel_shutdown (client->io, TRUE, NULL);
-      g_io_channel_unref (client->io);
-    }
-    soup_socket_disconnect (client->socket);
-  }
-
-  g_free (client->in_buf);
-  g_free (client->out_buf);
-
-  g_free (client);
 }

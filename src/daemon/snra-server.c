@@ -184,7 +184,7 @@ server_client_disconnect (SoupMessage * message, SnraServer * server)
       (GCompareFunc) (find_client_by_pipe));
 
   if (client) {
-    snra_server_client_free ((SnraServerClient *) (client->data));
+    g_object_unref (client->data);
     server->player_clients =
         g_list_delete_link (server->player_clients, client);
   }
@@ -431,7 +431,7 @@ snra_server_dispose (GObject * object)
 {
   SnraServer *server = (SnraServer *) (object);
 
-  g_list_foreach (server->player_clients, (GFunc) snra_server_client_free,
+  g_list_foreach (server->player_clients, (GFunc) g_object_unref,
       NULL);
   g_list_free (server->player_clients);
   server->player_clients = NULL;

@@ -58,6 +58,8 @@ struct _SnraServerClient
 
   gchar *out_buf;
   gsize out_bufsize;
+
+  GList *pending_msgs;
 };
 
 struct _SnraServerClientClass

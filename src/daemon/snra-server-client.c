@@ -27,19 +27,27 @@
 
 G_DEFINE_TYPE (SnraServerClient, snra_server_client, G_TYPE_OBJECT);
 
+typedef struct _PendingMsg PendingMsg;
+
+struct _PendingMsg
+{
+  gchar *body;
+  gsize len;
+};
+
 static guint next_client_id = 1;
 
 static void snra_server_client_finalize (GObject * object);
 static void snra_server_client_dispose (GObject * object);
 
 static void
-snra_server_client_init (SnraServerClient *client)
+snra_server_client_init (SnraServerClient * client)
 {
   client->client_id = next_client_id++;
 }
 
 static void
-snra_server_client_class_init (SnraServerClientClass *client_class)
+snra_server_client_class_init (SnraServerClientClass * client_class)
 {
   GObjectClass *gobject_class = (GObjectClass *) (client_class);
 
@@ -111,7 +119,7 @@ try_parse_websocket_fragment (SnraServerClient * client)
     outptr += 2;
     avail -= 8;
   } else {
-    if (avail < 10) 
+    if (avail < 10)
       return FALSE;
     frag_size = GST_READ_UINT64_BE (outptr);
     outptr += 8;
@@ -169,8 +177,8 @@ skip_out:
 }
 
 static gboolean
-snra_server_client_io_cb (G_GNUC_UNUSED GIOChannel *source, GIOCondition condition,
-    SnraServerClient *client)
+snra_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
+    GIOCondition condition, SnraServerClient * client)
 {
   g_print ("Got IO callback for client %p w/ condition %u\n", client,
       (guint) (condition));
@@ -222,6 +230,8 @@ snra_server_client_io_cb (G_GNUC_UNUSED GIOChannel *source, GIOCondition conditi
 static void
 snra_server_client_wrote_headers (SoupMessage * msg, SnraServerClient * client)
 {
+  GList *cur;
+
   /* Pause the message so Soup doesn't do any more responding */
   soup_server_pause_message (client->soup, msg);
 
@@ -232,6 +242,21 @@ snra_server_client_wrote_headers (SoupMessage * msg, SnraServerClient * client)
   g_io_channel_set_buffered (client->io, FALSE);
   g_io_add_watch (client->io, G_IO_IN | G_IO_HUP,
       (GIOFunc) (snra_server_client_io_cb), client);
+
+  /* Send any pending messages */
+  while ((cur = client->pending_msgs)) {
+    GList *next;
+    PendingMsg *msg = (PendingMsg *) (cur->data);
+
+    next = g_list_next (cur);
+
+    snra_server_client_send_message (client, msg->body, msg->len);
+    client->pending_msgs = g_list_delete_link (client->pending_msgs, cur);
+    g_free (msg->body);
+    g_free (msg);
+
+    cur = next;
+  }
 }
 
 static gchar *
@@ -380,11 +405,24 @@ void
 snra_server_client_send_message (SnraServerClient * client,
     gchar * body, gsize len)
 {
+  PendingMsg *msg;
+
   if (client->type == SNRA_SERVER_CLIENT_CHUNKED) {
     soup_message_body_append (client->event_pipe->response_body,
         SOUP_MEMORY_COPY, body, len);
     soup_server_unpause_message (client->soup, client->event_pipe);
-  } else {
-    write_fragment (client, body, len);
+    return;
   }
+
+  if (client->io) {
+    write_fragment (client, body, len);
+    return;
+  }
+
+  /* Websocket isn't ready to send yet. Store as a pending message */
+  msg = g_new (PendingMsg, 1);
+  msg->len = len;
+  msg->body = g_memdup (body, len);
+
+  client->pending_msgs = g_list_append (client->pending_msgs, msg);
 }

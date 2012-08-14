@@ -39,6 +39,8 @@ enum
   PROP_LAST
 };
 
+static gint resources_open = 0;
+
 static void snra_http_resource_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void snra_http_resource_get_property (GObject * object, guint prop_id,
@@ -50,14 +52,18 @@ typedef struct _SnraTransfer
 } SnraTransfer;
 
 static gboolean
-snra_http_resource_open(SnraHttpResource *resource)
+snra_http_resource_open (SnraHttpResource * resource)
 {
   if (resource->data == NULL) {
     GError *error = NULL;
-    g_print ("Opening resource %s\n", resource->source_path);
+
+    resources_open++;
+    g_print ("Opening resource %s. %d now open\n", resource->source_path,
+        resources_open);
     resource->data = g_mapped_file_new (resource->source_path, FALSE, &error);
     if (resource->data == NULL) {
-      g_message ("Failed to open resource %s: %s", resource->source_path, error->message);
+      g_message ("Failed to open resource %s: %s", resource->source_path,
+          error->message);
       g_error_free (error);
       return FALSE;
     }
@@ -67,12 +73,14 @@ snra_http_resource_open(SnraHttpResource *resource)
 }
 
 static void
-snra_http_resource_close(SnraHttpResource *resource)
+snra_http_resource_close (SnraHttpResource * resource)
 {
   if (resource->use_count) {
     resource->use_count--;
     if (resource->use_count == 0) {
-      g_print ("Releasing resource %s\n", resource->source_path);
+      resources_open--;
+      g_print ("Releasing resource %s. %d now open\n", resource->source_path,
+          resources_open);
 #if GLIB_CHECK_VERSION(2,22,0)
       g_mapped_file_unref (resource->data);
 #else
@@ -84,18 +92,20 @@ snra_http_resource_close(SnraHttpResource *resource)
 }
 
 static void
-resource_wrote_body (G_GNUC_UNUSED SoupMessage *msg, SnraTransfer *transfer)
+resource_wrote_body (G_GNUC_UNUSED SoupMessage * msg, SnraTransfer * transfer)
 {
-  g_print ("Got wrote-body for %s. Use count now %d\n", transfer->resource->source_path, transfer->resource->use_count);
+  g_print ("Got wrote-body for %s. Use count now %d\n",
+      transfer->resource->source_path, transfer->resource->use_count);
 }
 
 static void
-resource_finished (G_GNUC_UNUSED SoupMessage *msg, SnraTransfer *transfer)
+resource_finished (G_GNUC_UNUSED SoupMessage * msg, SnraTransfer * transfer)
 {
-  g_print ("Completed transfer of %s. Use count now %d\n", transfer->resource->source_path, transfer->resource->use_count-1);
+  g_print ("Completed transfer of %s. Use count now %d\n",
+      transfer->resource->source_path, transfer->resource->use_count - 1);
 
   /* Close the resource, destroy the transfer */
-  snra_http_resource_close(transfer->resource);
+  snra_http_resource_close (transfer->resource);
 
   g_object_unref (transfer->resource);
   g_free (transfer);
@@ -103,12 +113,12 @@ resource_finished (G_GNUC_UNUSED SoupMessage *msg, SnraTransfer *transfer)
 }
 
 void
-snra_http_resource_new_transfer (SnraHttpResource *resource, SoupMessage *msg)
+snra_http_resource_new_transfer (SnraHttpResource * resource, SoupMessage * msg)
 {
   /* Create a new transfer structure, and pass the contents of our resource to it */
   SnraTransfer *transfer;
 
-  if (!snra_http_resource_open(resource)) {
+  if (!snra_http_resource_open (resource)) {
     soup_message_set_status (msg, SOUP_STATUS_INTERNAL_SERVER_ERROR);
     return;
   }
@@ -118,48 +128,49 @@ snra_http_resource_new_transfer (SnraHttpResource *resource, SoupMessage *msg)
 
   {
     const gsize len = g_mapped_file_get_length (transfer->resource->data);
-    gchar *chunk = g_mapped_file_get_contents (transfer->resource->data); 
+    gchar *chunk = g_mapped_file_get_contents (transfer->resource->data);
 
-    g_signal_connect (msg, "finished", G_CALLBACK (resource_finished), transfer);
-    g_signal_connect (msg, "wrote-body", G_CALLBACK (resource_wrote_body), transfer);
+    g_signal_connect (msg, "finished", G_CALLBACK (resource_finished),
+        transfer);
+    g_signal_connect (msg, "wrote-body", G_CALLBACK (resource_wrote_body),
+        transfer);
 
     soup_message_set_status (msg, SOUP_STATUS_OK);
     soup_message_headers_set_encoding (msg->response_headers,
         SOUP_ENCODING_CONTENT_LENGTH);
     soup_message_headers_replace (msg->response_headers, "Content-Type",
-        snra_resource_get_mime_type(resource->source_path));
+        snra_resource_get_mime_type (resource->source_path));
 
     soup_message_headers_set_content_length (msg->response_headers, len);
-    soup_message_body_append (msg->response_body, SOUP_MEMORY_TEMPORARY, chunk, len);
+    soup_message_body_append (msg->response_body, SOUP_MEMORY_TEMPORARY, chunk,
+        len);
     soup_message_body_complete (msg->response_body);
   }
 }
 
 static void
-snra_http_resource_init (G_GNUC_UNUSED SnraHttpResource *resource)
+snra_http_resource_init (G_GNUC_UNUSED SnraHttpResource * resource)
 {
 }
 
 static void
-snra_http_resource_class_init (SnraHttpResourceClass *resource_class)
+snra_http_resource_class_init (SnraHttpResourceClass * resource_class)
 {
-  GObjectClass *gobject_class = (GObjectClass *)(resource_class);
+  GObjectClass *gobject_class = (GObjectClass *) (resource_class);
 
   gobject_class->set_property = snra_http_resource_set_property;
   gobject_class->get_property = snra_http_resource_get_property;
 
   g_object_class_install_property (gobject_class, PROP_SOURCE_PATH,
-    g_param_spec_string ("source-path", "Source Path",
-                         "Source file path resource",
-                         NULL,
-                         G_PARAM_READWRITE));
+      g_param_spec_string ("source-path", "Source Path",
+          "Source file path resource", NULL, G_PARAM_READWRITE));
 }
 
 static void
 snra_http_resource_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  SnraHttpResource *resource = (SnraHttpResource *)(object);
+  SnraHttpResource *resource = (SnraHttpResource *) (object);
 
   switch (prop_id) {
     case PROP_SOURCE_PATH:
@@ -176,7 +187,7 @@ static void
 snra_http_resource_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  SnraHttpResource *resource = (SnraHttpResource *)(object);
+  SnraHttpResource *resource = (SnraHttpResource *) (object);
 
   switch (prop_id) {
     case PROP_SOURCE_PATH:

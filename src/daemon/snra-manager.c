@@ -65,13 +65,12 @@ static void snra_manager_send_pause (SnraManager * manager,
     SnraServerClient * client);
 static void snra_manager_send_volume (SnraManager * manager,
     SnraServerClient * client, gdouble volume);
+static GstStructure *manager_make_set_media_msg (SnraManager *manager,
+    guint resource_id);
 
 static void
 manager_send_msg_to_client (SnraManager * manager, SnraServerClient * client,
     GstStructure * msg);
-static void
-manager_send_set_media_msg (SnraManager * manager, SnraServerClient * client,
-    guint resource_id);
 
 static GstNetTimeProvider *
 create_net_clock ()
@@ -112,8 +111,8 @@ failed:
 }
 #endif
 
-static void
-manager_send_enrol_msg (SnraManager * manager, SnraServerClient * client)
+static GstStructure *
+manager_make_enrol_msg (SnraManager * manager)
 {
   int clock_port;
   GstClock *clock;
@@ -132,7 +131,7 @@ manager_send_enrol_msg (SnraManager * manager, SnraServerClient * client)
       "current-time", G_TYPE_INT64, (gint64) (cur_time),
       "volume-level", G_TYPE_DOUBLE, manager->current_volume, NULL);
 
-  manager_send_msg_to_client (manager, client, msg);
+  return msg;
 }
 
 typedef enum _SnraControlEvent SnraControlEvent;
@@ -320,10 +319,12 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
     manager->ctrl_clients = g_list_prepend (manager->ctrl_clients, client_conn);
   }
 
-  manager_send_enrol_msg (manager, client_conn);
+  manager_send_msg_to_client (manager, client_conn,
+      manager_make_enrol_msg (manager));
+
   if (manager->current_resource) {
-    manager_send_set_media_msg (manager, client_conn,
-        manager->current_resource);
+    manager_send_msg_to_client (manager, client_conn,
+        manager_make_set_media_msg (manager, manager->current_resource));
   }
 
 done:
@@ -332,7 +333,7 @@ done:
 
 static void
 manager_send_msg_to_client (SnraManager * manager, SnraServerClient * client,
-    GstStructure * msg)
+    GstStructure *msg)
 {
   JsonGenerator *gen;
   JsonNode *root;
@@ -357,6 +358,10 @@ manager_send_msg_to_client (SnraManager * manager, SnraServerClient * client,
     /* client == NULL - send to all clients */
     GList *cur;
     for (cur = manager->player_clients; cur != NULL; cur = g_list_next (cur)) {
+      client = (SnraServerClient *) (cur->data);
+      snra_server_client_send_message (client, body, len);
+    }
+    for (cur = manager->ctrl_clients; cur != NULL; cur = g_list_next (cur)) {
       client = (SnraServerClient *) (cur->data);
       snra_server_client_send_message (client, body, len);
     }
@@ -731,7 +736,8 @@ snra_manager_play_resource (SnraManager * manager, guint resource_id)
   manager->base_time = GST_CLOCK_TIME_NONE;
   manager->stream_time = GST_CLOCK_TIME_NONE;
 
-  manager_send_set_media_msg (manager, NULL, resource_id);
+  manager_send_msg_to_client (manager, NULL,
+      manager_make_set_media_msg (manager, manager->current_resource));
 }
 
 static void
@@ -790,9 +796,8 @@ snra_manager_send_volume (SnraManager * manager, SnraServerClient * client,
   manager_send_msg_to_client (manager, client, msg);
 }
 
-static void
-manager_send_set_media_msg (SnraManager * manager, SnraServerClient * client,
-    guint resource_id)
+static GstStructure *
+manager_make_set_media_msg (SnraManager * manager, guint resource_id)
 {
   GstClock *clock;
   GstClockTime cur_time;
@@ -832,5 +837,5 @@ manager_send_set_media_msg (SnraManager * manager, SnraServerClient * client,
 
   g_free (resource_path);
 
-  manager_send_msg_to_client (manager, client, msg);
+  return msg;
 }

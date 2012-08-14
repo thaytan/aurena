@@ -434,6 +434,8 @@ write_fragment (SnraServerClient * client, gchar * body, gsize len)
 {
   gchar header[14];
   gsize header_len, i;
+  const guint8 masking = 0x00; // 0x80 to enable masking
+
   union
   {
     gchar bytes[4];
@@ -443,35 +445,40 @@ write_fragment (SnraServerClient * client, gchar * body, gsize len)
   header[0] = 0x81;
   header_len = 2;
   if (len < 126) {
-    header[1] = 0x80 + len;
+    header[1] = masking | len;
   } else if (len < 65536) {
-    header[1] = 0x80 + 126;
+    header[1] = masking | 126;
     GST_WRITE_UINT16_BE (header + 2, (guint16) (len));
     header_len += 2;
   } else {
-    header[1] = 0x80 + 127;
+    header[1] = masking | 127;
     GST_WRITE_UINT64_BE (header + 2, (guint64) (len));
     header_len += 8;
   }
   /* Add a random mask word. */
-  mask.val = g_random_int ();
-
-  memcpy (header + header_len, mask.bytes, 4);
-  header_len += 4;
+  if (masking) {
+    mask.val = g_random_int ();
+    memcpy (header + header_len, mask.bytes, 4);
+    header_len += 4;
+  }
 
   /* Write WebSocket frame header */
   write_to_io_channel (client->io, header, header_len);
 
   /* Mask the body, and send it */
-  if (len > client->out_bufsize) {
-    client->out_bufsize = len;
-    client->out_buf = g_realloc (client->out_buf, client->out_bufsize);
+  if (masking) {
+    if (len > client->out_bufsize) {
+      client->out_bufsize = len;
+      client->out_buf = g_realloc (client->out_buf, client->out_bufsize);
+    }
+    for (i = 0; i < len; i++) {
+      client->out_buf[i] = body[i] ^ mask.bytes[i % 4];
+    }
+    write_to_io_channel (client->io, client->out_buf, len);
   }
-  for (i = 0; i < len; i++) {
-    client->out_buf[i] = body[i] ^ mask.bytes[i % 4];
+  else {
+    write_to_io_channel (client->io, body, len);
   }
-
-  write_to_io_channel (client->io, client->out_buf, len);
 }
 
 void

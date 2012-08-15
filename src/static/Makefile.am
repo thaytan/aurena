@@ -1,9 +1,9 @@
 EXTRA_DIST= \
 	index.html \
 	js/jquery-ui-1.8.22.custom.min.js \
-	js/sonarea.js \
+	js/aurena.js \
 	js/jquery-1.7.2.min.js \
-	css/sonarea.css \
+	css/aurena.css \
 	css/smoothness/jquery-ui-1.8.22.custom.css \
 	css/smoothness/images/ui-bg_glass_65_ffffff_1x400.png \
 	css/smoothness/images/ui-icons_cd0a0a_256x240.png \

@@ -18,7 +18,7 @@
  */
 
 /*
- * Sonarea Client is the central object which:
+ * Aurena Client is the central object which:
  *   creates the network clock
  *   Establishes libsoup session
  *   Creates RTSP sessions as needed
@@ -427,8 +427,8 @@ snra_client_class_init (SnraClientClass * client_class)
   gobject_class->get_property = snra_client_get_property;
 
   g_object_class_install_property (gobject_class, PROP_SERVER_HOST,
-      g_param_spec_string ("server-host", "Sonarea Server",
-          "Sonarea Server hostname or IP", NULL,
+      g_param_spec_string ("server-host", "Aurena Server",
+          "Aurena Server hostname or IP", NULL,
           G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
 }
 
@@ -606,7 +606,7 @@ snra_avahi_client_callback (AvahiClient * s, AvahiClientState state,
       if (client->avahi_sb == NULL) {
         g_print ("Looking for new broadcast servers\n");
         client->avahi_sb = avahi_service_browser_new (s, AVAHI_IF_UNSPEC,
-            AVAHI_PROTO_UNSPEC, "_sonarea._tcp", NULL, 0, browse_callback,
+            AVAHI_PROTO_UNSPEC, "_aurena._tcp", NULL, 0, browse_callback,
             client);
         if (client->avahi_sb == NULL) {
           fprintf (stderr, "Failed to create service browser: %s\n",

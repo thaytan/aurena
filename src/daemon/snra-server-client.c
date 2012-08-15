@@ -315,7 +315,7 @@ is_websocket_client (SnraServerClient * client)
    * Upgrade: websocket
    * Connection: Upgrade, Keep-Alive
    * Sec-WebSocket-Key: XYZABC123
-   * Sec-WebSocket-Protocol: sonarea
+   * Sec-WebSocket-Protocol: aurena
    * Sec-WebSocket-Version: 13
    */
   SoupMessage *msg = client->event_pipe;
@@ -342,7 +342,7 @@ is_websocket_client (SnraServerClient * client)
               "Sec-WebSocket-Protocol")) == NULL)
     return FALSE;
 
-  if (!http_list_contains_value (val, "sonarea"))
+  if (!http_list_contains_value (val, "aurena"))
     return FALSE;
 
   /* Requested protocol version must be 13 or 8 */
@@ -405,7 +405,7 @@ snra_server_client_new (SoupServer * soup, SoupMessage * msg,
   soup_message_headers_replace (msg->response_headers, "Sec-WebSocket-Accept",
       accept_reply);
   soup_message_headers_replace (msg->response_headers, "Sec-WebSocket-Protocol",
-      "sonarea");
+      "aurena");
 
   g_free (accept_reply);
 

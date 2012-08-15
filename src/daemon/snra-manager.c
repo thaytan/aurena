@@ -18,7 +18,7 @@
  */
 
 /*
- * Sonarea Manager is the central object which:
+ * Aurena Manager is the central object which:
  *   creates the network clock
  *   Establishes libsoup session
  *   Creates RTSP sessions as needed
@@ -472,7 +472,7 @@ snra_manager_class_init (SnraManagerClass * manager_class)
 
   g_object_class_install_property (object_class, PROP_CONFIG,
       g_param_spec_object ("config", "config",
-          "Sonarea service configuration object",
+          "Aurena service configuration object",
           SNRA_TYPE_CONFIG, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
 }
 

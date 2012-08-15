@@ -227,7 +227,7 @@ snra_server_class_init (SnraServerClass * server_class)
 
   g_object_class_install_property (gobject_class, PROP_CONFIG,
       g_param_spec_object ("config", "config",
-          "Sonarea service configuration object",
+          "Aurena service configuration object",
           SNRA_TYPE_CONFIG, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
   g_object_class_install_property (gobject_class, PROP_CLOCK,
       g_param_spec_object ("clock", "clock",

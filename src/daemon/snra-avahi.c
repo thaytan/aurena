@@ -108,7 +108,7 @@ create_service (SnraAvahi * avahi)
 
       ret =
           avahi_entry_group_add_service (priv->group, AVAHI_IF_UNSPEC,
-          AVAHI_PROTO_UNSPEC, 0, priv->service_name, "_sonarea._tcp", NULL,
+          AVAHI_PROTO_UNSPEC, 0, priv->service_name, "_aurena._tcp", NULL,
           NULL, 5457, NULL);
       if (ret < 0) {
         if (ret == AVAHI_ERR_COLLISION) {
@@ -122,7 +122,7 @@ create_service (SnraAvahi * avahi)
           avahi_entry_group_reset (priv->group);
           continue;
         } else {
-          g_critical ("Failed to add _sonarea._tcp service: %s",
+          g_critical ("Failed to add _aurena._tcp service: %s",
               avahi_strerror (ret));
           goto fail;
         }
@@ -202,7 +202,7 @@ snra_avahi_init (SnraAvahi * avahi)
       G_TYPE_INSTANCE_GET_PRIVATE (avahi, SNRA_TYPE_AVAHI, SnraAvahiPrivate);
   int error = 0;
 
-  priv->service_name = g_strdup ("Sonarea media server");
+  priv->service_name = g_strdup ("Aurena media server");
 
   priv->glib_poll = avahi_glib_poll_new (NULL, G_PRIORITY_DEFAULT);
   priv->poll_api = avahi_glib_poll_get (priv->glib_poll);

@@ -51,21 +51,21 @@ static gchar *
 get_default_db_location ()
 {
   return
-      g_build_filename (g_get_user_data_dir (), "sonarea", "sonarea.db", NULL);
+      g_build_filename (g_get_user_data_dir (), "aurena", "aurena.db", NULL);
 }
 
 static gchar *
 get_default_playlist_location ()
 {
   return g_build_filename (g_get_user_config_dir (),
-      "sonarea", "playlist.txt", NULL);
+      "aurena", "playlist.txt", NULL);
 }
 
 static gchar *
 get_default_config_location ()
 {
   return g_build_filename (g_get_user_config_dir (),
-      "sonarea", "config.txt", NULL);
+      "aurena", "config.txt", NULL);
 }
 
 static void
@@ -178,8 +178,8 @@ snra_config_class_init (SnraConfigClass *config_class)
   g_free(location);
 
   g_object_class_install_property (gobject_class, PROP_PORT,
-    g_param_spec_int ("snra-port", "Sonarea port",
-                         "port for Sonarea service",
+    g_param_spec_int ("snra-port", "Aurena port",
+                         "port for Aurena service",
                          1, 65535, 5457,
                          G_PARAM_READWRITE));
   g_object_class_install_property (gobject_class, PROP_RTSP_PORT,

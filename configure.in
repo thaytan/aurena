@@ -1,5 +1,5 @@
 AC_PREREQ([2.68])
-AC_INIT([sonarea], [0.4], [thaytan@noraisin.net])
+AC_INIT([aurena], [0.5], [thaytan@noraisin.net])
 
 AM_INIT_AUTOMAKE([-Wno-portability 1.11 no-dist-gzip dist-bzip2 dist-xz tar-ustar])
 
@@ -7,7 +7,7 @@ AM_SILENT_RULES([yes])
 
 AM_MAINTAINER_MODE([enable])
 
-AC_CONFIG_SRCDIR([src/sonarea.c])
+AC_CONFIG_SRCDIR([src/aurena.c])
 AM_CONFIG_HEADER([config.h])
 
 AC_CANONICAL_HOST

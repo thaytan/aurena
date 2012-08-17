@@ -43,6 +43,7 @@ struct _SnraServerClient
   GObject parent;
 
   SnraServerClientType type;
+  gboolean fired_conn_lost;
 
   guint client_id;
   SoupMessage *event_pipe;
@@ -53,6 +54,7 @@ struct _SnraServerClient
 
   SoupSocket *socket;
   GIOChannel *io;
+  guint io_watch;
   gchar *in_buf;
   gchar *in_bufptr;
   gsize in_bufsize;

@@ -163,6 +163,7 @@ static const struct
 
 static const gint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
 
+#if 0
 static gint
 find_client_by_pipe (SnraServerClient * client, SoupMessage * wanted)
 {
@@ -170,6 +171,7 @@ find_client_by_pipe (SnraServerClient * client, SoupMessage * wanted)
     return 0;
   return 1;
 }
+#endif
 
 static gint
 find_client_by_id (SnraServerClient * client, void *wanted_id)
@@ -195,36 +197,28 @@ snra_manager_get_player_client (SnraManager * manager, guint client_id)
 }
 
 static void
-manager_player_client_disconnect (SoupMessage * message, SnraManager * manager)
+manager_player_client_disconnect (SnraServerClient *client, SnraManager * manager)
 {
-  GList *client = g_list_find_custom (manager->player_clients, message,
-      (GCompareFunc) (find_client_by_pipe));
-
-  if (client) {
-    g_object_unref (client->data);
+  GList *item = g_list_find (manager->player_clients, client);
+  g_print ("Disconnect from player client %u\n", client->client_id);
+  if (item) {
+    g_print ("Removing player client %u\n", client->client_id);
+    g_object_unref (client);
     manager->player_clients =
-        g_list_delete_link (manager->player_clients, client);
+        g_list_delete_link (manager->player_clients, item);
   }
 }
 
 static void
-manager_ctrl_client_disconnect (SoupMessage * message, SnraManager * manager)
+manager_ctrl_client_disconnect (SnraServerClient *client, SnraManager * manager)
 {
-  GList *client = g_list_find_custom (manager->ctrl_clients, message,
-      (GCompareFunc) (find_client_by_pipe));
-
-  if (client) {
-    g_object_unref (client->data);
-    manager->ctrl_clients = g_list_delete_link (manager->ctrl_clients, client);
+  GList *item = g_list_find (manager->ctrl_clients, client);
+  g_print ("Disconnect from control client %u\n", client->client_id);
+  if (item) {
+    g_print ("Removing control client %u\n", client->client_id);
+    g_object_unref (client);
+    manager->ctrl_clients = g_list_delete_link (manager->ctrl_clients, item);
   }
-}
-
-static void
-manager_ctrl_client_network_event (G_GNUC_UNUSED SoupMessage * msg,
-    G_GNUC_UNUSED GSocketClientEvent event,
-    G_GNUC_UNUSED GIOStream * connection, G_GNUC_UNUSED SnraManager * manager)
-{
-  g_print ("control client network event %d\n", event);
 }
 
 static void
@@ -243,16 +237,13 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
   client_conn = snra_server_client_new (soup, msg, client);
 
   if (g_str_equal (parts[2], "player")) {
-    g_signal_connect (msg, "finished",
+    g_signal_connect (client_conn, "connection-lost",
         G_CALLBACK (manager_player_client_disconnect), manager);
     manager->player_clients =
         g_list_prepend (manager->player_clients, client_conn);
   } else if (g_str_equal (parts[2], "control")) {
-    g_print ("New controller connection\n");
-    g_signal_connect (msg, "finished",
+    g_signal_connect (client_conn, "connection-lost",
         G_CALLBACK (manager_ctrl_client_disconnect), manager);
-    g_signal_connect (msg, "network-event",
-        G_CALLBACK (manager_ctrl_client_network_event), manager);
     manager->ctrl_clients = g_list_prepend (manager->ctrl_clients, client_conn);
   }
 

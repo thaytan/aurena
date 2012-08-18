@@ -127,9 +127,12 @@ manager_make_enrol_msg (SnraManager * manager)
 
   msg = gst_structure_new ("json",
       "msg-type", G_TYPE_STRING, "enrol",
+      "resource-id", G_TYPE_INT64, (gint64)manager->current_resource,
       "clock-port", G_TYPE_INT, clock_port,
       "current-time", G_TYPE_INT64, (gint64) (cur_time),
-      "volume-level", G_TYPE_DOUBLE, manager->current_volume, NULL);
+      "volume-level", G_TYPE_DOUBLE, manager->current_volume,
+      "paused", G_TYPE_BOOLEAN, manager->paused,
+      NULL);
 
   return msg;
 }
@@ -752,6 +755,7 @@ manager_make_set_media_msg (SnraManager * manager, guint resource_id)
 #endif
 
   msg = gst_structure_new ("json", "msg-type", G_TYPE_STRING, "set-media",
+      "resource-id", G_TYPE_INT64, (gint64)resource_id,
 #if 1
       "resource-protocol", G_TYPE_STRING, "http",
       "resource-port", G_TYPE_INT, port,
@@ -761,7 +765,8 @@ manager_make_set_media_msg (SnraManager * manager, guint resource_id)
 #endif
       "resource-path", G_TYPE_STRING, resource_path,
       "base-time", G_TYPE_INT64, (gint64) (manager->base_time),
-      "paused", G_TYPE_BOOLEAN, manager->paused, NULL);
+      "paused", G_TYPE_BOOLEAN, manager->paused,
+      NULL);
 
   g_free (resource_path);
 

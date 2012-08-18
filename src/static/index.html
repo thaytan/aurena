@@ -9,9 +9,16 @@
 </head>
 <body>
 <div id=player>
-<h1>Aurena</h1><p id="connstatus"></p>
-<div id="controls"><button id="play">Play</button><button id="pause">Pause</button><button id="next">Next</button></div>
-<div id="mastervol"><div id="mastervollabel">Volume:</div><div id="mastervolslider"></div><div id="mastervolval">100%</div></div>
+<div id="header">Aurena</div><span id="connstatus"></span>
+<div id="controls">
+  <button id="play">Play</button><button id="pause">Pause</button><button id="next">Next</button><div id="playstate"></div></div>
+  <div id="mastervol"><div id="mastervollabel">Volume:</div><div id="mastervolslider"></div><div id="mastervolval">100%</div></div>
+  <div id="nowplayingdiv"><div id="nowplayingtitle" class="inline">Now Playing</div>
+  <div id="nowplaying" class="inline"></div></div>
+
+  <div id="clients"></div>
+  <div id="playlist"></div>
+  <div id="library"></div>
 </div>
 
 <div id="debug"></div>

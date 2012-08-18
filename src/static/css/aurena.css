@@ -1,11 +1,18 @@
 #player {
   width: 640;
   background-color: #101010;
-  padding: 10px 5px;
+  padding: 10px 15px;
   color: white;
+  position: relative;
 }
-#mastervollabel, #mastervolval { display: inline; }
-#mastervol { display: inline; margin: 10px; }
-#mastervolslider { display: inline-block; width: 80%; }
 
+#header { font-size: 130%; display: inline; }
+#connstatus { position: absolute; right: 10px; top: 0px; }
+#playstate { display: inline; margin: 10px; }
+#mastervollabel, #mastervolval { display: inline; }
+#mastervol, .inline { display: inline; padding-top: 10px; margin: 10px; }
+#mastervolslider, #nowplayingdiv { display: inline-block; width: 80%; }
+#nowplayingdiv { padding-top: 15px; }
 #controls { margin: 10px; }
+
+#debug { display: none; }

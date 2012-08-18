@@ -38,7 +38,18 @@ websocket_listener : function()
      $("#debug").prepend("<p>websocket connections not available!</p>");
   }
 },
-
+update_playstate : function() {
+  if (aurena.paused) {
+    $("#playstate").html("Paused");
+  }
+  else {
+    $("#playstate").html("Playing");
+  }
+  if (aurena.cur_media != 0)
+    $("#nowplaying").html("track " + aurena.cur_media);
+  else
+    $("#nowplaying").html("None");
+},
 handle_event : function handle_event(data) {
   function set_vol_slider(vol, anim) {
     var s = $("#mastervolslider");
@@ -57,11 +68,28 @@ handle_event : function handle_event(data) {
   switch (json["msg-type"]) {
     case "enrol":
       var vol = json["volume-level"];
+      aurena.paused = json["paused"];
+      aurena.cur_media = json["resource-id"];
+
       set_vol_slider (vol, false);
+      aurena.update_playstate();
       break;
     case "volume":
       var vol = json["level"];
       set_vol_slider (vol, true);
+      break;
+    case "pause":
+      aurena.paused = true;
+      aurena.update_playstate();
+      break;
+    case "play":
+      aurena.paused = false;
+      aurena.update_playstate();
+      break;
+    case "set-media":
+      aurena.paused = json["paused"];
+      aurena.cur_media = json["resource-id"];
+      aurena.update_playstate();
       break;
     default:
       $("#debug").prepend("<p>Received message of type " + json["msg-type"] + ": " + data + "</p>");
@@ -75,6 +103,8 @@ init : function() {
 
   aurena.sliding = false;
   aurena.slide_update = false;
+  aurena.paused = true;
+  aurena.cur_media = 0;
 
   function send_slider_volume() {
     var curVol = $("#mastervolslider").slider( "option", "value");

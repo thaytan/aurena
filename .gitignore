@@ -14,7 +14,7 @@ ltmain.sh
 Makefile
 Makefile.in
 missing
-src/sonarea
+src/aurena
 src/simple-client
 stamp-h1
 .deps
@@ -22,4 +22,6 @@ stamp-h1
 *.la
 *.o
 *.lo
+*.bz2
+*.xz
 .libs/

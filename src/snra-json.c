@@ -31,19 +31,45 @@
 #endif
 
 static void
+snra_json_array_add_to_val (JsonArray *array, guint index_,
+    JsonNode *element_node, GValue *outval);
+
+static void
+snra_json_node_into_val (JsonNode *element_node, GValue *v)
+{
+  if (JSON_NODE_HOLDS_OBJECT (element_node)) {
+    GstStructure *child = snra_json_to_gst_structure (element_node);
+    g_value_init (v, GST_TYPE_STRUCTURE);
+    gst_value_set_structure (v, child);
+  } if (JSON_NODE_HOLDS_ARRAY (element_node)) {
+    JsonArray *arr = json_node_get_array (element_node);
+    g_value_init (v, GST_TYPE_ARRAY);
+    json_array_foreach_element (arr,
+        (JsonArrayForeach) snra_json_array_add_to_val, v);
+  } else {
+    json_node_get_value (element_node, v);
+  }
+}
+
+static void
+snra_json_array_add_to_val (G_GNUC_UNUSED JsonArray *array,
+    G_GNUC_UNUSED guint index_,
+    JsonNode *element_node, GValue *outval)
+{
+  GValue v = G_VALUE_INIT;
+  snra_json_node_into_val (element_node, &v);
+  gst_value_array_append_value (outval, &v); 
+  g_value_unset (&v);
+}
+
+static void
 snra_gst_struct_from_object (G_GNUC_UNUSED JsonObject * o,
     const gchar * member_name, JsonNode * member_node, GstStructure * s)
 {
-  if (JSON_NODE_HOLDS_OBJECT (member_node)) {
-    GstStructure *child = snra_json_to_gst_structure (member_node);
-    gst_structure_set (s, member_name, GST_TYPE_STRUCTURE, child, NULL);
-  } else {
-    GValue v = G_VALUE_INIT;
-
-    json_node_get_value (member_node, &v);
-    gst_structure_set_value (s, member_name, &v);
-    g_value_unset (&v);
-  }
+  GValue v = G_VALUE_INIT;
+  snra_json_node_into_val (member_node, &v);
+  gst_structure_set_value (s, member_name, &v);
+  g_value_unset (&v);
 }
 
 GstStructure *
@@ -64,19 +90,39 @@ snra_json_to_gst_structure (JsonNode * root)
   return s;
 }
 
-static void
-snra_add_struct_object (GQuark field_id, const GValue * value, JsonObject * o)
+static JsonNode *
+snra_json_value_to_node (const GValue *value)
 {
   JsonNode *n = NULL;
 
   if (GST_VALUE_HOLDS_STRUCTURE (value)) {
     const GstStructure *s = gst_value_get_structure (value);
     n = snra_json_from_gst_structure (s);
+  }
+  else if (GST_VALUE_HOLDS_ARRAY (value)) {
+    guint count = gst_value_array_get_size (value);
+    guint i;
+    JsonArray *arr = json_array_sized_new (count);
+    for (i = 0; i < count; i++) {
+      const GValue *sub_val = gst_value_array_get_value (value, i);
+      JsonNode *tmp = snra_json_value_to_node (sub_val);
+      if (tmp)
+        json_array_add_element (arr, tmp);
+    }
+    n = json_node_new (JSON_NODE_ARRAY);
+    json_node_take_array (n, arr);
   } else {
     n = json_node_new (JSON_NODE_VALUE);
     json_node_set_value (n, value);
   }
 
+  return n;
+}
+
+static void
+snra_add_struct_object (GQuark field_id, const GValue * value, JsonObject * o)
+{
+  JsonNode *n = snra_json_value_to_node (value);
   if (n)
     json_object_set_member (o, g_quark_to_string (field_id), n);
 }

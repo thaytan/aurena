@@ -138,6 +138,7 @@ snra_server_client_disconnect (G_GNUC_UNUSED SoupMessage *message,
     SnraServerClient *client)
 {
   g_print ("client %u disconnect signal\n", client->client_id);
+  client->need_body_complete = FALSE;
   snra_server_connection_lost (client);
 }
 
@@ -498,8 +499,6 @@ snra_server_client_new_single (SoupServer * soup, SoupMessage * msg,
   client->type = SNRA_SERVER_CLIENT_SINGLE;
   client->need_body_complete = TRUE;
 
-  soup_message_headers_set_encoding (msg->response_headers,
-      SOUP_ENCODING_CONTENT_LENGTH);
   soup_message_set_status (msg, SOUP_STATUS_OK);
   soup_server_pause_message (client->soup, msg);
 
@@ -600,9 +599,8 @@ snra_server_client_send_message (SnraServerClient * client,
     return;
   }
   if (client->type == SNRA_SERVER_CLIENT_SINGLE) {
-    soup_message_body_append (client->event_pipe->response_body,
-        SOUP_MEMORY_COPY, body, len);
-    soup_message_headers_set_content_length (client->event_pipe->response_headers, len);
+    soup_message_set_response (client->event_pipe,
+        "application/json", SOUP_MEMORY_COPY, body, len);
     snra_server_connection_lost (client);
     soup_server_unpause_message (client->soup, client->event_pipe);
     return;

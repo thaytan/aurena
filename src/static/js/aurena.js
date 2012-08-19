@@ -64,7 +64,7 @@ handle_event : function handle_event(data) {
     }
   }
 
-  json = jQuery.parseJSON(data);
+  json = $.parseJSON(data);
   switch (json["msg-type"]) {
     case "enrol":
       var vol = json["volume-level"];
@@ -91,10 +91,26 @@ handle_event : function handle_event(data) {
       aurena.cur_media = json["resource-id"];
       aurena.update_playstate();
       break;
+    case "player-clients-changed":
+      aurena.update_player_clients();
+      break;
     default:
       $("#debug").prepend("<p>Received message of type " + json["msg-type"] + ": " + data + "</p>");
       break;
   }
+},
+update_player_clients : function () {
+  $.getJSON("../client/player_clients", function(data) {
+     var items = [];
+     var clients = data['player-clients'];
+     aurena.clients = clients;
+     $.each(clients, function(key, val) {
+       items.push('<li id="' + key + '">' + "Client " + val["client-id"] + '</li>');
+     });
+     $("#cliententries").empty().prepend($('<ul/>', {
+       html: items.join('')
+     }));
+  });
 },
 
 init : function() {

@@ -47,6 +47,35 @@ enum
   PROP_LAST
 };
 
+typedef enum _SnraControlEvent SnraControlEvent;
+
+enum _SnraControlEvent
+{
+  SNRA_CONTROL_NONE,
+  SNRA_CONTROL_NEXT,
+  SNRA_CONTROL_PREV,
+  SNRA_CONTROL_PLAY,
+  SNRA_CONTROL_PAUSE,
+  SNRA_CONTROL_ENQUEUE,
+  SNRA_CONTROL_VOLUME
+};
+
+static const struct
+{
+  const char *name;
+  SnraControlEvent type;
+} control_event_names[] = {
+  {
+  "next", SNRA_CONTROL_NEXT}, {
+  "previous", SNRA_CONTROL_PREV}, {
+  "play", SNRA_CONTROL_PLAY}, {
+  "pause", SNRA_CONTROL_PAUSE}, {
+  "enqueue", SNRA_CONTROL_ENQUEUE}, {
+  "volume", SNRA_CONTROL_VOLUME}
+};
+
+static const gint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
+
 G_DEFINE_TYPE (SnraManager, snra_manager, G_TYPE_OBJECT);
 
 static void snra_manager_dispose (GObject * object);
@@ -67,6 +96,8 @@ static void snra_manager_send_volume (SnraManager * manager,
     SnraServerClient * client, gdouble volume);
 static GstStructure *manager_make_set_media_msg (SnraManager *manager,
     guint resource_id);
+static GstStructure *manager_make_player_clients_changed_msg
+    (SnraManager *manager);
 
 static void
 manager_send_msg_to_client (SnraManager * manager, SnraServerClient * client,
@@ -137,34 +168,35 @@ manager_make_enrol_msg (SnraManager * manager)
   return msg;
 }
 
-typedef enum _SnraControlEvent SnraControlEvent;
-
-enum _SnraControlEvent
+static GstStructure *
+make_player_clients_list_msg (SnraManager *manager)
 {
-  SNRA_CONTROL_NONE,
-  SNRA_CONTROL_NEXT,
-  SNRA_CONTROL_PREV,
-  SNRA_CONTROL_PLAY,
-  SNRA_CONTROL_PAUSE,
-  SNRA_CONTROL_ENQUEUE,
-  SNRA_CONTROL_VOLUME
-};
+  GstStructure *msg;
+  GValue p = { 0, };
+  GList *cur;
 
-static const struct
-{
-  const char *name;
-  SnraControlEvent type;
-} control_event_names[] = {
-  {
-  "next", SNRA_CONTROL_NEXT}, {
-  "previous", SNRA_CONTROL_PREV}, {
-  "play", SNRA_CONTROL_PLAY}, {
-  "pause", SNRA_CONTROL_PAUSE}, {
-  "enqueue", SNRA_CONTROL_ENQUEUE}, {
-  "volume", SNRA_CONTROL_VOLUME}
-};
+  g_value_init (&p, GST_TYPE_ARRAY);
 
-static const gint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
+  msg = gst_structure_new ("json",
+      "msg-type", G_TYPE_STRING, "player-clients",
+      NULL);
+
+  for (cur = manager->player_clients; cur != NULL; cur = g_list_next (cur)) {
+    SnraServerClient *client = (SnraServerClient *)(cur->data);
+    GValue tmp = { 0, };
+    GstStructure *cur_struct = gst_structure_new ("client",
+      "client-id", G_TYPE_INT64, (gint64) client->client_id, NULL);
+
+    g_value_init (&tmp, GST_TYPE_STRUCTURE);
+    gst_value_set_structure (&tmp, cur_struct);
+    gst_value_array_append_value (&p, &tmp);
+    g_value_unset (&tmp);
+    gst_structure_free (cur_struct);
+  }
+  gst_structure_take_value (msg, "player-clients", &p);
+
+  return msg;
+}
 
 #if 0
 static gint
@@ -200,15 +232,16 @@ snra_manager_get_player_client (SnraManager * manager, guint client_id)
 }
 
 static void
-manager_player_client_disconnect (SnraServerClient *client, SnraManager * manager)
+manager_player_client_disconnect (SnraServerClient *client,
+    SnraManager * manager)
 {
   GList *item = g_list_find (manager->player_clients, client);
-  g_print ("Disconnect from player client %u\n", client->client_id);
   if (item) {
-    g_print ("Removing player client %u\n", client->client_id);
     g_object_unref (client);
     manager->player_clients =
         g_list_delete_link (manager->player_clients, item);
+    manager_send_msg_to_client (manager, NULL,
+        manager_make_player_clients_changed_msg (manager));
   }
 }
 
@@ -225,6 +258,27 @@ manager_ctrl_client_disconnect (SnraServerClient *client, SnraManager * manager)
 }
 
 static void
+manager_status_client_disconnect (SnraServerClient *client,
+    G_GNUC_UNUSED SnraManager * manager)
+{
+  g_object_unref (client);
+}
+
+static void
+send_enrol_events(SnraManager *manager, SnraServerClient *client)
+{
+  manager_send_msg_to_client (manager, client,
+      manager_make_enrol_msg (manager));
+
+  if (manager->current_resource) {
+    manager_send_msg_to_client (manager, client,
+        manager_make_set_media_msg (manager, manager->current_resource));
+  }
+  manager_send_msg_to_client (manager, client,
+      manager_make_player_clients_changed_msg (manager));
+}
+
+static void
 manager_client_cb (SoupServer * soup, SoupMessage * msg,
     G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable * query,
     G_GNUC_UNUSED SoupClientContext * client, SnraManager * manager)
@@ -232,10 +286,11 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
   SnraServerClient *client_conn = NULL;
   gchar **parts = g_strsplit (path, "/", 3);
   guint n_parts = g_strv_length (parts);
-  gboolean send_events;
 
-  if (n_parts < 3 || !g_str_equal ("client", parts[1]))
+  if (n_parts < 3 || !g_str_equal ("client", parts[1])) {
+    soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
     goto done;                  /* Invalid request */
+  }
 
   if (g_str_equal (parts[2], "player_events")) {
     client_conn = snra_server_client_new (soup, msg, client);
@@ -243,23 +298,24 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
         G_CALLBACK (manager_player_client_disconnect), manager);
     manager->player_clients =
         g_list_prepend (manager->player_clients, client_conn);
-    send_events = TRUE;
+    send_enrol_events (manager, client_conn);
+    manager_send_msg_to_client (manager, NULL,
+        manager_make_player_clients_changed_msg (manager));
   } else if (g_str_equal (parts[2], "control_events")) {
     client_conn = snra_server_client_new (soup, msg, client);
     g_signal_connect (client_conn, "connection-lost",
         G_CALLBACK (manager_ctrl_client_disconnect), manager);
     manager->ctrl_clients = g_list_prepend (manager->ctrl_clients, client_conn);
-    send_events = TRUE;
-  }
-
-  if (send_events) {
+    send_enrol_events (manager, client_conn);
+  } else if (g_str_equal (parts[2], "player_clients")) {
+    client_conn = snra_server_client_new_single (soup, msg, client);
+    g_signal_connect (client_conn, "connection-lost",
+        G_CALLBACK (manager_status_client_disconnect), manager);
     manager_send_msg_to_client (manager, client_conn,
-        manager_make_enrol_msg (manager));
-
-    if (manager->current_resource) {
-      manager_send_msg_to_client (manager, client_conn,
-          manager_make_set_media_msg (manager, manager->current_resource));
-    }
+        make_player_clients_list_msg (manager));
+  }
+  else {
+    soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
   }
 
 done:
@@ -774,5 +830,15 @@ manager_make_set_media_msg (SnraManager * manager, guint resource_id)
 
   g_free (resource_path);
 
+  return msg;
+}
+
+static GstStructure *
+manager_make_player_clients_changed_msg (G_GNUC_UNUSED SnraManager *manager)
+{
+  GstStructure *msg;
+  msg = gst_structure_new ("json",
+            "msg-type", G_TYPE_STRING, "player-clients-changed",
+            NULL);
   return msg;
 }

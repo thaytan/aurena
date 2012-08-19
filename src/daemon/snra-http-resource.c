@@ -30,6 +30,12 @@
 #include "snra-resource.h"
 #include "snra-http-resource.h"
 
+#if 0
+#define DEBUG_PRINT(...) g_print (__VA_ARGS__);
+#else
+#define DEBUG_PRINT(...)
+#endif
+
 G_DEFINE_TYPE (SnraHttpResource, snra_http_resource, G_TYPE_OBJECT);
 
 enum
@@ -58,7 +64,7 @@ snra_http_resource_open (SnraHttpResource * resource)
     GError *error = NULL;
 
     resources_open++;
-    g_print ("Opening resource %s. %d now open\n", resource->source_path,
+    DEBUG_PRINT ("Opening resource %s. %d now open\n", resource->source_path,
         resources_open);
     resource->data = g_mapped_file_new (resource->source_path, FALSE, &error);
     if (resource->data == NULL) {

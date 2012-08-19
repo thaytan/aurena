@@ -107,21 +107,32 @@ resource_finished (G_GNUC_UNUSED SoupMessage * msg, SnraTransfer * transfer)
   /* Close the resource, destroy the transfer */
   snra_http_resource_close (transfer->resource);
 
+#if 0
+  g_print ("close resource %s (%p) use count now %d msg %p\n",
+      transfer->resource->source_path, transfer->resource,
+      transfer->resource->use_count, msg);
+#endif
+
   g_object_unref (transfer->resource);
   g_free (transfer);
-
 }
 
 void
 snra_http_resource_new_transfer (SnraHttpResource * resource, SoupMessage * msg)
 {
-  /* Create a new transfer structure, and pass the contents of our resource to it */
+  /* Create a new transfer structure, and pass the contents of our
+   * resource to it */
   SnraTransfer *transfer;
 
   if (!snra_http_resource_open (resource)) {
     soup_message_set_status (msg, SOUP_STATUS_INTERNAL_SERVER_ERROR);
     return;
   }
+
+#if 0
+  g_print ("open resource %s (%p) use count now %d msg %p\n",
+      resource->source_path, resource, resource->use_count, msg);
+#endif
 
   transfer = g_new0 (SnraTransfer, 1);
   transfer->resource = g_object_ref (resource);
@@ -136,15 +147,11 @@ snra_http_resource_new_transfer (SnraHttpResource * resource, SoupMessage * msg)
         transfer);
 
     soup_message_set_status (msg, SOUP_STATUS_OK);
-    soup_message_headers_set_encoding (msg->response_headers,
-        SOUP_ENCODING_CONTENT_LENGTH);
-    soup_message_headers_replace (msg->response_headers, "Content-Type",
-        snra_resource_get_mime_type (resource->source_path));
-
-    soup_message_headers_set_content_length (msg->response_headers, len);
-    soup_message_body_append (msg->response_body, SOUP_MEMORY_TEMPORARY, chunk,
-        len);
-    soup_message_body_complete (msg->response_body);
+    //soup_message_headers_set_encoding (msg->response_headers,
+        //SOUP_ENCODING_CONTENT_LENGTH);
+    soup_message_set_response (msg,
+        snra_resource_get_mime_type (resource->source_path),
+        SOUP_MEMORY_TEMPORARY, chunk, len);
   }
 }
 

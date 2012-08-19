@@ -376,8 +376,8 @@ static void
 connect_to_server (SnraClient * client, const gchar * server, int port)
 {
   SoupMessage *msg;
-  char *url = g_strdup_printf ("http://%s:%u/client/player", server, port);
-
+  char *url = g_strdup_printf ("http://%s:%u/client/player_events",
+                  server, port);
   if (client->connecting == FALSE) {
     g_print ("Attemping to connect to server %s:%d\n", server, port);
     client->connecting = TRUE;

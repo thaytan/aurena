@@ -229,33 +229,37 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
     G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable * query,
     G_GNUC_UNUSED SoupClientContext * client, SnraManager * manager)
 {
-  SnraServerClient *client_conn = g_new0 (SnraServerClient, 1);
+  SnraServerClient *client_conn = NULL;
   gchar **parts = g_strsplit (path, "/", 3);
   guint n_parts = g_strv_length (parts);
+  gboolean send_events;
 
   if (n_parts < 3 || !g_str_equal ("client", parts[1]))
     goto done;                  /* Invalid request */
 
-  /* Check if the request is a websocket request, if not handle as chunked */
-  client_conn = snra_server_client_new (soup, msg, client);
-
-  if (g_str_equal (parts[2], "player")) {
+  if (g_str_equal (parts[2], "player_events")) {
+    client_conn = snra_server_client_new (soup, msg, client);
     g_signal_connect (client_conn, "connection-lost",
         G_CALLBACK (manager_player_client_disconnect), manager);
     manager->player_clients =
         g_list_prepend (manager->player_clients, client_conn);
-  } else if (g_str_equal (parts[2], "control")) {
+    send_events = TRUE;
+  } else if (g_str_equal (parts[2], "control_events")) {
+    client_conn = snra_server_client_new (soup, msg, client);
     g_signal_connect (client_conn, "connection-lost",
         G_CALLBACK (manager_ctrl_client_disconnect), manager);
     manager->ctrl_clients = g_list_prepend (manager->ctrl_clients, client_conn);
+    send_events = TRUE;
   }
 
-  manager_send_msg_to_client (manager, client_conn,
-      manager_make_enrol_msg (manager));
-
-  if (manager->current_resource) {
+  if (send_events) {
     manager_send_msg_to_client (manager, client_conn,
-        manager_make_set_media_msg (manager, manager->current_resource));
+        manager_make_enrol_msg (manager));
+
+    if (manager->current_resource) {
+      manager_send_msg_to_client (manager, client_conn,
+          manager_make_set_media_msg (manager, manager->current_resource));
+    }
   }
 
 done:

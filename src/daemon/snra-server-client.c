@@ -30,6 +30,7 @@ G_DEFINE_TYPE (SnraServerClient, snra_server_client, G_TYPE_OBJECT);
 enum
 {
   CONNECTION_LOST,
+  MSG_RECEIVED,
   LAST_SIGNAL
 };
 
@@ -73,7 +74,7 @@ snra_server_client_finalize (GObject * object)
 {
   SnraServerClient *client = (SnraServerClient *) (object);
 
-  if (client->type == SNRA_SERVER_CLIENT_CHUNKED) {
+  if (client->need_body_complete) {
     soup_message_body_complete (client->event_pipe->response_body);
   }
 
@@ -115,6 +116,13 @@ snra_server_connection_lost (SnraServerClient * client)
     g_io_channel_shutdown (client->io, TRUE, NULL);
     g_io_channel_unref (client->io);
     client->io = NULL;
+  }
+
+  if (client->type == SNRA_SERVER_CLIENT_CHUNKED ||
+      client->type == SNRA_SERVER_CLIENT_SINGLE) {
+    soup_message_body_complete (client->event_pipe->response_body);
+    client->need_body_complete = FALSE;
+    soup_server_unpause_message (client->soup, client->event_pipe);
   }
 
   if (client->socket) {
@@ -227,6 +235,7 @@ static gboolean
 snra_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
     GIOCondition condition, SnraServerClient * client)
 {
+  GIOStatus status = G_IO_STATUS_NORMAL;
 #if 0
   g_print ("Got IO callback for client %p w/ condition %u\n", client,
       (guint) (condition));
@@ -238,8 +247,7 @@ snra_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
   }
 
   if (condition & G_IO_IN) {
-    gsize bread;
-    GIOStatus status;
+    gsize bread = 0;
 
     if (client->in_bufsize <= client->in_bufavail) {
       gsize cur_offs = client->in_bufptr - client->in_buf;
@@ -256,15 +264,11 @@ snra_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
         g_io_channel_read_chars (client->io,
         client->in_buf + client->in_bufavail,
         client->in_bufsize - client->in_bufavail, &bread, NULL);
-    if (status == G_IO_STATUS_ERROR)
+
+    if (status == G_IO_STATUS_ERROR) {
       snra_server_connection_lost (client);
-
-    if (status == G_IO_STATUS_EOF) {
-      // snra_server_connection_lost (client);
-      return FALSE;
     }
-
-    if (status == G_IO_STATUS_NORMAL || status == G_IO_STATUS_AGAIN) {
+    else {
       g_print ("Collected %" G_GSIZE_FORMAT " bytes to io buf\n", bread);
       client->in_bufavail += bread;
     }
@@ -276,6 +280,12 @@ snra_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
       memmove (client->in_buf, client->in_bufptr, client->in_bufavail);
       client->in_bufptr = client->in_buf;
     }
+  }
+
+  if (status == G_IO_STATUS_EOF) {
+    // no more data
+    snra_server_connection_lost (client);
+    return FALSE;
   }
 
   return TRUE;
@@ -414,7 +424,6 @@ is_websocket_client (SnraServerClient * client)
   return TRUE;
 }
 
-
 SnraServerClient *
 snra_server_client_new (SoupServer * soup, SoupMessage * msg,
     SoupClientContext * context)
@@ -433,6 +442,7 @@ snra_server_client_new (SoupServer * soup, SoupMessage * msg,
 
   if (!is_websocket_client (client)) {
     client->type = SNRA_SERVER_CLIENT_CHUNKED;
+    client->need_body_complete = TRUE;
 
     soup_message_headers_set_encoding (msg->response_headers,
         SOUP_ENCODING_CHUNKED);
@@ -442,6 +452,7 @@ snra_server_client_new (SoupServer * soup, SoupMessage * msg,
 
   /* Otherwise, it's a websocket client */
   client->type = SNRA_SERVER_CLIENT_WEBSOCKET;
+  client->need_body_complete = FALSE;
 
   client->socket = soup_client_context_get_socket (context);
   client->in_bufptr = client->in_buf = g_new0 (gchar, 1024);
@@ -466,6 +477,31 @@ snra_server_client_new (SoupServer * soup, SoupMessage * msg,
 
   g_signal_connect (msg, "wrote-informational",
       G_CALLBACK (snra_server_client_wrote_headers), client);
+
+  return client;
+}
+
+SnraServerClient *
+snra_server_client_new_single (SoupServer * soup, SoupMessage * msg,
+    G_GNUC_UNUSED SoupClientContext * context)
+{
+  SnraServerClient *client = g_object_new (SNRA_TYPE_SERVER_CLIENT, NULL);
+
+  client->soup = soup;
+  client->event_pipe = msg;
+
+  g_signal_connect (msg, "network-event",
+      G_CALLBACK (snra_server_client_network_event), client);
+  g_signal_connect (msg, "finished",
+      G_CALLBACK (snra_server_client_disconnect), client);
+
+  client->type = SNRA_SERVER_CLIENT_SINGLE;
+  client->need_body_complete = TRUE;
+
+  soup_message_headers_set_encoding (msg->response_headers,
+      SOUP_ENCODING_CONTENT_LENGTH);
+  soup_message_set_status (msg, SOUP_STATUS_OK);
+  soup_server_pause_message (client->soup, msg);
 
   return client;
 }
@@ -563,7 +599,16 @@ snra_server_client_send_message (SnraServerClient * client,
     soup_server_unpause_message (client->soup, client->event_pipe);
     return;
   }
+  if (client->type == SNRA_SERVER_CLIENT_SINGLE) {
+    soup_message_body_append (client->event_pipe->response_body,
+        SOUP_MEMORY_COPY, body, len);
+    soup_message_headers_set_content_length (client->event_pipe->response_headers, len);
+    snra_server_connection_lost (client);
+    soup_server_unpause_message (client->soup, client->event_pipe);
+    return;
+  }
 
+  /* else, websocket connection */
   if (client->io) {
     write_fragment (client, body, len);
     return;

@@ -10,7 +10,7 @@ websocket_listener : function()
 
   if ("WebSocket" in window)
   {
-     var url = document.URL.replace("http", "ws") + "../client/control";
+     var url = document.URL.replace("http", "ws") + "../client/control_events";
      var ws = new WebSocket(url, "aurena");
      aurena.ws = ws;
 

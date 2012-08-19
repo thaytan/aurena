@@ -35,7 +35,8 @@ typedef enum _SnraServerClientType SnraServerClientType;
 
 enum _SnraServerClientType {
   SNRA_SERVER_CLIENT_CHUNKED,
-  SNRA_SERVER_CLIENT_WEBSOCKET
+  SNRA_SERVER_CLIENT_WEBSOCKET,
+  SNRA_SERVER_CLIENT_SINGLE
 };
 
 struct _SnraServerClient
@@ -44,6 +45,7 @@ struct _SnraServerClient
 
   SnraServerClientType type;
   gboolean fired_conn_lost;
+  gboolean need_body_complete;
 
   guint client_id;
   SoupMessage *event_pipe;
@@ -75,6 +77,8 @@ GType snra_server_client_get_type(void);
 
 SnraServerClient *snra_server_client_new (SoupServer *soup,
     SoupMessage *msg, SoupClientContext *context);
+SnraServerClient *snra_server_client_new_single (SoupServer * soup,
+    SoupMessage * msg, SoupClientContext * context);
 
 void snra_server_client_send_message (SnraServerClient *client,
   gchar *body, gsize len);

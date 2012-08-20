@@ -67,6 +67,11 @@ snra_server_client_class_init (SnraServerClientClass * client_class)
       g_signal_new ("connection-lost", G_TYPE_FROM_CLASS (client_class),
       G_SIGNAL_RUN_LAST, 0, NULL, NULL,
       g_cclosure_marshal_generic, G_TYPE_NONE, 0, G_TYPE_NONE);
+
+  snra_server_client_signals[MSG_RECEIVED] =
+      g_signal_new ("message-received", G_TYPE_FROM_CLASS (client_class),
+      G_SIGNAL_RUN_LAST, 0, NULL, NULL,
+      g_cclosure_marshal_generic, G_TYPE_NONE, 2, G_TYPE_CHAR, G_TYPE_UINT64);
 }
 
 static void
@@ -227,7 +232,9 @@ try_parse_websocket_fragment (SnraServerClient * client)
   }
   decoded[frag_size] = 0;
 
-  /* FIXME: Fire a signal to get this packet processed */
+  /* Fire a signal to get this packet processed */
+  g_signal_emit (client, snra_server_client_signals[MSG_RECEIVED], 0,
+      decoded, (guint64)(frag_size));
 
   g_free (decoded);
 

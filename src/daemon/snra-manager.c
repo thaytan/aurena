@@ -99,9 +99,13 @@ static GstStructure *manager_make_set_media_msg (SnraManager *manager,
 static GstStructure *manager_make_player_clients_changed_msg
     (SnraManager *manager);
 
+#define SEND_MSG_TO_PLAYERS 1
+#define SEND_MSG_TO_CONTROLLERS 2
+#define SEND_MSG_TO_ALL (SEND_MSG_TO_PLAYERS|SEND_MSG_TO_CONTROLLERS)
+
 static void
 manager_send_msg_to_client (SnraManager * manager, SnraServerClient * client,
-    GstStructure * msg);
+    gint send_to_mask, GstStructure * msg);
 
 static GstNetTimeProvider *
 create_net_clock ()
@@ -240,7 +244,7 @@ manager_player_client_disconnect (SnraServerClient *client,
     g_object_unref (client);
     manager->player_clients =
         g_list_delete_link (manager->player_clients, item);
-    manager_send_msg_to_client (manager, NULL,
+    manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS,
         manager_make_player_clients_changed_msg (manager));
   }
 }
@@ -267,14 +271,14 @@ manager_status_client_disconnect (SnraServerClient *client,
 static void
 send_enrol_events(SnraManager *manager, SnraServerClient *client)
 {
-  manager_send_msg_to_client (manager, client,
+  manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL,
       manager_make_enrol_msg (manager));
 
   if (manager->current_resource) {
-    manager_send_msg_to_client (manager, client,
+    manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL,
         manager_make_set_media_msg (manager, manager->current_resource));
   }
-  manager_send_msg_to_client (manager, client,
+  manager_send_msg_to_client (manager, client, SEND_MSG_TO_CONTROLLERS,
       manager_make_player_clients_changed_msg (manager));
 }
 
@@ -299,7 +303,7 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
     manager->player_clients =
         g_list_prepend (manager->player_clients, client_conn);
     send_enrol_events (manager, client_conn);
-    manager_send_msg_to_client (manager, NULL,
+    manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS,
         manager_make_player_clients_changed_msg (manager));
   } else if (g_str_equal (parts[2], "control_events")) {
     client_conn = snra_server_client_new (soup, msg, client);
@@ -311,7 +315,7 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
     client_conn = snra_server_client_new_single (soup, msg, client);
     g_signal_connect (client_conn, "connection-lost",
         G_CALLBACK (manager_status_client_disconnect), manager);
-    manager_send_msg_to_client (manager, client_conn,
+    manager_send_msg_to_client (manager, client_conn, 0,
         make_player_clients_list_msg (manager));
   }
   else {
@@ -324,7 +328,7 @@ done:
 
 static void
 manager_send_msg_to_client (SnraManager * manager, SnraServerClient * client,
-    GstStructure *msg)
+    gint send_to_mask, GstStructure *msg)
 {
   JsonGenerator *gen;
   JsonNode *root;
@@ -348,13 +352,17 @@ manager_send_msg_to_client (SnraManager * manager, SnraServerClient * client,
   } else {
     /* client == NULL - send to all clients */
     GList *cur;
-    for (cur = manager->player_clients; cur != NULL; cur = g_list_next (cur)) {
-      client = (SnraServerClient *) (cur->data);
-      snra_server_client_send_message (client, body, len);
+    if (send_to_mask & SEND_MSG_TO_PLAYERS) {
+      for (cur = manager->player_clients; cur != NULL; cur = g_list_next (cur)) {
+        client = (SnraServerClient *) (cur->data);
+        snra_server_client_send_message (client, body, len);
+      }
     }
+    if (send_to_mask & SEND_MSG_TO_CONTROLLERS) {
     for (cur = manager->ctrl_clients; cur != NULL; cur = g_list_next (cur)) {
       client = (SnraServerClient *) (cur->data);
       snra_server_client_send_message (client, body, len);
+    }
     }
   }
   g_free (body);
@@ -732,7 +740,7 @@ snra_manager_play_resource (SnraManager * manager, guint resource_id)
   manager->base_time = GST_CLOCK_TIME_NONE;
   manager->stream_time = GST_CLOCK_TIME_NONE;
 
-  manager_send_msg_to_client (manager, NULL,
+  manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_ALL,
       manager_make_set_media_msg (manager, manager->current_resource));
 }
 
@@ -753,7 +761,7 @@ snra_manager_send_play (SnraManager * manager, SnraServerClient * client)
       "msg-type", G_TYPE_STRING, "play",
       "base-time", G_TYPE_INT64, (gint64) (manager->base_time), NULL);
 
-  manager_send_msg_to_client (manager, client, msg);
+  manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL, msg);
 }
 
 static void
@@ -764,7 +772,7 @@ snra_manager_send_pause (SnraManager * manager, SnraServerClient * client)
 
   msg = gst_structure_new ("json", "msg-type", G_TYPE_STRING, "pause", NULL);
 
-  manager_send_msg_to_client (manager, client, msg);
+  manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL, msg);
 
   if (manager->stream_time == GST_CLOCK_TIME_NONE) {
     g_object_get (manager->net_clock, "clock", &clock, NULL);
@@ -789,7 +797,7 @@ snra_manager_send_volume (SnraManager * manager, SnraServerClient * client,
       "msg-type", G_TYPE_STRING, "volume",
       "level", G_TYPE_DOUBLE, volume, NULL);
 
-  manager_send_msg_to_client (manager, client, msg);
+  manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL, msg);
 }
 
 static GstStructure *

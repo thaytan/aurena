@@ -74,6 +74,19 @@ snra_server_client_finalize (GObject * object)
 {
   SnraServerClient *client = (SnraServerClient *) (object);
 
+  if (client->disco_sig) {
+    g_signal_handler_disconnect (client->event_pipe, client->disco_sig);
+    client->disco_sig = 0;
+  }
+  if (client->net_event_sig) {
+    g_signal_handler_disconnect (client->event_pipe, client->net_event_sig);
+    client->net_event_sig = 0;
+  }
+  if (client->wrote_info_sig) {
+    g_signal_handler_disconnect (client->event_pipe, client->wrote_info_sig);
+    client->wrote_info_sig = 0;
+  }
+
   if (client->need_body_complete) {
     soup_message_body_complete (client->event_pipe->response_body);
   }
@@ -120,7 +133,8 @@ snra_server_connection_lost (SnraServerClient * client)
 
   if (client->type == SNRA_SERVER_CLIENT_CHUNKED ||
       client->type == SNRA_SERVER_CLIENT_SINGLE) {
-    soup_message_body_complete (client->event_pipe->response_body);
+    if (client->need_body_complete)
+      soup_message_body_complete (client->event_pipe->response_body);
     client->need_body_complete = FALSE;
     soup_server_unpause_message (client->soup, client->event_pipe);
   }
@@ -134,8 +148,8 @@ snra_server_connection_lost (SnraServerClient * client)
 }
 
 static void
-snra_server_client_disconnect (G_GNUC_UNUSED SoupMessage *message,
-    SnraServerClient *client)
+snra_server_client_disconnect (G_GNUC_UNUSED SoupMessage * message,
+    SnraServerClient * client)
 {
   g_print ("client %u disconnect signal\n", client->client_id);
   client->need_body_complete = FALSE;
@@ -146,7 +160,7 @@ static void
 snra_server_client_network_event (G_GNUC_UNUSED SoupMessage * msg,
     G_GNUC_UNUSED GSocketClientEvent event,
     G_GNUC_UNUSED GIOStream * connection,
-    G_GNUC_UNUSED SnraServerClient *client)
+    G_GNUC_UNUSED SnraServerClient * client)
 {
   g_print ("client %u network event %d\n", client->client_id, event);
 }
@@ -268,8 +282,7 @@ snra_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
 
     if (status == G_IO_STATUS_ERROR) {
       snra_server_connection_lost (client);
-    }
-    else {
+    } else {
       g_print ("Collected %" G_GSIZE_FORMAT " bytes to io buf\n", bread);
       client->in_bufavail += bread;
     }
@@ -436,9 +449,9 @@ snra_server_client_new (SoupServer * soup, SoupMessage * msg,
   client->soup = soup;
   client->event_pipe = msg;
 
-  g_signal_connect (msg, "network-event",
+  client->net_event_sig = g_signal_connect (msg, "network-event",
       G_CALLBACK (snra_server_client_network_event), client);
-  g_signal_connect (msg, "finished",
+  client->disco_sig = g_signal_connect (msg, "finished",
       G_CALLBACK (snra_server_client_disconnect), client);
 
   if (!is_websocket_client (client)) {
@@ -476,7 +489,7 @@ snra_server_client_new (SoupServer * soup, SoupMessage * msg,
 
   g_free (accept_reply);
 
-  g_signal_connect (msg, "wrote-informational",
+  client->wrote_info_sig = g_signal_connect (msg, "wrote-informational",
       G_CALLBACK (snra_server_client_wrote_headers), client);
 
   return client;
@@ -491,9 +504,9 @@ snra_server_client_new_single (SoupServer * soup, SoupMessage * msg,
   client->soup = soup;
   client->event_pipe = msg;
 
-  g_signal_connect (msg, "network-event",
+  client->net_event_sig = g_signal_connect (msg, "network-event",
       G_CALLBACK (snra_server_client_network_event), client);
-  g_signal_connect (msg, "finished",
+  client->disco_sig = g_signal_connect (msg, "finished",
       G_CALLBACK (snra_server_client_disconnect), client);
 
   client->type = SNRA_SERVER_CLIENT_SINGLE;
@@ -602,7 +615,6 @@ snra_server_client_send_message (SnraServerClient * client,
     soup_message_set_response (client->event_pipe,
         "application/json", SOUP_MEMORY_COPY, body, len);
     snra_server_connection_lost (client);
-    soup_server_unpause_message (client->soup, client->event_pipe);
     return;
   }
 

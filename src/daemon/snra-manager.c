@@ -415,8 +415,10 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
       } else {
         resource_id = CLAMP (resource_id, 1, get_playlist_len (manager));
       }
-      manager->paused = FALSE;
-      snra_manager_play_resource (manager, resource_id);
+      if (resource_id != 0) {
+        manager->paused = FALSE;
+        snra_manager_play_resource (manager, resource_id);
+      }
       break;
     }
     case SNRA_CONTROL_PAUSE:{
@@ -427,10 +429,13 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
     }
     case SNRA_CONTROL_PLAY:{
       if (manager->paused) {
-        manager->paused = FALSE;
         if (manager->current_resource == 0) {
-          snra_manager_play_resource (manager,
-              g_random_int_range (0, get_playlist_len (manager) + 1));
+          guint resource_id =
+              g_random_int_range (0, get_playlist_len (manager) + 1);
+          if (resource_id != 0) {
+            manager->paused = FALSE;
+            snra_manager_play_resource (manager, resource_id);
+          }
         }
         else {
           snra_manager_send_play (manager, NULL);

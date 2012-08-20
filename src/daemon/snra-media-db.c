@@ -27,7 +27,8 @@
 
 typedef struct _SnraMediaDBClass SnraMediaDBClass;
 
-enum {
+enum
+{
   PROP_0 = 0,
   PROP_DB_FILE,
   PROP_LAST
@@ -47,9 +48,9 @@ struct _SnraMediaDBClass
   GObjectClass parent;
 };
 
-static GType snra_media_db_get_type(void);
-static void snra_media_db_finalize(GObject *object);
-static gboolean media_db_create_tables (SnraMediaDB *media_db);
+static GType snra_media_db_get_type (void);
+static void snra_media_db_finalize (GObject * object);
+static gboolean media_db_create_tables (SnraMediaDB * media_db);
 static void snra_media_db_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void snra_media_db_get_property (GObject * object, guint prop_id,
@@ -58,22 +59,25 @@ static void snra_media_db_get_property (GObject * object, guint prop_id,
 G_DEFINE_TYPE (SnraMediaDB, snra_media_db, G_TYPE_OBJECT);
 
 static void
-snra_media_db_init (SnraMediaDB *media_db)
+snra_media_db_init (SnraMediaDB * media_db)
 {
   media_db->priv = G_TYPE_INSTANCE_GET_PRIVATE (media_db,
       SNRA_TYPE_MEDIA_DB, SnraMediaDBPriv);
 }
 
 static void
-snra_media_db_constructed (G_GNUC_UNUSED GObject *object)
+snra_media_db_constructed (G_GNUC_UNUSED GObject * object)
 {
-  SnraMediaDB *media_db = (SnraMediaDB *)(object);
+  SnraMediaDB *media_db = (SnraMediaDB *) (object);
   sqlite3 *handle = NULL;
+  gchar *dir;
 
   if (G_OBJECT_CLASS (snra_media_db_parent_class)->constructed != NULL)
     G_OBJECT_CLASS (snra_media_db_parent_class)->constructed (object);
 
-  g_mkdir_with_parents (g_path_get_dirname (media_db->priv->db_file), 0755); 
+  dir = g_path_get_dirname (media_db->priv->db_file);
+  g_mkdir_with_parents (dir, 0755);
+  g_free (dir);
 
   if (sqlite3_open (media_db->priv->db_file, &handle) != SQLITE_OK) {
     g_warning ("Could not open media DB %s\n", media_db->priv->db_file);
@@ -81,15 +85,15 @@ snra_media_db_constructed (G_GNUC_UNUSED GObject *object)
   }
   media_db->priv->handle = handle;
 
-  if (!media_db_create_tables(media_db))
+  if (!media_db_create_tables (media_db))
     media_db->priv->errored = TRUE;
   g_print ("media DB ready at %s\n", media_db->priv->db_file);
 }
 
 static void
-snra_media_db_class_init (SnraMediaDBClass *media_db_class)
+snra_media_db_class_init (SnraMediaDBClass * media_db_class)
 {
-  GObjectClass *object_class = (GObjectClass *)(media_db_class);
+  GObjectClass *object_class = (GObjectClass *) (media_db_class);
 
   object_class->constructed = snra_media_db_constructed;
   object_class->set_property = snra_media_db_set_property;
@@ -98,16 +102,16 @@ snra_media_db_class_init (SnraMediaDBClass *media_db_class)
   object_class->finalize = snra_media_db_finalize;
 
   g_object_class_install_property (object_class, PROP_DB_FILE,
-    g_param_spec_string ("db-file", "Database file",
-                         "Location for media DB file", NULL,
-                         G_PARAM_READWRITE|G_PARAM_CONSTRUCT_ONLY));
+      g_param_spec_string ("db-file", "Database file",
+          "Location for media DB file", NULL,
+          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
   g_type_class_add_private (object_class, sizeof (SnraMediaDBPriv));
 }
 
 static void
-snra_media_db_finalize(GObject *object)
+snra_media_db_finalize (GObject * object)
 {
-  SnraMediaDB *media_db = (SnraMediaDB *)(object);
+  SnraMediaDB *media_db = (SnraMediaDB *) (object);
 
   if (media_db->priv->handle)
     sqlite3_close (media_db->priv->handle);
@@ -117,7 +121,7 @@ static void
 snra_media_db_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  SnraMediaDB *media_db = (SnraMediaDB *)(object);
+  SnraMediaDB *media_db = (SnraMediaDB *) (object);
 
   switch (prop_id) {
     case PROP_DB_FILE:
@@ -134,7 +138,7 @@ static void
 snra_media_db_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  SnraMediaDB *media_db = (SnraMediaDB *)(object);
+  SnraMediaDB *media_db = (SnraMediaDB *) (object);
 
   switch (prop_id) {
     case PROP_DB_FILE:
@@ -147,32 +151,32 @@ snra_media_db_get_property (GObject * object, guint prop_id,
 }
 
 static gboolean
-media_db_create_tables (SnraMediaDB *media_db)
+media_db_create_tables (SnraMediaDB * media_db)
 {
   sqlite3 *handle = media_db->priv->handle;
   if (sqlite3_exec (handle,
-      "Create table if not exists paths"
-      "(id INTEGER PRIMARY KEY, base_path TEXT)",
-      NULL, NULL, NULL) != SQLITE_OK)
+          "Create table if not exists paths"
+          "(id INTEGER PRIMARY KEY, base_path TEXT)",
+          NULL, NULL, NULL) != SQLITE_OK)
     return FALSE;
   if (sqlite3_exec (handle,
-      "Create table if not exists files"
-      "(id INTEGER PRIMARY KEY, base_path_id INTEGER, "
-      "filename TEXT, timestamp TEXT, "
-      "duration INTEGER, is_video INTEGER)", NULL, NULL, NULL) != SQLITE_OK)
+          "Create table if not exists files"
+          "(id INTEGER PRIMARY KEY, base_path_id INTEGER, "
+          "filename TEXT, timestamp TEXT, "
+          "duration INTEGER, is_video INTEGER)", NULL, NULL, NULL) != SQLITE_OK)
     return FALSE;
   if (sqlite3_exec (handle,
-      "Create table if not exists songs"
-      "(id INTEGER PRIMARY KEY, media_id INTEGER, "
-      "timestamp TEXT, duration INTEGER, "
-      "is_video INTEGER)", NULL, NULL, NULL) != SQLITE_OK)
+          "Create table if not exists songs"
+          "(id INTEGER PRIMARY KEY, media_id INTEGER, "
+          "timestamp TEXT, duration INTEGER, "
+          "is_video INTEGER)", NULL, NULL, NULL) != SQLITE_OK)
     return FALSE;
 
   return TRUE;
 }
 
 SnraMediaDB *
-snra_media_db_new(const char *db_path)
+snra_media_db_new (const char *db_path)
 {
   SnraMediaDB *media_db = NULL;
 
@@ -189,39 +193,40 @@ snra_media_db_new(const char *db_path)
 }
 
 static guint64
-snra_media_path_to_id(SnraMediaDB *media_db, const gchar *path)
+snra_media_path_to_id (SnraMediaDB * media_db, const gchar * path)
 {
   sqlite3_stmt *stmt = NULL;
   sqlite3_stmt *insert_stmt = NULL;
-  guint64 path_id = (guint64)(-1);
+  guint64 path_id = (guint64) (-1);
   sqlite3 *handle = media_db->priv->handle;
 
   if (sqlite3_prepare (handle,
-      "select id from paths where base_path=?", -1, &stmt, NULL) != SQLITE_OK)
+          "select id from paths where base_path=?", -1, &stmt,
+          NULL) != SQLITE_OK)
     goto done;
 
   if (sqlite3_bind_text (stmt, 1, g_strdup (path), -1, g_free) != SQLITE_OK)
     goto done;
 
-  if (sqlite3_step(stmt) == SQLITE_ROW) {
+  if (sqlite3_step (stmt) == SQLITE_ROW) {
     path_id = sqlite3_column_int64 (stmt, 0);
     goto done;
   }
 
   /* Row not found, insert it */
   if (sqlite3_prepare (handle,
-      "insert into paths (base_path) VALUES (?)",
-      -1, &insert_stmt, NULL) != SQLITE_OK)
+          "insert into paths (base_path) VALUES (?)",
+          -1, &insert_stmt, NULL) != SQLITE_OK)
     goto done;
 
   if (sqlite3_bind_text (insert_stmt, 1,
-      g_strdup (path), -1, g_free) != SQLITE_OK)
+          g_strdup (path), -1, g_free) != SQLITE_OK)
     goto done;
 
-  if (sqlite3_step(insert_stmt) == SQLITE_DONE) {
+  if (sqlite3_step (insert_stmt) == SQLITE_DONE) {
     path_id = sqlite3_last_insert_rowid (handle);
     goto done;
-  } 
+  }
 
 done:
   if (insert_stmt)
@@ -232,16 +237,17 @@ done:
 }
 
 static guint64
-snra_media_file_to_id(SnraMediaDB *media_db, guint64 path_id, const gchar *file)
+snra_media_file_to_id (SnraMediaDB * media_db, guint64 path_id,
+    const gchar * file)
 {
   sqlite3_stmt *stmt = NULL;
   sqlite3_stmt *insert_stmt = NULL;
-  guint64 file_id = (guint64)(-1);
+  guint64 file_id = (guint64) (-1);
   sqlite3 *handle = media_db->priv->handle;
 
   if (sqlite3_prepare (handle,
-      "select id from files where base_path_id=? and filename=?",
-      -1, &stmt, NULL) != SQLITE_OK)
+          "select id from files where base_path_id=? and filename=?",
+          -1, &stmt, NULL) != SQLITE_OK)
     goto done;
 
   if (sqlite3_bind_int64 (stmt, 1, path_id) != SQLITE_OK)
@@ -249,24 +255,24 @@ snra_media_file_to_id(SnraMediaDB *media_db, guint64 path_id, const gchar *file)
   if (sqlite3_bind_text (stmt, 2, g_strdup (file), -1, g_free) != SQLITE_OK)
     goto done;
 
-  if (sqlite3_step(stmt) == SQLITE_ROW) {
+  if (sqlite3_step (stmt) == SQLITE_ROW) {
     file_id = sqlite3_column_int64 (stmt, 0);
     goto done;
   }
 
   /* Row not found, insert it */
   if (sqlite3_prepare (handle,
-      "insert into files (base_path_id, filename) VALUES (?,?)",
-      -1, &insert_stmt, NULL) != SQLITE_OK)
+          "insert into files (base_path_id, filename) VALUES (?,?)",
+          -1, &insert_stmt, NULL) != SQLITE_OK)
     goto done;
 
   if (sqlite3_bind_int64 (insert_stmt, 1, path_id) != SQLITE_OK)
     goto done;
   if (sqlite3_bind_text (insert_stmt, 2,
-      g_strdup (file), -1, g_free) != SQLITE_OK)
+          g_strdup (file), -1, g_free) != SQLITE_OK)
     goto done;
 
-  if (sqlite3_step(insert_stmt) == SQLITE_DONE) {
+  if (sqlite3_step (insert_stmt) == SQLITE_DONE) {
     file_id = sqlite3_last_insert_rowid (handle);
     goto done;
   }
@@ -280,45 +286,45 @@ done:
 }
 
 void
-snra_media_db_add_file (SnraMediaDB *media_db, const gchar *filename)
+snra_media_db_add_file (SnraMediaDB * media_db, const gchar * filename)
 {
-  gchar *path = g_path_get_dirname(filename);
-  gchar *file = g_path_get_basename(filename);
+  gchar *path = g_path_get_dirname (filename);
+  gchar *file = g_path_get_basename (filename);
   guint64 path_id;
-  
-  path_id = snra_media_path_to_id(media_db, path);
-  snra_media_file_to_id(media_db, path_id, file);
+
+  path_id = snra_media_path_to_id (media_db, path);
+  snra_media_file_to_id (media_db, path_id, file);
 
   //g_print ("File %s has id %" G_GUINT64_FORMAT "\n",
-    //filename, file_id);
+  //filename, file_id);
 
   g_free (path);
   g_free (file);
 }
 
 guint
-snra_media_db_get_file_count (SnraMediaDB *media_db)
+snra_media_db_get_file_count (SnraMediaDB * media_db)
 {
   sqlite3_stmt *stmt = NULL;
   gint count = -1;
   sqlite3 *handle = media_db->priv->handle;
 
   if (sqlite3_prepare (handle,
-      "select count(*) from files", -1, &stmt, NULL) != SQLITE_OK)
+          "select count(*) from files", -1, &stmt, NULL) != SQLITE_OK)
     goto done;
 
-  if (sqlite3_step(stmt) == SQLITE_ROW) {
+  if (sqlite3_step (stmt) == SQLITE_ROW) {
     count = sqlite3_column_int (stmt, 0);
     goto done;
   }
- 
+
 done:
   g_print ("%d media files in DB\n", count);
   return count;
 }
 
 gchar *
-snra_media_db_get_file_by_id (SnraMediaDB *media_db, guint id)
+snra_media_db_get_file_by_id (SnraMediaDB * media_db, guint id)
 {
   sqlite3_stmt *stmt = NULL;
   sqlite3 *handle = media_db->priv->handle;
@@ -328,18 +334,17 @@ snra_media_db_get_file_by_id (SnraMediaDB *media_db, guint id)
     goto done;
 
   if (sqlite3_prepare (handle,
-      "select base_path, filename from paths, files where paths.id = files.base_path_id "
-      "limit 1 offset ?",
-       -1, &stmt, NULL) != SQLITE_OK)
+          "select base_path, filename from paths, files where paths.id = files.base_path_id "
+          "limit 1 offset ?", -1, &stmt, NULL) != SQLITE_OK)
     goto done;
 
-  if (sqlite3_bind_int64 (stmt, 1, id-1) != SQLITE_OK)
+  if (sqlite3_bind_int64 (stmt, 1, id - 1) != SQLITE_OK)
     goto done;
 
-  if (sqlite3_step(stmt) == SQLITE_ROW) {
+  if (sqlite3_step (stmt) == SQLITE_ROW) {
     const gchar *base_path, *filename;
-    base_path = (gchar *)sqlite3_column_text (stmt, 0);
-    filename = (gchar *)sqlite3_column_text (stmt, 1);
+    base_path = (gchar *) sqlite3_column_text (stmt, 0);
+    filename = (gchar *) sqlite3_column_text (stmt, 1);
     ret_path = g_build_filename (base_path, filename, NULL);
     goto done;
   }

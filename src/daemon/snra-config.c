@@ -111,8 +111,10 @@ make_abs_path (gchar **dest, gchar *rel)
 {
   if (!g_path_is_absolute (*dest)) {
     /* Make path absolute, relative to the config file */
+    gchar *dir = g_path_get_dirname (rel);
     gchar *abs_location =
-        g_build_filename (g_path_get_dirname (rel), *dest, NULL);
+        g_build_filename (dir, *dest, NULL);
+    g_free (dir);
     g_free (*dest);
     *dest = abs_location;
   }

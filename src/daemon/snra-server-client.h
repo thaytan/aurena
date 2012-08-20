@@ -66,6 +66,10 @@ struct _SnraServerClient
   gsize out_bufsize;
 
   GList *pending_msgs;
+
+  gulong net_event_sig;
+  gulong disco_sig;
+  gulong wrote_info_sig;
 };
 
 struct _SnraServerClientClass

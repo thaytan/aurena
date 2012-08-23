@@ -269,7 +269,8 @@ manager_status_client_disconnect (SnraServerClient *client,
 }
 
 static void
-send_enrol_events(SnraManager *manager, SnraServerClient *client)
+send_enrol_events(SnraManager *manager, SnraServerClient *client,
+  gboolean is_controller)
 {
   manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL,
       manager_make_enrol_msg (manager));
@@ -278,8 +279,10 @@ send_enrol_events(SnraManager *manager, SnraServerClient *client)
     manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL,
         manager_make_set_media_msg (manager, manager->current_resource));
   }
-  manager_send_msg_to_client (manager, client, SEND_MSG_TO_CONTROLLERS,
-      manager_make_player_clients_changed_msg (manager));
+  if (is_controller) {
+    manager_send_msg_to_client (manager, client, SEND_MSG_TO_CONTROLLERS,
+        manager_make_player_clients_changed_msg (manager));
+  }
 }
 
 static void
@@ -302,7 +305,7 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
         G_CALLBACK (manager_player_client_disconnect), manager);
     manager->player_clients =
         g_list_prepend (manager->player_clients, client_conn);
-    send_enrol_events (manager, client_conn);
+    send_enrol_events (manager, client_conn, FALSE);
     manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS,
         manager_make_player_clients_changed_msg (manager));
   } else if (g_str_equal (parts[2], "control_events")) {
@@ -310,7 +313,7 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
     g_signal_connect (client_conn, "connection-lost",
         G_CALLBACK (manager_ctrl_client_disconnect), manager);
     manager->ctrl_clients = g_list_prepend (manager->ctrl_clients, client_conn);
-    send_enrol_events (manager, client_conn);
+    send_enrol_events (manager, client_conn, TRUE);
   } else if (g_str_equal (parts[2], "player_clients")) {
     client_conn = snra_server_client_new_single (soup, msg, client);
     g_signal_connect (client_conn, "connection-lost",

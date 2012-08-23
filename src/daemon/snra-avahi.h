@@ -44,7 +44,7 @@ struct _SnraAvahiClass
 
 GType snra_avahi_get_type(void);
 
-SnraAvahi *snra_avahi_new(void);
+SnraAvahi *snra_avahi_new(int port);
 
 G_END_DECLS
 

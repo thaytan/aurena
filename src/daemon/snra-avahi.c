@@ -34,6 +34,19 @@
 
 G_DEFINE_TYPE (SnraAvahi, snra_avahi, G_TYPE_OBJECT);
 
+enum
+{
+  PROP_0,
+  PROP_PORT,
+  PROP_LAST
+};
+
+static void snra_avahi_constructed (GObject * object);
+static void snra_avahi_set_property (GObject * object, guint prop_id,
+    const GValue * value, GParamSpec * pspec);
+static void snra_avahi_get_property (GObject * object, guint prop_id,
+    GValue * value, GParamSpec * pspec);
+
 struct _SnraAvahiPrivate
 {
   const AvahiPoll *poll_api;
@@ -41,6 +54,7 @@ struct _SnraAvahiPrivate
   AvahiClient *client;
   AvahiEntryGroup *group;
   char *service_name;
+  int port;
 };
 
 static void snra_avahi_finalize (GObject * object);
@@ -104,12 +118,12 @@ create_service (SnraAvahi * avahi)
     /* If the group is empty (either because it was just created, or
      * because it was reset previously, add our entries.  */
     if (avahi_entry_group_is_empty (priv->group)) {
-      g_message ("Adding service '%s'", priv->service_name);
+      g_message ("Adding service '%s' on port %d", priv->service_name, priv->port);
 
       ret =
           avahi_entry_group_add_service (priv->group, AVAHI_IF_UNSPEC,
           AVAHI_PROTO_UNSPEC, 0, priv->service_name, "_aurena._tcp", NULL,
-          NULL, 5457, NULL);
+          NULL, priv->port, NULL);
       if (ret < 0) {
         if (ret == AVAHI_ERR_COLLISION) {
           /* A service name collision with a local service happened. Let's
@@ -186,12 +200,49 @@ avahi_client_callback (AVAHI_GCC_UNUSED AvahiClient * client,
 }
 
 static void
+snra_avahi_set_property (GObject * object, guint prop_id,
+    const GValue * value, GParamSpec * pspec)
+{
+  SnraAvahi *avahi = (SnraAvahi *) (object);
+
+  switch (prop_id) {
+    case PROP_PORT:
+      avahi->priv->port = g_value_get_int (value);
+      g_print ("Port is %d\n", avahi->priv->port);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
+}
+
+static void
+snra_avahi_get_property (GObject * object, guint prop_id,
+    GValue * value, GParamSpec * pspec)
+{
+  SnraAvahi *avahi = (SnraAvahi *) (object);
+
+  switch (prop_id) {
+    case PROP_PORT:
+      g_value_set_int (value, avahi->priv->port);
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+      break;
+  }
+}
+
+
+static void
 snra_avahi_finalize (GObject * object)
 {
   SnraAvahi *avahi = (SnraAvahi *) (object);
 
-  avahi_entry_group_free (avahi->priv->group);
-  avahi_client_free (avahi->priv->client);
+  if (avahi->priv->group)
+    avahi_entry_group_free (avahi->priv->group);
+  if (avahi->priv->client)
+    avahi_client_free (avahi->priv->client);
+
   avahi_glib_poll_free (avahi->priv->glib_poll);
 }
 
@@ -200,12 +251,44 @@ snra_avahi_init (SnraAvahi * avahi)
 {
   SnraAvahiPrivate *priv = avahi->priv =
       G_TYPE_INSTANCE_GET_PRIVATE (avahi, SNRA_TYPE_AVAHI, SnraAvahiPrivate);
-  int error = 0;
 
   priv->service_name = g_strdup ("Aurena media server");
 
   priv->glib_poll = avahi_glib_poll_new (NULL, G_PRIORITY_DEFAULT);
   priv->poll_api = avahi_glib_poll_get (priv->glib_poll);
+  priv->port = 5457;
+}
+
+static void
+snra_avahi_class_init (SnraAvahiClass * klass)
+{
+  GObjectClass *gobject_class = (GObjectClass *) (klass);
+
+  gobject_class->constructed = snra_avahi_constructed;
+  gobject_class->finalize = snra_avahi_finalize;
+  gobject_class->set_property = snra_avahi_set_property;
+  gobject_class->get_property = snra_avahi_get_property;
+
+  g_type_class_add_private (gobject_class, sizeof (SnraAvahiPrivate));
+
+  g_object_class_install_property (gobject_class, PROP_PORT,
+    g_param_spec_int ("snra-port", "Aurena port",
+                         "port for Aurena service",
+                         1, 65535, 5457,
+                         G_PARAM_READWRITE|G_PARAM_CONSTRUCT));
+
+  avahi_set_allocator (avahi_glib_allocator ());
+}
+
+static void
+snra_avahi_constructed (GObject * object)
+{
+  SnraAvahi *avahi = (SnraAvahi *) (object);
+  SnraAvahiPrivate *priv = avahi->priv;
+  int error = 0;
+
+  if (G_OBJECT_CLASS (snra_avahi_parent_class)->constructed != NULL)
+    G_OBJECT_CLASS (snra_avahi_parent_class)->constructed (object);
 
   priv->client =
       avahi_client_new (priv->poll_api, 0, avahi_client_callback, avahi,
@@ -218,20 +301,8 @@ snra_avahi_init (SnraAvahi * avahi)
   }
 }
 
-static void
-snra_avahi_class_init (SnraAvahiClass * klass)
-{
-  GObjectClass *gobject_class = (GObjectClass *) (klass);
-
-  gobject_class->finalize = snra_avahi_finalize;
-
-  g_type_class_add_private (gobject_class, sizeof (SnraAvahiPrivate));
-
-  avahi_set_allocator (avahi_glib_allocator ());
-}
-
 SnraAvahi *
-snra_avahi_new ()
+snra_avahi_new (int port)
 {
-  return g_object_new (SNRA_TYPE_AVAHI, NULL);
+  return g_object_new (SNRA_TYPE_AVAHI, "snra-port", port, NULL);
 }

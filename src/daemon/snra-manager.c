@@ -491,8 +491,6 @@ snra_manager_init (SnraManager * manager)
   manager->net_clock = create_net_clock ();
   manager->paused = TRUE;
 
-  manager->avahi = g_object_new (SNRA_TYPE_AVAHI, NULL);
-
   manager->base_time = GST_CLOCK_TIME_NONE;
   manager->stream_time = GST_CLOCK_TIME_NONE;
   manager->current_volume = 0.1;
@@ -505,6 +503,7 @@ snra_manager_constructed (GObject * object)
 {
   SnraManager *manager = (SnraManager *) (object);
   gchar *db_file;
+  int snra_port;
 
   if (G_OBJECT_CLASS (snra_manager_parent_class)->constructed != NULL)
     G_OBJECT_CLASS (snra_manager_parent_class)->constructed (object);
@@ -512,6 +511,8 @@ snra_manager_constructed (GObject * object)
 #ifdef HAVE_GST_RTSP
   manager->rtsp = create_rtsp_server (manager);
 #endif
+
+  g_object_get (manager->config, "snra-port", &snra_port, NULL);
 
   manager->server = g_object_new (SNRA_TYPE_SERVER,
       "config", manager->config, NULL);
@@ -523,6 +524,8 @@ snra_manager_constructed (GObject * object)
   snra_server_add_handler (manager->server, "/client",
       (SoupServerCallback) manager_client_cb,
       g_object_ref (manager), g_object_unref);
+
+  manager->avahi = g_object_new (SNRA_TYPE_AVAHI, "snra-port", snra_port, NULL);
 
   g_object_get (manager->config, "database", &db_file, NULL);
   manager->media_db = snra_media_db_new (db_file);

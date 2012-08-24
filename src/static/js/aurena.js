@@ -50,20 +50,26 @@ update_playstate : function() {
   else
     $("#nowplaying").html("None");
 },
-handle_event : function handle_event(data) {
-  function set_vol_slider(vol, anim) {
-    var s = $("#mastervolslider");
 
-    if (!aurena.sliding && vol != s.slider("value")) {
-      // $("#debug").prepend("<p>Setting vol " + vol + "</p>");
-      aurena.slide_update = true;
-      s.slider("option", "animate", anim);
-      s.slider("value", vol);
-      s.slider("option", "animate", true);
-      aurena.slide_update = false;
-    }
+set_vol_slider : function set_vol_slider(client_id, vol, anim) {
+  var s;
+
+  if (client_id == 0)
+    s = $("#mastervolslider");
+  else
+    s = $("#volume-" + client_id);
+
+  if (!aurena.sliding && vol != s.slider("value")) {
+    // $("#debug").prepend("<p>Setting vol " + vol + "</p>");
+    aurena.slide_update = true;
+    s.slider("option", "animate", anim);
+    s.slider("value", vol);
+    s.slider("option", "animate", true);
+    aurena.slide_update = false;
   }
+},
 
+handle_event : function handle_event(data) {
   json = $.parseJSON(data);
   switch (json["msg-type"]) {
     case "enrol":
@@ -71,12 +77,12 @@ handle_event : function handle_event(data) {
       aurena.paused = json["paused"];
       aurena.cur_media = json["resource-id"];
 
-      set_vol_slider (vol, false);
+      aurena.set_vol_slider (0, vol, false);
       aurena.update_playstate();
       break;
     case "volume":
       var vol = json["level"];
-      set_vol_slider (vol, true);
+      aurena.set_vol_slider (0, vol, true);
       break;
     case "pause":
       aurena.paused = true;
@@ -100,43 +106,67 @@ handle_event : function handle_event(data) {
   }
 },
 update_player_clients : function () {
-  $.getJSON("../client/player_clients", function(data) {
+  $.getJSON("../client/player_info", function(data) {
      var items = [];
      var clients = data['player-clients'];
      aurena.clients = clients;
      $.each(clients, function(key, val) {
-       items.push('<li id="' + key + '">' + "Client " + val["client-id"] + '</li>');
+       var enable_id = "enable-" + val["client-id"];
+       var volume_id = "volume-" + val["client-id"];
+       var info = '<li id="' + val["client-id"] + '">';
+       info += "<input type='checkbox' id='" + enable_id + "'/>";
+       info += " Client " + val["host"];
+       info += " <div id='" + volume_id + "' />";
+       info += '</li>';
+       items.push(info);
+        console.log ("Client data " + JSON.stringify(val));
      });
      $("#cliententries").empty().prepend($('<ul/>', {
        html: items.join('')
      }));
+     $.each(clients, function(key, val) {
+       var enable_id = "enable-" + val["client-id"];
+       var volume_id = "volume-" + val["client-id"];
+
+       $("#" + volume_id).slider({
+         animate: true,
+         min : 0.0, max : 1.5, range : 'true', value : 1.0, step : 0.01,
+         start : function(event, ui) { //$("#debug").prepend("<p>start");
+                                       aurena.sliding = true; },
+         stop : function(event, ui) { setTimeout(function() { aurena.sliding = false; }, 100); },
+         slide : function(event, ui) { aurena.volChange = true; aurena.send_slider_volume(val["client-id"]); },
+         change : function(event, ui) { aurena.volChange = true; aurena.send_slider_volume(val["client-id"]); }
+       });
+       $("#" + enable_id).attr('checked', val["enabled"]);
+       console.log ($("#" + enable_id));
+     });
+  });
+},
+
+send_slider_volume : function send_slider_volume(client_id) {
+  var curVol = $("#mastervolslider").slider( "option", "value");
+  $('#mastervolval').text(Math.round(curVol * 100).toString() + '%');
+
+  if (aurena.sendingVol || !aurena.volChange || aurena.slide_update) return;
+  aurena.sendingVol = true; aurena.volChange = false;
+  // $("#debug").prepend("<p>Sending volume " + curVol.toString() + "</p>");
+  $.ajax({
+    type: 'POST',
+    url: "../control/volume",
+    data: { level: curVol.toString() }
+  }).complete(function() {
+        aurena.sendingVol = false; aurena.send_slider_volume(0);
   });
 },
 
 init : function() {
-  var sendingVol = false;
-  var volChange = false;
+  aurena.sendingVol = false;
+  aurena.volChange = false;
 
   aurena.sliding = false;
   aurena.slide_update = false;
   aurena.paused = true;
   aurena.cur_media = 0;
-
-  function send_slider_volume() {
-    var curVol = $("#mastervolslider").slider( "option", "value");
-    $('#mastervolval').text(Math.round(curVol * 100).toString() + '%');
-
-    if (sendingVol || !volChange || aurena.slide_update) return;
-    sendingVol = true; volChange = false;
-    // $("#debug").prepend("<p>Sending volume " + curVol.toString() + "</p>");
-    $.ajax({
-      type: 'POST',
-      url: "../control/volume",
-      data: { level: curVol.toString() }
-    }).complete(function() {
-        sendingVol = false; send_slider_volume();
-      });
-  }
 
   $("#mastervolslider").slider({
      animate: true,
@@ -144,8 +174,8 @@ init : function() {
      start : function(event, ui) { //$("#debug").prepend("<p>start");
                                    aurena.sliding = true; },
      stop : function(event, ui) { setTimeout(function() { aurena.sliding = false; }, 100); },
-     slide : function(event, ui) { volChange = true; send_slider_volume(); },
-     change : function(event, ui) { volChange = true; send_slider_volume(); }
+     slide : function(event, ui) { aurena.volChange = true; aurena.send_slider_volume(0); },
+     change : function(event, ui) { aurena.volChange = true; aurena.send_slider_volume(0); }
   });
   $("#play").click(function() { $.ajax({ url: "../control/play", type: 'POST' }); });
   $("#pause").click(function() { $.ajax({ url: "../control/pause" , type: 'POST'}); });

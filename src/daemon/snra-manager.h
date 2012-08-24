@@ -57,8 +57,10 @@ struct _SnraManager
   gboolean paused;
   guint current_resource;
 
+  guint next_player_id;
+  GList *player_info;
+
   GList *ctrl_clients;
-  GList *player_clients;
 
   GstClockTime base_time;
   GstClockTime stream_time;

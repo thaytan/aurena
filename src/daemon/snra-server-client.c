@@ -44,7 +44,7 @@ struct _PendingMsg
   gsize len;
 };
 
-static guint next_client_id = 1;
+static guint next_conn_id = 1;
 
 static void snra_server_client_finalize (GObject * object);
 static void snra_server_client_dispose (GObject * object);
@@ -52,7 +52,7 @@ static void snra_server_client_dispose (GObject * object);
 static void
 snra_server_client_init (SnraServerClient * client)
 {
-  client->client_id = next_client_id++;
+  client->conn_id = next_conn_id++;
 }
 
 static void
@@ -99,6 +99,8 @@ snra_server_client_finalize (GObject * object)
   if (client->socket)
     soup_socket_disconnect (client->socket);
 
+  g_free (client->host);
+
   g_free (client->in_buf);
   g_free (client->out_buf);
 
@@ -127,7 +129,7 @@ snra_server_connection_lost (SnraServerClient * client)
     return;
   client->fired_conn_lost = TRUE;
 
-  g_print ("Lost connection for client %u\n", client->client_id);
+  g_print ("Lost connection for client %u\n", client->conn_id);
 
   if (client->io) {
     g_source_remove (client->io_watch);
@@ -156,7 +158,7 @@ static void
 snra_server_client_disconnect (G_GNUC_UNUSED SoupMessage * message,
     SnraServerClient * client)
 {
-  g_print ("client %u disconnect signal\n", client->client_id);
+  g_print ("client %u disconnect signal\n", client->conn_id);
   client->need_body_complete = FALSE;
   snra_server_connection_lost (client);
 }
@@ -167,7 +169,7 @@ snra_server_client_network_event (G_GNUC_UNUSED SoupMessage * msg,
     G_GNUC_UNUSED GIOStream * connection,
     G_GNUC_UNUSED SnraServerClient * client)
 {
-  g_print ("client %u network event %d\n", client->client_id, event);
+  g_print ("client %u network event %d\n", client->conn_id, event);
 }
 
 /* Callbacks used for websocket clients */
@@ -180,7 +182,7 @@ try_parse_websocket_fragment (SnraServerClient * client)
   gchar *decoded;
   gsize i, avail;
 
-  g_print ("Got %u bytes to parse\n", (guint) client->in_bufavail);
+  // g_print ("Got %u bytes to parse\n", (guint) client->in_bufavail);
   if (client->in_bufavail < 2)
     return FALSE;
 
@@ -320,7 +322,7 @@ snra_server_client_wrote_headers (SoupMessage * msg, SnraServerClient * client)
   /* Pause the message so Soup doesn't do any more responding */
   soup_server_pause_message (client->soup, msg);
 
-  g_print ("client %u ready for traffic\n", client->client_id);
+  g_print ("client %u ready for traffic\n", client->conn_id);
 
   client->io = g_io_channel_unix_new (soup_socket_get_fd (client->socket));
   g_io_channel_set_encoding (client->io, NULL, NULL);
@@ -455,6 +457,7 @@ snra_server_client_new (SoupServer * soup, SoupMessage * msg,
 
   client->soup = soup;
   client->event_pipe = msg;
+  client->host = g_strdup (soup_client_context_get_host (context));
 
   client->net_event_sig = g_signal_connect (msg, "network-event",
       G_CALLBACK (snra_server_client_network_event), client);
@@ -510,6 +513,7 @@ snra_server_client_new_single (SoupServer * soup, SoupMessage * msg,
 
   client->soup = soup;
   client->event_pipe = msg;
+  client->host = g_strdup (soup_client_context_get_host (context));
 
   client->net_event_sig = g_signal_connect (msg, "network-event",
       G_CALLBACK (snra_server_client_network_event), client);
@@ -637,4 +641,10 @@ snra_server_client_send_message (SnraServerClient * client,
   msg->body = g_memdup (body, len);
 
   client->pending_msgs = g_list_append (client->pending_msgs, msg);
+}
+
+const gchar *
+snra_server_client_get_host (SnraServerClient *client)
+{
+  return client->host;
 }

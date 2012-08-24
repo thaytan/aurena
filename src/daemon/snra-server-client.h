@@ -47,7 +47,7 @@ struct _SnraServerClient
   gboolean fired_conn_lost;
   gboolean need_body_complete;
 
-  guint client_id;
+  guint conn_id;
   SoupMessage *event_pipe;
   SoupServer *soup;
 
@@ -55,6 +55,8 @@ struct _SnraServerClient
   gint websocket_protocol;
 
   SoupSocket *socket;
+  gchar *host;
+
   GIOChannel *io;
   guint io_watch;
   gchar *in_buf;
@@ -86,6 +88,8 @@ SnraServerClient *snra_server_client_new_single (SoupServer * soup,
 
 void snra_server_client_send_message (SnraServerClient *client,
   gchar *body, gsize len);
+
+const gchar *snra_server_client_get_host (SnraServerClient *client);
 
 G_END_DECLS
 

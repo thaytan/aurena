@@ -1,5 +1,5 @@
 AC_PREREQ([2.68])
-AC_INIT([aurena], [0.5], [thaytan@noraisin.net])
+AC_INIT([aurena], [0.6], [thaytan@noraisin.net])
 
 AM_INIT_AUTOMAKE([-Wno-portability 1.11 no-dist-gzip dist-bzip2 dist-xz tar-ustar])
 
@@ -36,7 +36,7 @@ else
 fi
 
 AC_MSG_NOTICE([Checking whether to build server])
-PKG_CHECK_MODULES(SNRA_SERVER, [sqlite3 >= 3.3],
+PKG_CHECK_MODULES(SNRA_SERVER, [sqlite3 >= 3.3 glib-2.0 >= 2.30],
     [BUILD_SNRA_SERVER=yes], [BUILD_SNRA_SERVER=no])
 AM_CONDITIONAL(BUILD_SNRA_SERVER, test "x$BUILD_SNRA_SERVER" = "xyes")
 

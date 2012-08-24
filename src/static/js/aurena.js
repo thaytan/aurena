@@ -84,6 +84,10 @@ handle_event : function handle_event(data) {
       var vol = json["level"];
       aurena.set_vol_slider (0, vol, true);
       break;
+    case "client-volume":
+      var vol = json["level"];
+      aurena.set_vol_slider (json["client-id"], vol, true);
+      break;
     case "pause":
       aurena.paused = true;
       aurena.update_playstate();
@@ -117,6 +121,7 @@ update_player_clients : function () {
        info += "<input type='checkbox' id='" + enable_id + "'/>";
        info += " Client " + val["host"];
        info += " <div id='" + volume_id + "' />";
+       info += " <div id='volumeval-" + val["client-id"] + "' />";
        info += '</li>';
        items.push(info);
         console.log ("Client data " + JSON.stringify(val));
@@ -125,27 +130,37 @@ update_player_clients : function () {
        html: items.join('')
      }));
      $.each(clients, function(key, val) {
-       var enable_id = "enable-" + val["client-id"];
-       var volume_id = "volume-" + val["client-id"];
+       var client_id = val["client-id"];
+       var enable_id = "enable-" + client_id;
+       var volume_id = "volume-" + client_id;
 
        $("#" + volume_id).slider({
          animate: true,
-         min : 0.0, max : 1.5, range : 'true', value : 1.0, step : 0.01,
-         start : function(event, ui) { //$("#debug").prepend("<p>start");
-                                       aurena.sliding = true; },
+         min : 0.0, max : 1.5, range : 'true', value : val["volume"], step : 0.01,
+         start : function(event, ui) { aurena.sliding = true; },
          stop : function(event, ui) { setTimeout(function() { aurena.sliding = false; }, 100); },
-         slide : function(event, ui) { aurena.volChange = true; aurena.send_slider_volume(val["client-id"]); },
-         change : function(event, ui) { aurena.volChange = true; aurena.send_slider_volume(val["client-id"]); }
+         slide : function(cid) { return function(event, ui) { aurena.volChange = true; aurena.send_slider_volume(cid); } }(client_id),
+         change : function(cid) { return function(event, ui) { aurena.volChange = true; aurena.send_slider_volume(cid); } }(client_id)
        });
+       $('#volumeval-' + client_id).text(Math.round(val["volume"] * 100).toString() + '%');
        $("#" + enable_id).attr('checked', val["enabled"]);
-       console.log ($("#" + enable_id));
      });
   });
 },
 
 send_slider_volume : function send_slider_volume(client_id) {
-  var curVol = $("#mastervolslider").slider( "option", "value");
-  $('#mastervolval').text(Math.round(curVol * 100).toString() + '%');
+  var s;
+
+  if (client_id == 0)
+    s= $("#mastervolslider");
+  else
+    s = $("#volume-" + client_id);
+
+  var curVol = s.slider( "option", "value");
+  if (client_id == 0)
+    $('#mastervolval').text(Math.round(curVol * 100).toString() + '%');
+  else
+    $('#volumeval-' + client_id).text(Math.round(curVol * 100).toString() + '%');
 
   if (aurena.sendingVol || !aurena.volChange || aurena.slide_update) return;
   aurena.sendingVol = true; aurena.volChange = false;
@@ -153,9 +168,9 @@ send_slider_volume : function send_slider_volume(client_id) {
   $.ajax({
     type: 'POST',
     url: "../control/volume",
-    data: { level: curVol.toString() }
+    data: { level: curVol.toString(), client_id: client_id }
   }).complete(function() {
-        aurena.sendingVol = false; aurena.send_slider_volume(0);
+        aurena.sendingVol = false; aurena.send_slider_volume(client_id);
   });
 },
 

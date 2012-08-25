@@ -44,6 +44,8 @@
 
 #include "snra-client.h"
 
+#define DISABLED_STATE GST_STATE_PAUSED
+
 G_DEFINE_TYPE (SnraClient, snra_client, G_TYPE_OBJECT);
 
 enum
@@ -281,7 +283,7 @@ handle_set_media_message (SnraClient * client, GstStructure * s)
       client->state = GST_STATE_PLAYING;
   }
   else {
-    client->state = GST_STATE_READY;
+    client->state = DISABLED_STATE;
   }
 
   gst_element_set_state (client->player, client->state);
@@ -306,7 +308,7 @@ handle_play_message (SnraClient * client, GstStructure * s)
         ")\n", GST_TIME_ARGS (base_time), GST_TIME_ARGS (stream_time));
     gst_element_set_base_time (GST_ELEMENT (client->player), base_time);
     if (client->enabled == FALSE)
-      client->state = GST_STATE_READY;
+      client->state = DISABLED_STATE;
     else
       client->state = GST_STATE_PLAYING;
     gst_element_set_state (GST_ELEMENT (client->player), client->state);
@@ -338,7 +340,7 @@ handle_set_client_message (SnraClient * client, GstStructure * s)
     return;
 
   if (client->enabled == FALSE)
-    client->state = GST_STATE_READY;
+    client->state = DISABLED_STATE;
   else if (client->paused)
     client->state = GST_STATE_PAUSED;
   else
@@ -398,7 +400,7 @@ handle_received_chunk (G_GNUC_UNUSED SoupMessage * msg, SoupBuffer * chunk,
     else if (g_str_equal (msg_type, "pause")) {
       client->paused = TRUE;
       if (client->enabled == FALSE)
-        client->state = GST_STATE_READY;
+        client->state = DISABLED_STATE;
       else
         client->state = GST_STATE_PAUSED;
       if (client->player)

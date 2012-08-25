@@ -279,6 +279,23 @@ manager_status_client_disconnect (SnraServerClient * client,
   g_object_unref (client);
 }
 
+static gboolean
+handle_ping_timeout (SnraManager *manager)
+{
+  GstStructure *msg;
+
+  if (manager->ping_timeout == 0)
+    return FALSE;
+
+  /* Send a ping to each client */
+  msg = gst_structure_new ("json",
+      "msg-type", G_TYPE_STRING, "ping", NULL);
+  manager_send_msg_to_client (manager, NULL,
+     SEND_MSG_TO_ALL, msg);
+
+  return TRUE;
+}
+
 static void
 send_enrol_events (SnraManager * manager, SnraServerClient * client,
     SnraPlayerInfo *info)
@@ -293,6 +310,10 @@ send_enrol_events (SnraManager * manager, SnraServerClient * client,
   if (info == NULL) {
     manager_send_msg_to_client (manager, client, SEND_MSG_TO_CONTROLLERS,
         manager_make_player_clients_changed_msg (manager));
+  }
+
+  if (manager->ping_timeout == 0) {
+    manager->ping_timeout = g_timeout_add_seconds (2,  (GSourceFunc) handle_ping_timeout, manager);
   }
 }
 
@@ -343,7 +364,8 @@ get_player_info_for_client (SnraManager *manager, SnraServerClient *client)
     info->host = g_strdup (host);
     info->id = manager->next_player_id++;
     info->volume = 1.0;
-    info->enabled = FALSE;
+    /* FIXME: Disable new clients if playing, otherwise enable */
+    info->enabled = manager->paused;
     manager->player_info = entry = g_list_prepend (manager->player_info, info);
 
     g_print ("New player id %u\n", info->id);
@@ -380,8 +402,6 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
         G_CALLBACK (manager_player_client_disconnect), manager);
 
     info = get_player_info_for_client (manager, client_conn);
-    /* FIXME: Disable new clients if playing, otherwise enable */
-    info->enabled = manager->paused;
 
     send_enrol_events (manager, client_conn, info);
     manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS,
@@ -680,6 +700,11 @@ snra_manager_dispose (GObject * object)
   g_list_foreach (manager->player_info, (GFunc) free_player_info, NULL);
   g_list_free (manager->player_info);
   manager->player_info = NULL;
+
+  if (manager->ping_timeout) {
+    g_source_remove (manager->ping_timeout);
+    manager->ping_timeout = 0;
+  }
 
   G_OBJECT_CLASS (snra_manager_parent_class)->dispose (object);
 }

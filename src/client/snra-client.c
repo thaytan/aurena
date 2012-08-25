@@ -125,7 +125,7 @@ handle_enrol_message (SnraClient * client, GstStructure * s)
       construct_player (client);
 
     if (client->player) {
-      g_print ("New volume %g\n", new_vol);
+      //g_print ("New volume %g\n", new_vol);
       g_object_set (G_OBJECT (client->player), "volume", new_vol,
           "mute", (gboolean) (new_vol == 0.0), NULL);
     }
@@ -281,8 +281,7 @@ handle_set_media_message (SnraClient * client, GstStructure * s)
       client->state = GST_STATE_PAUSED;
     else
       client->state = GST_STATE_PLAYING;
-  }
-  else {
+  } else {
     client->state = DISABLED_STATE;
   }
 
@@ -386,11 +385,11 @@ handle_received_chunk (G_GNUC_UNUSED SoupMessage * msg, SoupBuffer * chunk,
       return;                   /* Invalid chunk */
 
     msg_type = gst_structure_get_string (s, "msg-type");
-    if (msg_type == NULL) {
+    if (msg_type == NULL || g_str_equal (msg_type, "ping")) {
       gst_structure_free (s);
       return;
     }
-    g_print ("event of type %s\n", msg_type);
+
     if (g_str_equal (msg_type, "enrol"))
       handle_enrol_message (client, s);
     else if (g_str_equal (msg_type, "set-media"))
@@ -409,6 +408,8 @@ handle_received_chunk (G_GNUC_UNUSED SoupMessage * msg, SoupBuffer * chunk,
       handle_set_volume_message (client, s);
     } else if (g_str_equal (msg_type, "client-setting")) {
       handle_set_client_message (client, s);
+    } else {
+      g_print ("Unhandled event of type %s\n", msg_type);
     }
   }
 }
@@ -418,7 +419,7 @@ connect_to_server (SnraClient * client, const gchar * server, int port)
 {
   SoupMessage *msg;
   char *url = g_strdup_printf ("http://%s:%u/client/player_events",
-                  server, port);
+      server, port);
   if (client->connecting == FALSE) {
     g_print ("Attemping to connect to server %s:%d\n", server, port);
     client->connecting = TRUE;

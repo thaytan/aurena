@@ -66,6 +66,8 @@ struct _SnraManager
   GstClockTime stream_time;
 
   gdouble current_volume;
+
+  guint ping_timeout;
 };
 
 struct _SnraManagerClass

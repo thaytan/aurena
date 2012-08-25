@@ -326,7 +326,7 @@ handle_set_volume_message (SnraClient * client, GstStructure * s)
     construct_player (client);
 
   if (client->player) {
-    g_print ("New volume %g\n", new_vol);
+    // g_print ("New volume %g\n", new_vol);
     g_object_set (G_OBJECT (client->player), "volume", new_vol,
         "mute", (gboolean) (new_vol == 0.0), NULL);
   }

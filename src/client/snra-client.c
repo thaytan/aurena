@@ -128,6 +128,10 @@ handle_enrol_message (SnraClient * client, GstStructure * s)
           "mute", (gboolean) (new_vol == 0.0), NULL);
     }
   }
+
+  snra_json_structure_get_boolean (s, "enabled", &client->enabled);
+  snra_json_structure_get_boolean (s, "paused", &client->paused);
+
 #if GLIB_CHECK_VERSION(2,22,0)
   {
     GResolver *resolver = g_resolver_get_default ();
@@ -270,10 +274,15 @@ handle_set_media_message (SnraClient * client, GstStructure * s)
   gst_element_set_base_time (client->player, base_time);
   gst_pipeline_use_clock (GST_PIPELINE (client->player), client->net_clock);
 
-  if (paused)
-    client->state = GST_STATE_PAUSED;
-  else
-    client->state = GST_STATE_PLAYING;
+  if (client->enabled) {
+    if (paused)
+      client->state = GST_STATE_PAUSED;
+    else
+      client->state = GST_STATE_PLAYING;
+  }
+  else {
+    client->state = GST_STATE_READY;
+  }
 
   gst_element_set_state (client->player, client->state);
 }
@@ -288,13 +297,19 @@ handle_play_message (SnraClient * client, GstStructure * s)
     return;                     /* Invalid message */
   base_time = (GstClockTime) (tmp);
 
+  client->paused = FALSE;
+
   if (client->player) {
     GstClockTime stream_time =
         gst_clock_get_time (client->net_clock) - base_time;
     g_print ("Playing base_time %" GST_TIME_FORMAT " (offset %" GST_TIME_FORMAT
         ")\n", GST_TIME_ARGS (base_time), GST_TIME_ARGS (stream_time));
     gst_element_set_base_time (GST_ELEMENT (client->player), base_time);
-    gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PLAYING);
+    if (client->enabled == FALSE)
+      client->state = GST_STATE_READY;
+    else
+      client->state = GST_STATE_PLAYING;
+    gst_element_set_state (GST_ELEMENT (client->player), client->state);
   }
 }
 
@@ -314,6 +329,23 @@ handle_set_volume_message (SnraClient * client, GstStructure * s)
     g_object_set (G_OBJECT (client->player), "volume", new_vol,
         "mute", (gboolean) (new_vol == 0.0), NULL);
   }
+}
+
+static void
+handle_set_client_message (SnraClient * client, GstStructure * s)
+{
+  if (!snra_json_structure_get_boolean (s, "enabled", &client->enabled))
+    return;
+
+  if (client->enabled == FALSE)
+    client->state = GST_STATE_READY;
+  else if (client->paused)
+    client->state = GST_STATE_PAUSED;
+  else
+    client->state = GST_STATE_PLAYING;
+
+  if (client->player)
+    gst_element_set_state (GST_ELEMENT (client->player), client->state);
 }
 
 static void
@@ -364,11 +396,18 @@ handle_received_chunk (G_GNUC_UNUSED SoupMessage * msg, SoupBuffer * chunk,
     else if (g_str_equal (msg_type, "play"))
       handle_play_message (client, s);
     else if (g_str_equal (msg_type, "pause")) {
-      client->state = GST_STATE_PAUSED;
+      client->paused = TRUE;
+      if (client->enabled == FALSE)
+        client->state = GST_STATE_READY;
+      else
+        client->state = GST_STATE_PAUSED;
       if (client->player)
         gst_element_set_state (GST_ELEMENT (client->player), client->state);
-    } else if (g_str_equal (msg_type, "volume"))
+    } else if (g_str_equal (msg_type, "volume")) {
       handle_set_volume_message (client, s);
+    } else if (g_str_equal (msg_type, "client-setting")) {
+      handle_set_client_message (client, s);
+    }
   }
 }
 

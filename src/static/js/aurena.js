@@ -69,6 +69,13 @@ set_vol_slider : function set_vol_slider(client_id, vol, anim) {
   }
 },
 
+set_client_enable : function f(client_id, enable) {
+  if (client_id < 1)
+    return;
+  var s = $("#enable-" + client_id);
+  s.attr('checked', enable);
+},
+
 handle_event : function handle_event(data) {
   json = $.parseJSON(data);
   switch (json["msg-type"]) {
@@ -87,6 +94,10 @@ handle_event : function handle_event(data) {
     case "client-volume":
       var vol = json["level"];
       aurena.set_vol_slider (json["client-id"], vol, true);
+      break;
+    case "client-setting":
+      var en = json["enabled"];
+      aurena.set_client_enable (json["client-id"], en);
       break;
     case "pause":
       aurena.paused = true;
@@ -110,6 +121,24 @@ handle_event : function handle_event(data) {
   }
 },
 update_player_clients : function () {
+  function send_enable_val(client_id) {
+    if (aurena.sendingEnable)
+      return;
+    var enabled = 0;
+
+    if ($("#enable-" + client_id).attr('checked'))
+      enabled = 1;
+
+    aurena.sendingEnable = true;
+    $.ajax({
+      type: 'GET',
+      url: "../control/setclient",
+      data: { client_id: client_id, enable: enabled }
+    }).complete(function() {
+      aurena.sendingEnable = false;
+    });
+  }
+
   $.getJSON("../client/player_info", function(data) {
      var items = [];
      var clients = data['player-clients'];
@@ -143,7 +172,7 @@ update_player_clients : function () {
          change : function(cid) { return function(event, ui) { aurena.volChange = true; aurena.send_slider_volume(cid); } }(client_id)
        });
        $('#volumeval-' + client_id).text(Math.round(val["volume"] * 100).toString() + '%');
-       $("#" + enable_id).attr('checked', val["enabled"]);
+       $("#" + enable_id).attr('checked', val["enabled"]).change(function(cid) { return function () { send_enable_val (cid) } }(client_id));
      });
   });
 },

@@ -68,8 +68,7 @@ enum _SnraControlEvent
   SNRA_CONTROL_PAUSE,
   SNRA_CONTROL_ENQUEUE,
   SNRA_CONTROL_VOLUME,
-  SNRA_CONTROL_CLIENT_ENABLE,
-  SNRA_CONTROL_CLIENT_DISABLE
+  SNRA_CONTROL_CLIENT_SETTING
 };
 
 static const struct
@@ -84,8 +83,7 @@ static const struct
   "pause", SNRA_CONTROL_PAUSE}, {
   "enqueue", SNRA_CONTROL_ENQUEUE}, {
   "volume", SNRA_CONTROL_VOLUME}, {
-  "enable", SNRA_CONTROL_CLIENT_ENABLE}, {
-  "disable", SNRA_CONTROL_CLIENT_DISABLE}
+  "setclient", SNRA_CONTROL_CLIENT_SETTING}
 };
 
 static const gint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
@@ -110,6 +108,8 @@ static void snra_manager_adjust_volume (SnraManager * manager,
     gdouble volume);
 static void snra_manager_adjust_client_volume (SnraManager * manager,
     guint client_id, gdouble volume);
+static void snra_manager_adjust_client_setting (SnraManager * manager,
+    guint client_id, gboolean enable);
 static GstStructure *manager_make_set_media_msg (SnraManager * manager,
     guint resource_id);
 static GstStructure *manager_make_player_clients_changed_msg
@@ -191,6 +191,9 @@ manager_make_enrol_msg (SnraManager * manager, SnraPlayerInfo *info)
       "current-time", G_TYPE_INT64, (gint64) (cur_time),
       "volume-level", G_TYPE_DOUBLE, volume,
       "paused", G_TYPE_BOOLEAN, manager->paused, NULL);
+
+  if (info != NULL) /* Is a player message */
+    gst_structure_set (msg, "enabled", G_TYPE_BOOLEAN, info->enabled, NULL);
 
   return msg;
 }
@@ -559,10 +562,20 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
 
       break;
     }
-    case SNRA_CONTROL_CLIENT_ENABLE:{
-      break;
-    }
-    case SNRA_CONTROL_CLIENT_DISABLE:{
+    case SNRA_CONTROL_CLIENT_SETTING:{
+      gchar *set_str = find_param_str ("enable", query, post_params);
+      gchar *id_str = find_param_str ("client_id", query, post_params);
+      guint client_id = 0;
+      gint enable = 1;
+
+      if (id_str != NULL)
+        sscanf (id_str, "%u", &client_id);
+
+      if (set_str && sscanf (set_str, "%d", &enable)) {
+        if (client_id > 0)
+          snra_manager_adjust_client_setting (manager, client_id, enable != 0);
+      }
+
       break;
     }
     default:
@@ -918,6 +931,31 @@ snra_manager_adjust_client_volume (SnraManager * manager, guint client_id,
   msg = gst_structure_new ("json",
            "msg-type", G_TYPE_STRING, "volume",
            "level", G_TYPE_DOUBLE, volume * manager->current_volume, NULL);
+  manager_send_msg_to_client (manager, info->conn, 0, msg);
+}
+
+static void
+snra_manager_adjust_client_setting (SnraManager * manager, guint client_id,
+    gboolean enable)
+{
+  GstStructure *msg = NULL;
+  SnraPlayerInfo *info;
+
+  info = get_player_info_by_id (manager, client_id);
+  if (info == NULL)
+    return;
+
+  info->enabled = enable;
+  msg = gst_structure_new ("json",
+          "msg-type", G_TYPE_STRING, "client-setting",
+          "client-id", G_TYPE_INT64, (gint64) client_id,
+          "enabled", G_TYPE_BOOLEAN, enable, NULL);
+  manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS, msg);
+
+  /* Tell the player which volume to set */
+  msg = gst_structure_new ("json",
+           "msg-type", G_TYPE_STRING, "client-setting",
+           "enabled", G_TYPE_BOOLEAN, enable, NULL);
   manager_send_msg_to_client (manager, info->conn, 0, msg);
 }
 

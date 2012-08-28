@@ -1,14 +1,9 @@
 Server TODO
- * Implement /status handler
  * Track metadata discovery
- * Send out client volume events, play/pause, current song info,
-   play position
  * Support seeking.
  * Provide library hooks
 
 Control UI
- * Reflect client events in the UI, starting with volume, play/pause, song
-   info then position updates
  * Song library, searching, enqueueing
 
 sqlite DB schema:

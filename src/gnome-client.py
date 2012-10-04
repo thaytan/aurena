@@ -16,7 +16,7 @@ class AurenaView(WebKit.WebView):
 class AurenaWindow(Gtk.Window):
     def __init__(self):
         Gtk.Window.__init__(self)
-        self.set_default_size(900, 700)
+        self.set_default_size(700, 350)
         self.set_title('Aurena')
 
         self.web_view = AurenaView()
@@ -30,7 +30,7 @@ class AurenaWindow(Gtk.Window):
         self.web_view.connect('title-changed', self.title_changed)
 
         # TODO: async?
-        icon_file = Gio.File.new_for_uri('http://localhost:5457/icon.png')
+        icon_file = Gio.File.new_for_uri('http://localhost:5457/ui/icon.png')
         icon = GdkPixbuf.Pixbuf.new_from_stream(icon_file.read(None), None)
         self.set_icon(icon)
 

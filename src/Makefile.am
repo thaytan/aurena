@@ -18,4 +18,5 @@ simple_client_SOURCES = simple-client.c \
 simple_client_CPPFLAGS = -I$(top_srcdir) $(SNRA_COMMON_CFLAGS) $(GST_CFLAGS) $(EXTRA_CFLAGS)
 simple_client_LDADD = client/libsnra_client.la $(SNRA_COMMON_LIBS) $(GST_LIBS)
 
+EXTRA_DIST = gnome-client.py
 DIST_SUBDIRS=client daemon static

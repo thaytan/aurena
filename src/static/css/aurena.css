@@ -1,3 +1,7 @@
+html {
+  background-color: #000000;
+}
+
 #player {
   width: 640;
   background-color: #101010;

@@ -202,7 +202,25 @@ send_slider_volume : function send_slider_volume(client_id) {
         aurena.sendingVol = false; aurena.send_slider_volume(client_id);
   });
 },
-
+playPause : function() {
+  if (aurena.paused)
+    aurena.play();
+  else
+    aurena.pause();
+  aurena.paused = !aurena.paused;
+},
+play : function() {
+  $.ajax({ url: "../control/play" , type: 'POST'});
+},
+pause : function() {
+  $.ajax({ url: "../control/pause" , type: 'POST'});
+},
+next : function() {
+  $.ajax({ url: "../control/next" , type: 'POST'});
+},
+previous : function() {
+  $.ajax({ url: "../control/previous" , type: 'POST'});
+},
 init : function() {
   aurena.sendingVol = false;
   aurena.volChange = false;
@@ -221,9 +239,9 @@ init : function() {
      slide : function(event, ui) { aurena.volChange = true; aurena.send_slider_volume(0); },
      change : function(event, ui) { aurena.volChange = true; aurena.send_slider_volume(0); }
   });
-  $("#play").click(function() { $.ajax({ url: "../control/play", type: 'POST' }); });
-  $("#pause").click(function() { $.ajax({ url: "../control/pause" , type: 'POST'}); });
-  $("#next").click(function() { $.ajax({ url: "../control/next" , type: 'POST'}); });
+  $("#play").click(function() { aurena.play() });
+  $("#pause").click(function() { aurena.pause() });
+  $("#next").click(function() { aurena.next() });
   aurena.websocket_listener();
 }
 

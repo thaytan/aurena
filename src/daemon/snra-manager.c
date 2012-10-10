@@ -572,7 +572,8 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
       if (id_str != NULL)
         sscanf (id_str, "%u", &client_id);
 
-      if (vol_str && sscanf (vol_str, "%lf", &new_vol)) {
+      if (vol_str) {
+        new_vol = g_ascii_strtod (vol_str, NULL);
         new_vol = CLAMP (new_vol, 0.0, 10.0);
         if (client_id == 0)
           snra_manager_adjust_volume (manager, new_vol);

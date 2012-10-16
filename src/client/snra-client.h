@@ -57,6 +57,7 @@ struct _SnraClient
   gint server_port;
 
   SoupSession *soup;
+  SoupMessage *msg;
   JsonParser *json;
 
   GMainContext * context;
@@ -64,6 +65,7 @@ struct _SnraClient
   GstElement *player;
 
   guint timeout;
+  guint idle_timeout;
 
   gboolean connecting;
   gboolean was_connected;

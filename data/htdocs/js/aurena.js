@@ -153,7 +153,7 @@ update_player_clients : function () {
        info += " <div id='volumeval-" + val["client-id"] + "' />";
        info += '</li>';
        items.push(info);
-        console.log ("Client data " + JSON.stringify(val));
+        // console.log ("Client data " + JSON.stringify(val));
      });
      $("#cliententries").empty().prepend($('<ul/>', {
        html: items.join('')

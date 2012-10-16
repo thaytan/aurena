@@ -138,6 +138,19 @@ get_flag_from_msg (SoupMessage *msg)
   return flag;
 }
 
+static gboolean
+conn_idle_timeout (SnraClient * client)
+{
+  client->idle_timeout = 0;
+
+  if (client->msg) {
+    g_print ("Connection timed out\n");
+    soup_session_cancel_message (client->soup, client->msg, 200);
+  }
+  
+  return FALSE;
+}
+
 static void
 handle_connection_closed_cb (G_GNUC_UNUSED SoupSession * session,
     SoupMessage * msg, SnraClient * client)
@@ -145,6 +158,11 @@ handle_connection_closed_cb (G_GNUC_UNUSED SoupSession * session,
   SnraClientFlags flag = get_flag_from_msg (msg);
 
   client->connecting &= ~flag;
+
+  if (client->idle_timeout) {
+    g_source_remove (client->idle_timeout);
+    client->idle_timeout = 0;
+  }
 
   if (msg->status_code == SOUP_STATUS_CANCELLED)
     return;
@@ -858,6 +876,12 @@ handle_received_chunk (SoupMessage * msg, SoupBuffer * chunk,
     client->was_connected |= flag;
   }
 
+  /* Set up or re-trigger 20 second idle timeout for ping messages */
+  if (client->idle_timeout)
+    g_source_remove (client->idle_timeout);
+  client->idle_timeout = g_timeout_add_seconds (20,
+      (GSourceFunc) conn_idle_timeout, client);
+ 
 #if HAVE_AVAHI
   /* Successful server connection, stop avahi discovery */
   if (client->avahi_client) {

@@ -987,6 +987,8 @@ snra_client_init (SnraClient * client)
 {
   /* Set a 20 second timeout on pings from the server */
   g_object_set (G_OBJECT (client->soup), "idle-timeout", 20, NULL);
+  /* 5 second timeout before retrying with new connections */
+  g_object_set (G_OBJECT (client->soup), "timeout", 5, NULL);
   client->server_port = 5457;
   client->paused = TRUE;
 }

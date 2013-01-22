@@ -55,6 +55,14 @@ enum
   PROP_LAST
 };
 
+enum
+{
+  SIGNAL_PLAYER_CREATED,
+  NUM_SIGNALS
+};
+
+int signals[NUM_SIGNALS];
+
 static void snra_client_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void snra_client_get_property (GObject * object, guint prop_id,
@@ -213,20 +221,24 @@ construct_player (SnraClient * client)
 {
   GstBus *bus;
 
-  if (GST_CHECK_VERSION (0, 11, 1))
-    client->player = gst_element_factory_make ("playbin", NULL);
-  else
-    client->player = gst_element_factory_make ("playbin2", NULL);
+#if GST_CHECK_VERSION (0, 11, 1)
+  client->player = gst_element_factory_make ("playbin", NULL);
+#else
+  client->player = gst_element_factory_make ("playbin2", NULL);
+#endif
 
   if (client->player == NULL) {
     g_warning ("Failed to construct playbin");
     return;
   }
+
   bus = gst_element_get_bus (GST_ELEMENT (client->player));
   gst_bus_add_signal_watch (bus);
   g_signal_connect (bus, "message::eos", (GCallback) (on_eos_msg), client);
   g_signal_connect (bus, "message::error", (GCallback) (on_error_msg), client);
   gst_object_unref (bus);
+
+  g_signal_emit (client, signals[SIGNAL_PLAYER_CREATED], 0, client->player);
 }
 
 static void
@@ -472,6 +484,10 @@ snra_client_class_init (SnraClientClass * client_class)
       g_param_spec_string ("server-host", "Aurena Server",
           "Aurena Server hostname or IP", NULL,
           G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
+
+  signals[SIGNAL_PLAYER_CREATED] = g_signal_new("player-created",
+      G_TYPE_FROM_CLASS (client_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL,
+      G_TYPE_NONE, 1, GST_TYPE_ELEMENT);
 }
 
 static void

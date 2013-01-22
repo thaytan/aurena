@@ -22,7 +22,7 @@ PKG_PROG_PKG_CONFIG([0.22])
 PKG_CHECK_MODULES(SNRA_COMMON, [gobject-2.0 glib-2.0 >= 2.30 avahi-client avahi-glib >= 0.6.24 json-glib-1.0 libsoup-2.4])
 
 AC_MSG_NOTICE([Checking for GStreamer 1.0])
-PKG_CHECK_MODULES(GST_1_0, [gstreamer-1.0 gstreamer-net-1.0], [HAVE_GST_1_0=yes], [HAVE_GST_1_0=no])
+PKG_CHECK_MODULES(GST_1_0, [gstreamer-11.0 gstreamer-net-1.0], [HAVE_GST_1_0=yes], [HAVE_GST_1_0=no])
 if test "x$HAVE_GST_1_0" = "xyes"; then
   GST_CFLAGS="$GST_1_0_CFLAGS -DGST_USE_UNSTABLE_API"
   GST_LIBS="$GST_1_0_LIBS"
@@ -33,6 +33,20 @@ else
   GST_CFLAGS="$GST_0_10_CFLAGS"
   GST_LIBS="$GST_0_10_LIBS"
   PKG_CHECK_MODULES(GST_RTSP, [gst-rtsp-server-0.10], [HAVE_GST_RTSP=yes], [HAVE_GST_RTSP=no])
+fi
+
+AC_MSG_NOTICE([Check for Fullscreen requirements])
+PKG_CHECK_MODULES(FULLSCREEN, [gtk+-3.0], [BUILD_FULLSCREEN=yes],
+		        [BUILD_FULLSCREEN=no])
+AM_CONDITIONAL(BUILD_FULLSCREEN, test "x$BUILD_FULLSCREEN" = "xyes")
+if test "x$BUILD_FULLSCREEN" = "xyes"; then
+   if test "x$HAVE_GST_1_0" = "xyes"; then
+      FULLSCREEN_LIBS="$FULLSCREEN_LIBS -lgstvideo-1.0"
+   else
+      FULLSCREEN_LIBS="$FULLSCREEN_LIBS -lgstinterfaces-0.10"
+   fi
+   AC_SUBST([FULLSCREEN_CFLAGS])
+   AC_SUBST([FULLSCREEN_LIBS])
 fi
 
 AC_MSG_NOTICE([Checking whether to build server])

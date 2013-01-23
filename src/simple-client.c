@@ -22,6 +22,7 @@
 #endif
 
 #include <glib.h>
+#include <glib-unix.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,46 +33,14 @@
 #include <src/client/snra-client.h>
 
 static GMainLoop *ml = NULL;
-static gint sigint_received;
-
-static void sigint_handler_sighandler (int signum);
-
-static void
-sigint_setup (void)
-{
-  struct sigaction action;
-  memset (&action, 0, sizeof (struct sigaction));
-
-  action.sa_handler = sigint_handler_sighandler;
-  sigaction (SIGINT, &action, NULL);
-}
-
-static void
-sigint_restore (void)
-{
-  struct sigaction action;
-  memset (&action, 0, sizeof (struct sigaction));
-
-  action.sa_handler = SIG_DFL;
-  sigaction (SIGINT, &action, NULL);
-
-}
 
 static gboolean
-sigint_check (G_GNUC_UNUSED void *data)
+sigint_handler (G_GNUC_UNUSED void *data)
 {
-  if (sigint_received) {
-    g_print ("Exiting...\n");
-    g_main_loop_quit (ml);
-  }
-  return TRUE;
-}
+  g_print ("Exiting...\n");
+  g_main_loop_quit (ml);
 
-static void
-sigint_handler_sighandler (G_GNUC_UNUSED int signum)
-{
-  sigint_received++;
-  sigint_restore ();
+  return TRUE;
 }
 
 int
@@ -90,8 +59,7 @@ main (int argc, char *argv[])
 
   avahi_set_allocator (avahi_glib_allocator ());
 
-  g_timeout_add (250, sigint_check, NULL);
-  sigint_setup ();
+  g_unix_signal_add (SIGINT, sigint_handler, NULL);
 
   client = snra_client_new (server);
   if (client == NULL)

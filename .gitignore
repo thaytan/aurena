@@ -16,6 +16,7 @@ Makefile.in
 missing
 src/aurena
 src/simple-client
+src/simple-client-fullscreen
 stamp-h1
 .deps
 *.swp

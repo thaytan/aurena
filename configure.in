@@ -22,7 +22,7 @@ PKG_PROG_PKG_CONFIG([0.22])
 PKG_CHECK_MODULES(SNRA_COMMON, [gobject-2.0 glib-2.0 >= 2.30 avahi-client avahi-glib >= 0.6.24 json-glib-1.0 libsoup-2.4])
 
 AC_MSG_NOTICE([Checking for GStreamer 1.0])
-PKG_CHECK_MODULES(GST_1_0, [gstreamer-11.0 gstreamer-net-1.0], [HAVE_GST_1_0=yes], [HAVE_GST_1_0=no])
+PKG_CHECK_MODULES(GST_1_0, [gstreamer-1.0 gstreamer-net-1.0], [HAVE_GST_1_0=yes], [HAVE_GST_1_0=no])
 if test "x$HAVE_GST_1_0" = "xyes"; then
   GST_CFLAGS="$GST_1_0_CFLAGS -DGST_USE_UNSTABLE_API"
   GST_LIBS="$GST_1_0_LIBS"

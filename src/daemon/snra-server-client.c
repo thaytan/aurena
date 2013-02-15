@@ -22,6 +22,7 @@
 #endif
 
 #include <libsoup/soup-server.h>
+#include <string.h>
 
 #include "snra-server-client.h"
 

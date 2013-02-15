@@ -29,7 +29,7 @@ if test "x$HAVE_GST_1_0" = "xyes"; then
   PKG_CHECK_MODULES(GST_RTSP, [gstreamer-rtsp-server-1.0], [HAVE_GST_RTSP=yes], [HAVE_GST_RTSP=no])
 else
   AC_MSG_NOTICE([Checking for GStreamer 0.10])
-  PKG_CHECK_MODULES(GST_0_10, [gstreamer-0.10 gstreamer-net-0.10])
+  PKG_CHECK_MODULES(GST_0_10, [gstreamer-0.10 >= 0.10.31 gstreamer-net-0.10])
   GST_CFLAGS="$GST_0_10_CFLAGS"
   GST_LIBS="$GST_0_10_LIBS"
   PKG_CHECK_MODULES(GST_RTSP, [gst-rtsp-server-0.10], [HAVE_GST_RTSP=yes], [HAVE_GST_RTSP=no])

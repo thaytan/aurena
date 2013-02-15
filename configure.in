@@ -19,7 +19,7 @@ AC_PROG_CC_STDC
 LT_INIT
 
 PKG_PROG_PKG_CONFIG([0.22])
-PKG_CHECK_MODULES(SNRA_COMMON, [gobject-2.0 glib-2.0 >= 2.30 avahi-client avahi-glib >= 0.6.24 json-glib-1.0 libsoup-2.4])
+PKG_CHECK_MODULES(SNRA_COMMON, [gobject-2.0 glib-2.0 >= 2.30 avahi-client avahi-glib >= 0.6.24 json-glib-1.0 libsoup-2.4 >= 2.26.1])
 
 AC_MSG_NOTICE([Checking for GStreamer 1.0])
 PKG_CHECK_MODULES(GST_1_0, [gstreamer-1.0 gstreamer-net-1.0], [HAVE_GST_1_0=yes], [HAVE_GST_1_0=no])
@@ -29,7 +29,7 @@ if test "x$HAVE_GST_1_0" = "xyes"; then
   PKG_CHECK_MODULES(GST_RTSP, [gstreamer-rtsp-server-1.0], [HAVE_GST_RTSP=yes], [HAVE_GST_RTSP=no])
 else
   AC_MSG_NOTICE([Checking for GStreamer 0.10])
-  PKG_CHECK_MODULES(GST_0_10, [gstreamer-0.10 gstreamer-net-0.10])
+  PKG_CHECK_MODULES(GST_0_10, [gstreamer-0.10 >= 0.10.31 gstreamer-net-0.10])
   GST_CFLAGS="$GST_0_10_CFLAGS"
   GST_LIBS="$GST_0_10_LIBS"
   PKG_CHECK_MODULES(GST_RTSP, [gst-rtsp-server-0.10], [HAVE_GST_RTSP=yes], [HAVE_GST_RTSP=no])

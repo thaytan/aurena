@@ -26,10 +26,6 @@
 
 #include <src/snra-json.h>
 
-#ifndef G_VALUE_INIT
-#define G_VALUE_INIT {{0,}, {0,}}
-#endif
-
 static void
 snra_json_array_add_to_val (JsonArray *array, guint index_,
     JsonNode *element_node, GValue *outval);

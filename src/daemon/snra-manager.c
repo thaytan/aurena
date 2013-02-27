@@ -202,7 +202,7 @@ static GstStructure *
 make_player_clients_list_msg (SnraManager * manager)
 {
   GstStructure *msg;
-  GValue p = { 0, };
+  GValue p = G_VALUE_INIT;
   GList *cur;
 
   g_value_init (&p, GST_TYPE_ARRAY);
@@ -213,7 +213,7 @@ make_player_clients_list_msg (SnraManager * manager)
   for (cur = manager->player_info; cur != NULL; cur = g_list_next (cur)) {
     SnraPlayerInfo *info = (SnraPlayerInfo *) (cur->data);
     if (info->conn != NULL) {
-      GValue tmp = { 0, };
+      GValue tmp = G_VALUE_INIT;
       GstStructure *cur_struct = gst_structure_new ("client",
           "client-id", G_TYPE_INT64, (gint64) info->id,
           "enabled", G_TYPE_BOOLEAN, info->enabled,

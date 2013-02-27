@@ -31,6 +31,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <glib.h>
 
 #if !GLIB_CHECK_VERSION(2,22,0)
@@ -365,6 +366,9 @@ static void
 handle_received_chunk (G_GNUC_UNUSED SoupMessage * msg, SoupBuffer * chunk,
     SnraClient * client)
 {
+  const gchar *ptr;
+  gsize length;
+
   if (client->was_connected == FALSE) {
     g_print ("Successfully connected to server %s:%d\n",
         client->connected_server, client->connected_port);
@@ -387,6 +391,19 @@ handle_received_chunk (G_GNUC_UNUSED SoupMessage * msg, SoupBuffer * chunk,
     g_free (tmp);
   }
 #endif
+
+  ptr = memchr (chunk->data, '\0', chunk->length);
+  if (!ptr)
+    return;
+
+  /* Save remaining portion */
+  ptr += 1;
+  length =(chunk->length - (ptr - chunk->data));
+
+  soup_message_body_flatten (msg->response_body);
+  chunk->data = msg->response_body->data;
+  chunk->length = msg->response_body->length;
+
   if (json_parser_load_from_data (client->json, chunk->data, chunk->length,
           NULL)) {
     JsonNode *root = json_parser_get_root (client->json);
@@ -394,12 +411,12 @@ handle_received_chunk (G_GNUC_UNUSED SoupMessage * msg, SoupBuffer * chunk,
     const char *msg_type;
 
     if (s == NULL)
-      return;                   /* Invalid chunk */
+      goto end;                   /* Invalid chunk */
 
     msg_type = gst_structure_get_string (s, "msg-type");
     if (msg_type == NULL || g_str_equal (msg_type, "ping")) {
       gst_structure_free (s);
-      return;
+      goto end;
     }
 
     if (g_str_equal (msg_type, "enrol"))
@@ -424,6 +441,12 @@ handle_received_chunk (G_GNUC_UNUSED SoupMessage * msg, SoupBuffer * chunk,
       g_print ("Unhandled event of type %s\n", msg_type);
     }
   }
+
+end:
+  soup_message_body_truncate (msg->response_body);
+  /* Put back remaining part */
+  if (length)
+    soup_message_body_append (msg->response_body, SOUP_MEMORY_COPY, ptr, length);
 }
 
 static void
@@ -441,7 +464,7 @@ connect_to_server (SnraClient * client, const gchar * server, int port)
   client->connected_port = port;
 
   msg = soup_message_new ("GET", url);
-  soup_message_body_set_accumulate (msg->response_body, FALSE);
+  soup_message_body_set_accumulate (msg->response_body, TRUE);
   g_signal_connect (msg, "got-chunk", (GCallback) handle_received_chunk,
       client);
   soup_session_queue_message (client->soup, msg,

@@ -119,12 +119,13 @@ snra_json_value_to_node (const GValue *value)
   return n;
 }
 
-static void
+static gboolean
 snra_add_struct_object (GQuark field_id, const GValue * value, JsonObject * o)
 {
   JsonNode *n = snra_json_value_to_node (value);
   if (n)
     json_object_set_member (o, g_quark_to_string (field_id), n);
+  return TRUE;
 }
 
 JsonNode *

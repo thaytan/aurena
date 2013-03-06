@@ -63,7 +63,7 @@ struct _SnraManager
   GList *ctrl_clients;
 
   GstClockTime base_time;
-  GstClockTime stream_time;
+  GstClockTime position;
 
   gdouble current_volume;
 

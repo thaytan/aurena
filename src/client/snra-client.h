@@ -24,9 +24,11 @@ struct _SnraClient
 {
   GObject parent;
 
-  GstState state;
   gboolean enabled;
   gboolean paused;
+  GstClockTime base_time;
+  GstClockTime position;
+  gchar *uri;
 
   GstClock *net_clock;
   gchar *server_host;

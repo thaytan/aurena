@@ -45,8 +45,6 @@
 
 #include "snra-client.h"
 
-#define DISABLED_STATE GST_STATE_PAUSED
-
 G_DEFINE_TYPE (SnraClient, snra_client, G_TYPE_OBJECT);
 
 enum
@@ -243,14 +241,59 @@ construct_player (SnraClient * client)
 }
 
 static void
+set_media (SnraClient * client)
+{
+  if (client->player == NULL) {
+    construct_player (client);
+    if (client->player == NULL)
+      return;
+  } else {
+    gst_element_set_state (client->player, GST_STATE_NULL);
+  }
+
+  g_print ("Setting media URI %s base_time %" GST_TIME_FORMAT " position %"
+      GST_TIME_FORMAT " paused %i\n", client->uri, GST_TIME_ARGS (client->base_time),
+      GST_TIME_ARGS (client->position), client->paused);
+  g_object_set (client->player, "uri", client->uri, NULL);
+
+  gst_element_set_start_time (client->player, GST_CLOCK_TIME_NONE);
+  gst_pipeline_use_clock (GST_PIPELINE (client->player), client->net_clock);
+
+  /* Do the preroll */
+  gst_element_set_state (client->player, GST_STATE_PAUSED);
+  gst_element_get_state (client->player, NULL, NULL, GST_CLOCK_TIME_NONE);
+
+  /* Compensate preroll time if playing */
+  if (!client->paused) {
+    GstClockTime now = gst_clock_get_time (client->net_clock);
+    if (now > (client->base_time + client->position))
+      client->position = now - client->base_time;
+  }
+
+  /* If position is not 0, seek to that position */
+  if (client->position) {
+    /* FIXME Query duration, so we don't seek after EOS */
+    if (!gst_element_seek_simple (client->player, GST_FORMAT_TIME,
+          GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, client->position)) {
+      g_warning ("Initial seek failed, player will go faster instead");
+      client->position = 0;
+    }
+  }
+
+  /* Set base time considering seek position after seek */
+  gst_element_set_base_time (client->player,
+      client->base_time + client->position);
+
+  if (!client->paused)
+    gst_element_set_state (client->player, GST_STATE_PLAYING);
+}
+
+static void
 handle_set_media_message (SnraClient * client, GstStructure * s)
 {
   const gchar *protocol, *path;
   int port;
-  GstClockTime base_time;
   gint64 tmp;
-  gchar *uri;
-  gboolean paused;
 
   protocol = gst_structure_get_string (s, "resource-protocol");
   path = gst_structure_get_string (s, "resource-path");
@@ -263,67 +306,66 @@ handle_set_media_message (SnraClient * client, GstStructure * s)
 
   if (!snra_json_structure_get_int64 (s, "base-time", &tmp))
     return;                     /* Invalid message */
+  client->base_time = (GstClockTime) (tmp);
 
-  if (!snra_json_structure_get_boolean (s, "paused", &paused))
+  if (!snra_json_structure_get_int64 (s, "position", &tmp))
+    return;                     /* Invalid message */
+  client->position = (GstClockTime) (tmp);
+
+  if (!snra_json_structure_get_boolean (s, "paused", &client->paused))
     return;
 
-  base_time = (GstClockTime) (tmp);
+  g_free (client->uri);
+  client->uri = g_strdup_printf ("%s://%s:%d%s", protocol,
+      client->connected_server, port, path);
 
-  if (client->player == NULL) {
-    construct_player (client);
-    if (client->player == NULL)
-      return;
-  } else {
-    gst_element_set_state (client->player, GST_STATE_NULL);
-  }
-
-  uri =
-      g_strdup_printf ("%s://%s:%d%s", protocol, client->connected_server, port,
-      path);
-  g_print ("Playing URI %s base_time %" GST_TIME_FORMAT "\n", uri,
-      GST_TIME_ARGS (base_time));
-  g_object_set (client->player, "uri", uri, NULL);
-  g_free (uri);
-
-  gst_element_set_start_time (client->player, GST_CLOCK_TIME_NONE);
-  gst_element_set_base_time (client->player, base_time);
-  gst_pipeline_use_clock (GST_PIPELINE (client->player), client->net_clock);
-
-  if (client->enabled) {
-    if (paused)
-      client->state = GST_STATE_PAUSED;
-    else
-      client->state = GST_STATE_PLAYING;
-  } else {
-    client->state = DISABLED_STATE;
-  }
-
-  gst_element_set_state (client->player, client->state);
+  if (client->enabled)
+    set_media (client);
 }
 
 static void
 handle_play_message (SnraClient * client, GstStructure * s)
 {
-  GstClockTime base_time;
   gint64 tmp;
 
   if (!snra_json_structure_get_int64 (s, "base-time", &tmp))
     return;                     /* Invalid message */
-  base_time = (GstClockTime) (tmp);
 
+  client->base_time = (GstClockTime) (tmp);
   client->paused = FALSE;
 
-  if (client->player) {
-    GstClockTime stream_time =
-        gst_clock_get_time (client->net_clock) - base_time;
-    g_print ("Playing base_time %" GST_TIME_FORMAT " (offset %" GST_TIME_FORMAT
-        ")\n", GST_TIME_ARGS (base_time), GST_TIME_ARGS (stream_time));
-    gst_element_set_base_time (GST_ELEMENT (client->player), base_time);
-    if (client->enabled == FALSE)
-      client->state = DISABLED_STATE;
-    else
-      client->state = GST_STATE_PLAYING;
-    gst_element_set_state (GST_ELEMENT (client->player), client->state);
+  if (client->enabled && client->player) {
+    g_print ("Playing base_time %" GST_TIME_FORMAT " (position %"
+        GST_TIME_FORMAT ")\n", GST_TIME_ARGS (client->base_time),
+        GST_TIME_ARGS (client->position));
+    gst_element_set_base_time (GST_ELEMENT (client->player),
+        client->base_time + client->position);
+
+    gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PLAYING);
+  }
+}
+
+static void
+handle_pause_message (SnraClient * client, GstStructure * s)
+{
+  GstClockTime old_position = client->position;
+  gint64 tmp;
+
+  if (!snra_json_structure_get_int64 (s, "position", &tmp))
+    return;                     /* Invalid message */
+
+  client->position = (GstClockTime) (tmp);
+  client->paused = TRUE;
+
+  if (client->enabled && client->player) {
+    g_print ("Pausing at position %" GST_TIME_FORMAT "\n",
+        GST_TIME_ARGS (client->position));
+    gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PAUSED);
+    if (!gst_element_seek_simple (client->player, GST_FORMAT_TIME,
+          GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, client->position)) {
+      g_warning ("Pausing seek failed");
+      client->position = old_position;
+    }
   }
 }
 
@@ -348,18 +390,22 @@ handle_set_volume_message (SnraClient * client, GstStructure * s)
 static void
 handle_set_client_message (SnraClient * client, GstStructure * s)
 {
-  if (!snra_json_structure_get_boolean (s, "enabled", &client->enabled))
+  gboolean enabled;
+
+  if (!snra_json_structure_get_boolean (s, "enabled", &enabled))
     return;
 
-  if (client->enabled == FALSE)
-    client->state = DISABLED_STATE;
-  else if (client->paused)
-    client->state = GST_STATE_PAUSED;
-  else
-    client->state = GST_STATE_PLAYING;
+  if (enabled == client->enabled)
+    return;
+  client->enabled = enabled;
 
-  if (client->player)
-    gst_element_set_state (GST_ELEMENT (client->player), client->state);
+  if (!client->player)
+    return;
+
+  if (client->enabled)
+    set_media (client);
+  else
+    gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_NULL);
 }
 
 static void
@@ -426,13 +472,7 @@ handle_received_chunk (G_GNUC_UNUSED SoupMessage * msg, SoupBuffer * chunk,
     else if (g_str_equal (msg_type, "play"))
       handle_play_message (client, s);
     else if (g_str_equal (msg_type, "pause")) {
-      client->paused = TRUE;
-      if (client->enabled == FALSE)
-        client->state = DISABLED_STATE;
-      else
-        client->state = GST_STATE_PAUSED;
-      if (client->player)
-        gst_element_set_state (GST_ELEMENT (client->player), client->state);
+      handle_pause_message (client, s);
     } else if (g_str_equal (msg_type, "volume")) {
       handle_set_volume_message (client, s);
     } else if (g_str_equal (msg_type, "client-setting")) {
@@ -477,7 +517,6 @@ snra_client_init (SnraClient * client)
 {
   client->soup = soup_session_async_new ();
   client->server_port = 5457;
-  client->state = GST_STATE_NULL;
 }
 
 static void
@@ -540,6 +579,7 @@ snra_client_finalize (GObject * object)
 
   g_free (client->server_host);
   g_free (client->connected_server);
+  g_free (client->uri);
 
   G_OBJECT_CLASS (snra_client_parent_class)->finalize (object);
 }

@@ -622,7 +622,7 @@ snra_manager_init (SnraManager * manager)
   manager->paused = TRUE;
 
   manager->base_time = GST_CLOCK_TIME_NONE;
-  manager->stream_time = GST_CLOCK_TIME_NONE;
+  manager->position = 0;
   manager->current_volume = 0.1;
 
   manager->current_resource = 0;
@@ -888,7 +888,7 @@ snra_manager_play_resource (SnraManager * manager, guint resource_id)
 {
   manager->current_resource = resource_id;
   manager->base_time = GST_CLOCK_TIME_NONE;
-  manager->stream_time = GST_CLOCK_TIME_NONE;
+  manager->position = 0;
 
   manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_ALL,
       manager_make_set_media_msg (manager, manager->current_resource));
@@ -902,10 +902,9 @@ snra_manager_send_play (SnraManager * manager, SnraServerClient * client)
 
   /* Update base time to match length of time paused */
   g_object_get (manager->net_clock, "clock", &clock, NULL);
-  manager->base_time =
-      gst_clock_get_time (clock) + (GST_SECOND / 4) - manager->stream_time;
+  manager->base_time = gst_clock_get_time (clock) - manager->position + (GST_SECOND / 30);
   gst_object_unref (clock);
-  manager->stream_time = GST_CLOCK_TIME_NONE;
+  manager->position = 0;
 
   msg = gst_structure_new ("json",
       "msg-type", G_TYPE_STRING, "play",
@@ -918,21 +917,24 @@ static void
 snra_manager_send_pause (SnraManager * manager, SnraServerClient * client)
 {
   GstClock *clock;
+  GstClockTime now;
   GstStructure *msg;
 
-  msg = gst_structure_new ("json", "msg-type", G_TYPE_STRING, "pause", NULL);
+  g_object_get (manager->net_clock, "clock", &clock, NULL);
+  now = gst_clock_get_time (clock);
+  gst_object_unref (clock);
+
+  /* Calculate how much of the current file we played up until now, and store */
+  manager->position = now - manager->base_time + (GST_SECOND / 30);
+  g_print ("Storing position %" GST_TIME_FORMAT "\n",
+      GST_TIME_ARGS (manager->position));
+
+  msg = gst_structure_new ("json",
+      "msg-type", G_TYPE_STRING, "pause",
+      "position", G_TYPE_INT64, (gint64) manager->position,
+      NULL);
 
   manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL, msg);
-
-  if (manager->stream_time == GST_CLOCK_TIME_NONE) {
-    g_object_get (manager->net_clock, "clock", &clock, NULL);
-    /* Calculate how much of the current file we played up until now, and store */
-    manager->stream_time =
-        gst_clock_get_time (clock) + (GST_SECOND / 4) - manager->base_time;
-    gst_object_unref (clock);
-    g_print ("Storing stream_time %" GST_TIME_FORMAT "\n",
-        GST_TIME_ARGS (manager->stream_time));
-  }
 }
 
 static void
@@ -1011,7 +1013,7 @@ static GstStructure *
 manager_make_set_media_msg (SnraManager * manager, guint resource_id)
 {
   GstClock *clock;
-  GstClockTime cur_time;
+  GstClockTime cur_time, position;
   gchar *resource_path;
   GstStructure *msg;
   gint port;
@@ -1025,7 +1027,7 @@ manager_make_set_media_msg (SnraManager * manager, guint resource_id)
   if (manager->base_time == GST_CLOCK_TIME_NONE) {
     // configure a base time 0.25 seconds in the future
     manager->base_time = cur_time + (GST_SECOND / 4);
-    manager->stream_time = GST_CLOCK_TIME_NONE;
+    manager->position = 0;
     g_print ("Base time now %" G_GUINT64_FORMAT "\n", manager->base_time);
   }
 #if 1
@@ -1033,6 +1035,12 @@ manager_make_set_media_msg (SnraManager * manager, guint resource_id)
 #else
   g_object_get (manager->config, "rtsp-port", &port, NULL);
 #endif
+
+  /* Calculate position if currently playing */
+  if (!manager->paused && cur_time > manager->base_time)
+    position = cur_time - manager->base_time;
+  else
+    position = manager->position;
 
   msg = gst_structure_new ("json", "msg-type", G_TYPE_STRING, "set-media",
       "resource-id", G_TYPE_INT64, (gint64) resource_id,
@@ -1045,6 +1053,7 @@ manager_make_set_media_msg (SnraManager * manager, guint resource_id)
 #endif
       "resource-path", G_TYPE_STRING, resource_path,
       "base-time", G_TYPE_INT64, (gint64) (manager->base_time),
+      "position", G_TYPE_INT64, (gint64) (position),
       "paused", G_TYPE_BOOLEAN, manager->paused, NULL);
 
   g_free (resource_path);

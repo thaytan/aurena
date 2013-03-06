@@ -85,11 +85,34 @@ player_disposed (gpointer user_data,
 }
 
 static void
+on_eos_msg (SnraClient *client, G_GNUC_UNUSED GstMessage * msg)
+{
+  SoupMessage *soup_msg;
+  /* FIXME: Next song should all be handled server side */
+  char *url = g_strdup_printf ("http://%s:%u/control/next",
+      client->connected_server, client->connected_port);
+
+  g_print ("Got EOS message\n");
+
+  soup_msg = soup_message_new ("GET", url);
+  soup_session_send_message (client->soup, soup_msg);
+  g_free (url);
+}
+
+static void
 player_created (G_GNUC_UNUSED SnraClient *client, GstElement * player)
 {
-  guint timeout = g_timeout_add_seconds (1, print_position, player);
+  GstBus *bus;
+  guint timeout;
+
+  timeout = g_timeout_add_seconds (1, print_position, player);
   g_object_weak_ref (G_OBJECT (player), player_disposed,
       GUINT_TO_POINTER (timeout));
+
+  bus = gst_element_get_bus (GST_ELEMENT (client->player));
+  g_signal_connect_swapped (bus, "message::eos", G_CALLBACK (on_eos_msg),
+      client);
+  gst_object_unref (bus);
 }
 
 int

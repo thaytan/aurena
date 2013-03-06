@@ -184,22 +184,6 @@ handle_enrol_message (SnraClient * client, GstStructure * s)
 }
 
 static void
-on_eos_msg (G_GNUC_UNUSED GstBus * bus, G_GNUC_UNUSED GstMessage * msg,
-    SnraClient * client)
-{
-  SoupMessage *soup_msg;
-  /* FIXME: Next song should all be handled server side */
-  char *url = g_strdup_printf ("http://%s:%u/control/next",
-      client->connected_server, client->connected_port);
-
-  g_print ("Got EOS message\n");
-
-  soup_msg = soup_message_new ("GET", url);
-  soup_session_send_message (client->soup, soup_msg);
-  g_free (url);
-}
-
-static void
 on_error_msg (G_GNUC_UNUSED GstBus * bus, GstMessage * msg,
     G_GNUC_UNUSED SnraClient * client)
 {
@@ -232,7 +216,6 @@ construct_player (SnraClient * client)
 
   bus = gst_element_get_bus (GST_ELEMENT (client->player));
   gst_bus_add_signal_watch (bus);
-  g_signal_connect (bus, "message::eos", (GCallback) (on_eos_msg), client);
   g_signal_connect (bus, "message::error", (GCallback) (on_error_msg), client);
   gst_object_unref (bus);
 

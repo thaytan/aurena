@@ -114,8 +114,8 @@ static GstStructure *manager_make_set_media_msg (SnraManager * manager,
     guint resource_id);
 static GstStructure *manager_make_player_clients_changed_msg
     (SnraManager * manager);
-static SnraPlayerInfo *
-get_player_info_by_id (SnraManager *manager, guint client_id);
+static SnraPlayerInfo * get_player_info_by_id (SnraManager *manager,
+    guint client_id);
 
 #define SEND_MSG_TO_PLAYERS 1
 #define SEND_MSG_TO_DISABLED_PLAYERS 2
@@ -487,7 +487,7 @@ get_playlist_len (SnraManager * mgr)
   return snra_media_db_get_file_count (mgr->media_db);
 }
 
-static gchar *
+static const gchar *
 find_param_str (const gchar * param_name, GHashTable * query_params,
     GHashTable * post_params)
 {
@@ -525,7 +525,7 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
 
   switch (event_type) {
     case SNRA_CONTROL_NEXT:{
-      gchar *id_str = find_param_str ("id", query, post_params);
+      const gchar *id_str = find_param_str ("id", query, post_params);
       guint resource_id;
 
       g_print ("Next ID %s\n", id_str);
@@ -565,8 +565,8 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
       break;
     }
     case SNRA_CONTROL_VOLUME:{
-      gchar *vol_str = find_param_str ("level", query, post_params);
-      gchar *id_str = find_param_str ("client_id", query, post_params);
+      const gchar *vol_str = find_param_str ("level", query, post_params);
+      const gchar *id_str = find_param_str ("client_id", query, post_params);
       guint client_id = 0;
       gdouble new_vol;
 
@@ -585,8 +585,8 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
       break;
     }
     case SNRA_CONTROL_CLIENT_SETTING:{
-      gchar *set_str = find_param_str ("enable", query, post_params);
-      gchar *id_str = find_param_str ("client_id", query, post_params);
+      const gchar *set_str = find_param_str ("enable", query, post_params);
+      const gchar *id_str = find_param_str ("client_id", query, post_params);
       guint client_id = 0;
       gint enable = 1;
 

@@ -528,9 +528,16 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
       gchar *id_str = find_param_str ("id", query, post_params);
       guint resource_id;
 
-      if (get_playlist_len (manager) == 0) {
+      g_print ("Next ID %s\n", id_str);
+
+      if (id_str && id_str[0] == '/') {
+        resource_id = G_MAXUINT;
+        g_free (manager->custom_file);
+        manager->custom_file = g_strdup (id_str);
+      } else if (get_playlist_len (manager) == 0) {
         resource_id = 0;
-      } else if (id_str == NULL || !sscanf (id_str, "%d", &resource_id)) {
+      } else if (id_str == NULL || !id_str[0]
+          || !sscanf (id_str, "%d", &resource_id)) {
         /* No or invalid resource id: skip to next track */
         resource_id =
           (guint) (manager->current_resource % get_playlist_len (manager)) + 1;
@@ -717,6 +724,8 @@ snra_manager_finalize (GObject * object)
 
   snra_server_stop (manager->server);
   g_object_unref (manager->server);
+
+  g_free (manager->custom_file);
 }
 
 static void
@@ -861,6 +870,10 @@ snra_manager_get_resource_cb (G_GNUC_UNUSED SnraServer * server,
   SnraManager *manager = (SnraManager *) (userdata);
   SnraHttpResource *ret;
   gchar *file;
+
+  if (resource_id == G_MAXUINT)
+    return g_object_new (SNRA_TYPE_HTTP_RESOURCE, "source-path",
+        manager->custom_file, NULL);
 
   if (resource_id < 1 || resource_id > get_playlist_len (manager))
     return NULL;

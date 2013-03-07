@@ -56,6 +56,7 @@ struct _SnraManager
   GPtrArray *playlist;
   gboolean paused;
   guint current_resource;
+  gchar *custom_file;
 
   guint next_player_id;
   GList *player_info;

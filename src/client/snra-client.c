@@ -352,6 +352,36 @@ handle_pause_message (SnraClient * client, GstStructure * s)
 }
 
 static void
+handle_seek_message (SnraClient * client, GstStructure * s)
+{
+  GstClockTime old_position = client->position;
+  gint64 tmp;
+
+  if (!snra_json_structure_get_int64 (s, "base-time", &tmp))
+    return;                     /* Invalid message */
+  client->base_time = (GstClockTime) tmp;
+
+  if (!snra_json_structure_get_int64 (s, "position", &tmp))
+    return;                     /* Invalid message */
+  client->position = (GstClockTime) (tmp);
+
+  if (client->enabled && client->player) {
+    g_print ("Seeking at position %" GST_TIME_FORMAT " (base_time %"
+        GST_TIME_FORMAT ")\n", GST_TIME_ARGS (client->position),
+        GST_TIME_ARGS (client->base_time));
+
+    if (!gst_element_seek_simple (client->player, GST_FORMAT_TIME,
+          GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, client->position)) {
+      g_warning ("Seeking failed, client may run faster or block.");
+      client->position = old_position;
+    }
+
+    gst_element_set_base_time (client->player,
+        client->base_time + client->position);
+  }
+}
+
+static void
 handle_set_volume_message (SnraClient * client, GstStructure * s)
 {
   gdouble new_vol;
@@ -453,15 +483,16 @@ handle_received_chunk (G_GNUC_UNUSED SoupMessage * msg, SoupBuffer * chunk,
       handle_set_media_message (client, s);
     else if (g_str_equal (msg_type, "play"))
       handle_play_message (client, s);
-    else if (g_str_equal (msg_type, "pause")) {
+    else if (g_str_equal (msg_type, "pause"))
       handle_pause_message (client, s);
-    } else if (g_str_equal (msg_type, "volume")) {
+    else if (g_str_equal (msg_type, "volume"))
       handle_set_volume_message (client, s);
-    } else if (g_str_equal (msg_type, "client-setting")) {
+    else if (g_str_equal (msg_type, "client-setting"))
       handle_set_client_message (client, s);
-    } else {
+    else if (g_str_equal (msg_type, "seek"))
+      handle_seek_message (client, s);
+    else
       g_print ("Unhandled event of type %s\n", msg_type);
-    }
   }
 
 end:

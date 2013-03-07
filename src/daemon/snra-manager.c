@@ -68,7 +68,8 @@ enum _SnraControlEvent
   SNRA_CONTROL_PAUSE,
   SNRA_CONTROL_ENQUEUE,
   SNRA_CONTROL_VOLUME,
-  SNRA_CONTROL_CLIENT_SETTING
+  SNRA_CONTROL_CLIENT_SETTING,
+  SNRA_CONTROL_SEEK,
 };
 
 static const struct
@@ -83,7 +84,8 @@ static const struct
   "pause", SNRA_CONTROL_PAUSE}, {
   "enqueue", SNRA_CONTROL_ENQUEUE}, {
   "volume", SNRA_CONTROL_VOLUME}, {
-  "setclient", SNRA_CONTROL_CLIENT_SETTING}
+  "setclient", SNRA_CONTROL_CLIENT_SETTING}, {
+  "seek", SNRA_CONTROL_SEEK}
 };
 
 static const gint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
@@ -116,6 +118,8 @@ static GstStructure *manager_make_player_clients_changed_msg
     (SnraManager * manager);
 static SnraPlayerInfo * get_player_info_by_id (SnraManager *manager,
     guint client_id);
+static void snra_manager_send_seek (SnraManager * manager,
+    SnraServerClient * client, GstClockTime position);
 
 #define SEND_MSG_TO_PLAYERS 1
 #define SEND_MSG_TO_DISABLED_PLAYERS 2
@@ -600,6 +604,16 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
 
       break;
     }
+    case SNRA_CONTROL_SEEK:{
+      const gchar *pos_str = find_param_str ("position", query, post_params);
+      GstClockTime position = 0;
+
+      if (pos_str != NULL)
+        sscanf (pos_str, "%" G_GUINT64_FORMAT, &position);
+
+      snra_manager_send_seek (manager, NULL, position);
+      break;
+    }
     default:
       g_message ("Ignoring unknown/unimplemented control %s\n", parts[2]);
       soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
@@ -1015,6 +1029,31 @@ snra_manager_adjust_volume (SnraManager * manager, gdouble volume)
            "level", G_TYPE_DOUBLE, info->volume * volume, NULL);
     manager_send_msg_to_client (manager, info->conn, 0, msg);
   }
+}
+
+static void
+snra_manager_send_seek (SnraManager * manager, SnraServerClient * client,
+    GstClockTime position)
+{
+  GstClock *clock;
+  GstClockTime now;
+  GstStructure *msg;
+
+  g_object_get (manager->net_clock, "clock", &clock, NULL);
+  now = gst_clock_get_time (clock);
+  gst_object_unref (clock);
+
+  manager->base_time = now - position + (GST_SECOND / 4);
+  if (manager->paused)
+    manager->position = position;
+
+  msg = gst_structure_new ("json",
+      "msg-type", G_TYPE_STRING, "seek",
+      "base-time", G_TYPE_INT64, (gint64) manager->base_time,
+      "position", G_TYPE_INT64, (gint64) position,
+      NULL);
+
+  manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL, msg);
 }
 
 static GstStructure *

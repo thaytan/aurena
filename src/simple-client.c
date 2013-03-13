@@ -137,7 +137,7 @@ main (int argc, char *argv[])
 
   g_unix_signal_add (SIGINT, sigint_handler, NULL);
 
-  client = snra_client_new (server);
+  client = snra_client_new (server, SNRA_CLIENT_PLAYER);
   if (client == NULL)
     goto fail;
 

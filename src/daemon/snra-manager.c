@@ -885,7 +885,7 @@ snra_manager_get_resource_cb (G_GNUC_UNUSED SnraServer * server,
   SnraHttpResource *ret;
   gchar *file;
 
-  if (resource_id == G_MAXUINT)
+  if (resource_id == G_MAXUINT && manager->custom_file)
     return g_object_new (SNRA_TYPE_HTTP_RESOURCE, "source-path",
         manager->custom_file, NULL);
 

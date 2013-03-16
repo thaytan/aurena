@@ -35,18 +35,18 @@ else
   PKG_CHECK_MODULES(GST_RTSP, [gst-rtsp-server-0.10], [HAVE_GST_RTSP=yes], [HAVE_GST_RTSP=no])
 fi
 
-AC_MSG_NOTICE([Check for Fullscreen requirements])
-PKG_CHECK_MODULES(FULLSCREEN, [gtk+-3.0], [BUILD_FULLSCREEN=yes],
-		        [BUILD_FULLSCREEN=no])
-AM_CONDITIONAL(BUILD_FULLSCREEN, test "x$BUILD_FULLSCREEN" = "xyes")
-if test "x$BUILD_FULLSCREEN" = "xyes"; then
+AC_MSG_NOTICE([Check for GTK+ 3.0 requirements])
+PKG_CHECK_MODULES(GTKAPPS, [gtk+-3.0], [BUILD_GTKAPPS=yes],
+		        [BUILDS_GTKAPP=no])
+AM_CONDITIONAL(BUILD_GTKAPPS, test "x$BUILD_GTKAPPS" = "xyes")
+if test "x$BUILD_GTKAPPS" = "xyes"; then
    if test "x$HAVE_GST_1_0" = "xyes"; then
-      FULLSCREEN_LIBS="$FULLSCREEN_LIBS -lgstvideo-1.0"
+      GTKAPPS_LIBS="$GTKAPPS_LIBS -lgstvideo-1.0"
    else
-      FULLSCREEN_LIBS="$FULLSCREEN_LIBS -lgstinterfaces-0.10"
+      GTKAPPS_LIBS="$GTKAPPS_LIBS -lgstinterfaces-0.10"
    fi
-   AC_SUBST([FULLSCREEN_CFLAGS])
-   AC_SUBST([FULLSCREEN_LIBS])
+   AC_SUBST([GTKAPP_CFLAGS])
+   AC_SUBST([GTKAPPS_LIBS])
 fi
 
 AC_MSG_NOTICE([Checking whether to build server])

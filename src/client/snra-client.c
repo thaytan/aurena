@@ -853,6 +853,10 @@ snra_client_init (SnraClient * client)
   client->soup = soup_session_async_new ();
   client->server_port = 5457;
   client->paused = TRUE;
+
+  if (!g_strcmp0 ("1", g_getenv ("AURENA_DEBUG")))
+    soup_session_add_feature (client->soup,
+        SOUP_SESSION_FEATURE (soup_logger_new (SOUP_LOGGER_LOG_BODY, -1)));
 }
 
 static void

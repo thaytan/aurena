@@ -57,6 +57,7 @@ struct _SnraManager
   gboolean paused;
   guint current_resource;
   gchar *custom_file;
+  gchar *language;
 
   guint next_player_id;
   GList *player_info;

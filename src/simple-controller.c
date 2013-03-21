@@ -33,6 +33,7 @@
 #include <gdk/gdkx.h>
 
 #include <gst/gst.h>
+#include <gst/tag/tag.h>
 
 #if GST_CHECK_VERSION (0, 11, 1)
 #include <gst/video/videooverlay.h>
@@ -56,7 +57,8 @@ typedef struct
   GtkWidget *pause_image;
   GtkWidget *next_button;
   GtkWidget *file_chooser;
-  GtkWidget *audio_track;
+  GtkWidget *lang_selector;
+  GtkListStore *languages;
   GtkWidget *seeker;
   guint seeker_timeout;
   gboolean seeker_grabbed;
@@ -201,6 +203,20 @@ client_volume_changed_cb (PlayerContext * player, gdouble volume)
 }
 
 static void
+language_changed_cb (UIContext * ctx)
+{
+  GtkTreeIter iter;
+
+  if (gtk_combo_box_get_active_iter (GTK_COMBO_BOX (ctx->lang_selector),
+        &iter)) {
+    gchar *lang;
+    gtk_tree_model_get (GTK_TREE_MODEL (ctx->languages), &iter, 1, &lang, -1);
+    snra_client_set_language (ctx->client, lang);
+    g_free (lang);
+  }
+}
+
+static void
 update_connected_status (UIContext * ctx)
 {
   SnraClient *client = ctx->client;
@@ -236,10 +252,10 @@ update_enabled_status (UIContext * ctx)
 
   /* Update audio tracks selection */
   if (snra_client_is_enabled (client)) {
-    gtk_widget_set_sensitive (ctx->audio_track, TRUE);
+    gtk_widget_set_sensitive (ctx->lang_selector, TRUE);
     /* TODO Fill up audio track list */
   } else {
-    gtk_widget_set_sensitive (ctx->audio_track, FALSE);
+    gtk_widget_set_sensitive (ctx->lang_selector, FALSE);
   }
 
   /* Update video box */
@@ -327,6 +343,60 @@ update_volume_status (UIContext *ctx)
 }
 
 static void
+update_language_status (UIContext * ctx)
+{
+  GtkTreeIter iter;
+  gint num_audio = 0, cur_audio = 0, size = 0, i;
+
+  g_signal_handlers_block_by_func (ctx->lang_selector, language_changed_cb, ctx);
+
+  if (ctx->client->player)
+    g_object_get (ctx->client->player, "n-audio", &num_audio, "current-audio",
+        &cur_audio, NULL);
+
+  gtk_list_store_clear (ctx->languages);
+
+  for (i = 0; i < num_audio; i++) {
+    GstTagList *tags = NULL;
+    gchar *str;
+    const gchar *language;
+
+    g_signal_emit_by_name (ctx->client->player, "get-audio-tags", i, &tags);
+
+    if (!tags)
+      continue;
+
+    if (gst_tag_list_get_string (tags, GST_TAG_LANGUAGE_CODE, &str)) {
+      gst_tag_list_free (tags);
+      language = gst_tag_get_language_name (str);
+
+      gtk_list_store_append (ctx->languages, &iter);
+      gtk_list_store_set (ctx->languages, &iter, 0, language, 1, str, 2, i,
+          -1);
+      size++;
+      g_free (str);
+
+      if (i == cur_audio)
+        gtk_combo_box_set_active_iter (GTK_COMBO_BOX (ctx->lang_selector), &iter);
+    }
+  }
+
+  if (num_audio == 0) {
+    gtk_list_store_append (ctx->languages, &iter);
+    gtk_list_store_set (ctx->languages, &iter, 0, "No Audio", 1, NULL, 2, 0,
+        -1);
+    gtk_combo_box_set_active_iter (GTK_COMBO_BOX (ctx->lang_selector), &iter);
+  } else if (size == 0) {
+    gtk_list_store_append (ctx->languages, &iter);
+    gtk_list_store_set (ctx->languages, &iter, 0, "Default", 1, NULL, 2,
+        cur_audio, -1);
+    gtk_combo_box_set_active_iter (GTK_COMBO_BOX (ctx->lang_selector), &iter);
+  }
+
+  g_signal_handlers_unblock_by_func (ctx->lang_selector, language_changed_cb, ctx);
+}
+
+static void
 update_media_uri (UIContext *ctx)
 {
   SnraClient *client = ctx->client;
@@ -371,6 +441,8 @@ update_media_uri (UIContext *ctx)
 
     update_seeker_status (ctx);
   }
+
+  update_language_status (ctx);
 }
 
 static gchar *
@@ -603,8 +675,12 @@ main (gint argc, gchar *argv[])
   ctx.next_button = GTK_WIDGET (gtk_builder_get_object (builder, "nextButton"));
   ctx.file_chooser =
     GTK_WIDGET (gtk_builder_get_object (builder, "fileChooser"));
-  ctx.audio_track =
-    GTK_WIDGET (gtk_builder_get_object (builder, "audioTrack"));
+  ctx.lang_selector =
+    GTK_WIDGET (gtk_builder_get_object (builder, "languageSelector"));
+  ctx.languages = gtk_list_store_new (3, G_TYPE_STRING, G_TYPE_STRING,
+      G_TYPE_INT);
+  gtk_combo_box_set_model (GTK_COMBO_BOX (ctx.lang_selector),
+      GTK_TREE_MODEL (ctx.languages));
   ctx.seeker = GTK_WIDGET (gtk_builder_get_object (builder, "seekerScale"));
   gtk_range_set_increments (GTK_RANGE (ctx.seeker), 2.0l * (gdouble) GST_SECOND,
       10.0l * (gdouble) GST_SECOND);
@@ -630,6 +706,8 @@ main (gint argc, gchar *argv[])
       G_CALLBACK (seeker_grabbed_cb), &ctx);
   g_signal_connect_swapped (ctx.seeker, "button-release-event",
       G_CALLBACK (seeker_released_cb), &ctx);
+  g_signal_connect_swapped (ctx.lang_selector, "changed",
+      G_CALLBACK (language_changed_cb), &ctx);
 
   /* Updates */
   g_signal_connect_swapped (ctx.client, "notify::connected-server",
@@ -657,6 +735,7 @@ main (gint argc, gchar *argv[])
   update_enabled_status (&ctx);
   update_paused_status (&ctx);
   update_players_status (&ctx);
+  update_language_status (&ctx);
 
   gtk_widget_show_all (window);
   gtk_main ();

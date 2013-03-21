@@ -48,6 +48,7 @@ struct _SnraClient
   GstClockTime base_time;
   GstClockTime position;
   gchar *uri;
+  gchar *language;
 
   GstClock *net_clock;
   gchar *server_host;
@@ -92,6 +93,7 @@ const GArray *snra_client_get_player_info (SnraClient * client);
 gboolean snra_client_get_player_enabled (SnraClient * client, guint id);
 void snra_client_set_player_enabled (SnraClient * client, guint id, gboolean enabled);
 void snra_client_set_player_volume (SnraClient * client, guint id, gdouble volume);
+void snra_client_set_language (SnraClient * client, const gchar *language_code);
 
 G_END_DECLS
 #endif

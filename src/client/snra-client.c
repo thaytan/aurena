@@ -58,6 +58,7 @@ enum
   PROP_VOLUME,
   PROP_CONNECTED_SERVER,
   PROP_ENABLED,
+  PROP_LANGUAGE,
   PROP_LAST
 };
 
@@ -288,6 +289,36 @@ construct_player (SnraClient * client)
 }
 
 static void
+set_language (SnraClient * client)
+{
+  gint num_audio, cur_audio, i;
+
+  g_object_get (client->player, "n-audio", &num_audio, "current-audio",
+      &cur_audio, NULL);
+
+  for (i = 0; i < num_audio; i++) {
+    GstTagList *tags;
+    gchar *str = NULL;
+    gboolean found = FALSE;
+
+    g_signal_emit_by_name (client->player, "get-audio-tags", i, &tags);
+    if (!tags)
+      continue;
+
+    if (gst_tag_list_get_string (tags, GST_TAG_LANGUAGE_CODE, &str))
+      found = g_str_equal (client->language, str);
+
+    gst_tag_list_free (tags);
+    g_free (str);
+
+    if (found) {
+      g_object_set (client->player, "current-audio", i, NULL);
+      break;
+    }
+  }
+}
+
+static void
 set_media (SnraClient * client)
 {
   if (client->player == NULL) {
@@ -322,7 +353,7 @@ set_media (SnraClient * client)
     /* FIXME Query duration, so we don't seek after EOS */
     if (!gst_element_seek_simple (client->player, GST_FORMAT_TIME,
           GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, client->position)) {
-      g_warning ("Initial seek failed, player will go faster instead");
+      g_warning ("Initial seekd failed, player will go faster instead");
       client->position = 0;
     }
   }
@@ -331,6 +362,9 @@ set_media (SnraClient * client)
   gst_element_set_base_time (client->player,
       client->base_time + client->position);
 
+  /* Before we start playing, ensure we have selected the right audio track */
+  set_language (client);
+
   if (!client->paused)
     gst_element_set_state (client->player, GST_STATE_PLAYING);
 }
@@ -338,7 +372,7 @@ set_media (SnraClient * client)
 static void
 handle_player_set_media_message (SnraClient * client, GstStructure * s)
 {
-  const gchar *protocol, *path;
+  const gchar *protocol, *path, *language;
   int port;
   gint64 tmp;
 
@@ -362,6 +396,10 @@ handle_player_set_media_message (SnraClient * client, GstStructure * s)
   if (!snra_json_structure_get_boolean (s, "paused", &client->paused))
     return;
 
+  g_free (client->language);
+  language = gst_structure_get_string (s, "language");
+  client->language = g_strdup (language ? language : "en");
+
   g_free (client->uri);
   client->uri = g_strdup_printf ("%s://%s:%d%s", protocol,
       client->connected_server, port, path);
@@ -369,6 +407,7 @@ handle_player_set_media_message (SnraClient * client, GstStructure * s)
   if (client->enabled)
     set_media (client);
 
+  g_object_notify (G_OBJECT (client), "language");
   g_object_notify (G_OBJECT (client), "media-uri");
 }
 
@@ -499,6 +538,24 @@ handle_player_set_client_message (SnraClient * client, GstStructure * s)
 }
 
 static void
+handle_player_language_message (SnraClient * client, GstStructure * s)
+{
+  const gchar *language;
+
+  language = gst_structure_get_string (s, "language");
+  if (!language)
+    return;
+
+  g_free (client->language);
+  client->language = g_strdup (language);
+
+  if (client->enabled && client->player)
+    set_language (client);
+
+  g_object_notify (G_OBJECT (client), "language");
+}
+
+static void
 handle_player_message (SnraClient * client, GstStructure * s)
 {
   const gchar *msg_type;
@@ -521,6 +578,8 @@ handle_player_message (SnraClient * client, GstStructure * s)
     handle_player_set_client_message (client, s);
   else if (g_str_equal (msg_type, "seek"))
     handle_player_seek_message (client, s);
+  else if (g_str_equal (msg_type, "language"))
+    handle_player_language_message (client, s);
   else
     g_print ("Unhandled player event of type %s\n", msg_type);
 }
@@ -712,6 +771,13 @@ handle_controller_client_setting_message (SnraClient * client, GstStructure * s)
 }
 
 static void
+handle_controller_language_message (SnraClient * client, GstStructure * s)
+{
+  if (!(client->flags & SNRA_CLIENT_PLAYER))
+    handle_player_language_message (client, s);
+}
+
+static void
 handle_controller_message (SnraClient * client, GstStructure * s)
 {
   const gchar *msg_type;
@@ -738,6 +804,8 @@ handle_controller_message (SnraClient * client, GstStructure * s)
     handle_controller_seek_message (client, s);
   else if (g_str_equal (msg_type, "set-media"))
     handle_controller_set_media_message (client, s);
+  else if (g_str_equal (msg_type, "language"))
+    handle_controller_language_message (client, s);
   else
     g_print ("Unhandled contorller event of type %s\n", msg_type);
 }
@@ -938,6 +1006,11 @@ snra_client_class_init (SnraClientClass * client_class)
           "True if Aurena is enabled", FALSE,
           G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
 
+  g_object_class_install_property (gobject_class, PROP_LANGUAGE,
+      g_param_spec_string ("language", "Audio Language",
+          "Audio language to choose", NULL,
+          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
+
   signals[SIGNAL_PLAYER_CREATED] = g_signal_new("player-created",
       G_TYPE_FROM_CLASS (client_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL,
       G_TYPE_NONE, 1, GST_TYPE_ELEMENT);
@@ -983,6 +1056,7 @@ snra_client_finalize (GObject * object)
   g_free (client->server_host);
   g_free (client->connected_server);
   g_free (client->uri);
+  g_free (client->language);
   free_player_info (client->player_info);
 
   G_OBJECT_CLASS (snra_client_parent_class)->finalize (object);
@@ -1087,6 +1161,10 @@ snra_client_get_property (GObject * object, guint prop_id,
         tmp = g_strdup_printf ("%s:%u", client->connected_server,
             client->connected_port);
       g_value_take_string (value, tmp);
+      break;
+    }
+    case PROP_LANGUAGE:{
+      g_value_set_string (value, client->language);
       break;
     }
     default:
@@ -1375,5 +1453,18 @@ snra_client_set_player_volume (SnraClient * client, guint id, gdouble volume)
   soup_session_queue_message (client->soup, soup_msg, NULL, NULL);
 
   g_free (id_str);
+  g_free (uri);
+}
+
+void
+snra_client_set_language (SnraClient * client, const gchar *language_code)
+{
+  gchar *uri;
+  SoupMessage *soup_msg;
+  uri = g_strdup_printf ("http://%s:%u/control/language",
+      client->connected_server, client->connected_port);
+  soup_msg = soup_form_request_new ("POST", uri, "language", language_code,
+      NULL);
+  soup_session_queue_message (client->soup, soup_msg, NULL, NULL);
   g_free (uri);
 }

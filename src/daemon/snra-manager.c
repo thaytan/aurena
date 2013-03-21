@@ -70,6 +70,7 @@ enum _SnraControlEvent
   SNRA_CONTROL_VOLUME,
   SNRA_CONTROL_CLIENT_SETTING,
   SNRA_CONTROL_SEEK,
+  SNRA_CONTROL_LANGUAGE
 };
 
 static const struct
@@ -85,7 +86,8 @@ static const struct
   "enqueue", SNRA_CONTROL_ENQUEUE}, {
   "volume", SNRA_CONTROL_VOLUME}, {
   "setclient", SNRA_CONTROL_CLIENT_SETTING}, {
-  "seek", SNRA_CONTROL_SEEK}
+  "seek", SNRA_CONTROL_SEEK}, {
+  "language", SNRA_CONTROL_LANGUAGE}
 };
 
 static const gint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
@@ -120,6 +122,8 @@ static SnraPlayerInfo * get_player_info_by_id (SnraManager *manager,
     guint client_id);
 static void snra_manager_send_seek (SnraManager * manager,
     SnraServerClient * client, GstClockTime position);
+static void snra_manager_send_language (SnraManager * manager,
+    SnraServerClient * client, const gchar * language);
 
 #define SEND_MSG_TO_PLAYERS 1
 #define SEND_MSG_TO_DISABLED_PLAYERS 2
@@ -614,6 +618,11 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
       snra_manager_send_seek (manager, NULL, position);
       break;
     }
+    case SNRA_CONTROL_LANGUAGE:{
+      const gchar *language = find_param_str ("language", query, post_params);
+      snra_manager_send_language (manager, NULL, language);
+      break;
+    }
     default:
       g_message ("Ignoring unknown/unimplemented control %s\n", parts[2]);
       soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
@@ -635,6 +644,7 @@ snra_manager_init (SnraManager * manager)
   manager->playlist = g_ptr_array_new ();
   manager->net_clock = create_net_clock ();
   manager->paused = TRUE;
+  manager->language = g_strdup ("en");
 
   manager->base_time = GST_CLOCK_TIME_NONE;
   manager->position = 0;
@@ -740,6 +750,7 @@ snra_manager_finalize (GObject * object)
   g_object_unref (manager->server);
 
   g_free (manager->custom_file);
+  g_free (manager->language);
 }
 
 static void
@@ -1056,6 +1067,23 @@ snra_manager_send_seek (SnraManager * manager, SnraServerClient * client,
   manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL, msg);
 }
 
+static void
+snra_manager_send_language (SnraManager * manager, SnraServerClient * client,
+    const gchar * language)
+{
+  GstStructure *msg;
+
+  g_free (manager->language);
+  manager->language = g_strdup (language ? language : "en");
+
+  msg = gst_structure_new ("json",
+      "msg-type", G_TYPE_STRING, "language",
+      "language", G_TYPE_STRING, manager->language,
+      NULL);
+
+  manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL, msg);
+}
+
 static GstStructure *
 manager_make_set_media_msg (SnraManager * manager, guint resource_id)
 {
@@ -1101,7 +1129,8 @@ manager_make_set_media_msg (SnraManager * manager, guint resource_id)
       "resource-path", G_TYPE_STRING, resource_path,
       "base-time", G_TYPE_INT64, (gint64) (manager->base_time),
       "position", G_TYPE_INT64, (gint64) (position),
-      "paused", G_TYPE_BOOLEAN, manager->paused, NULL);
+      "paused", G_TYPE_BOOLEAN, manager->paused,
+      "language", G_TYPE_STRING, manager->language, NULL);
 
   g_free (resource_path);
 

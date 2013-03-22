@@ -620,6 +620,9 @@ snra_server_client_send_message (SnraServerClient * client,
   if (client->type == SNRA_SERVER_CLIENT_CHUNKED) {
     soup_message_body_append (client->event_pipe->response_body,
         SOUP_MEMORY_COPY, body, len);
+    /* Add a NULL seperator, enable HTTP stack that abstract HTTP chunk. */
+    soup_message_body_append (client->event_pipe->response_body,
+        SOUP_MEMORY_COPY, "\0", 1);
     soup_server_unpause_message (client->soup, client->event_pipe);
     return;
   }

@@ -17,6 +17,7 @@ missing
 src/aurena
 src/simple-client
 src/simple-client-fullscreen
+src/simple-controller
 stamp-h1
 .deps
 *.swp

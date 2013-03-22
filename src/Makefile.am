@@ -6,8 +6,8 @@ SUBDIRS += daemon
 bin_PROGRAMS += aurena
 endif
 
-if BUILD_FULLSCREEN
-bin_PROGRAMS += simple-client-fullscreen
+if BUILD_GTKAPPS
+bin_PROGRAMS += simple-client-fullscreen simple-controller
 endif
 
 aurena_CPPFLAGS = -I$(top_srcdir) $(SNRA_COMMON_CFLAGS) $(SNRA_SERVER_CFLAGS) $(GST_RTSP_CFLAGS) $(GST_CFLAGS) $(EXTRA_CFLAGS)
@@ -27,8 +27,16 @@ simple_client_fullscreen_SOURCES = simple-client-fullscreen.c \
         snra-json.c snra-json.h \
         snra-types.h
 simple_client_fullscreen_CPPFLAGS = $(simple_client_CPPFLAGS) \
-	$(FULLSCREEN_CFLAGS)
-simple_client_fullscreen_LDADD = $(simple_client_LDADD) $(FULLSCREEN_LIBS)
+        $(GTKAPPS_CFLAGS)
+simple_client_fullscreen_LDADD = $(simple_client_LDADD) $(GTKAPPS_LIBS)
+
+
+simple_controller_SOURCES = simple-controller.c \
+        snra-json.c snra-json.h \
+        snra-types.h
+simple_controller_CPPFLAGS = $(simple_client_CPPFLAGS) \
+        $(GTKAPPS_CFLAGS)
+simple_controller_LDADD = $(simple_client_LDADD) $(GTKAPPS_LIBS)
 
 
 EXTRA_DIST = gnome-client.py

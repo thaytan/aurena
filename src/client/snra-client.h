@@ -12,7 +12,7 @@
 #include <avahi-common/error.h>
 #include <avahi-glib/glib-watch.h>
 
-#include <src/snra-types.h>
+#include "src/snra-types.h"
 
 G_BEGIN_DECLS
 
@@ -20,13 +20,35 @@ G_BEGIN_DECLS
 
 typedef struct _SnraClientClass SnraClientClass;
 
+typedef struct
+{
+  guint id;
+  gchar * host;
+  gdouble volume;
+  gboolean enabled;
+} SnraPlayerInfo;
+
+typedef enum
+{
+    SNRA_CLIENT_NONE = 0,
+    SNRA_CLIENT_PLAYER = (1 << 0),
+    SNRA_CLIENT_CONTROLLER = (1 << 1),
+} SnraClientFlags;
+
 struct _SnraClient
 {
   GObject parent;
 
-  GstState state;
+  SnraClientFlags flags;
+  gdouble volume;
+  GArray *player_info;
+
   gboolean enabled;
   gboolean paused;
+  GstClockTime base_time;
+  GstClockTime position;
+  gchar *uri;
+  gchar *language;
 
   GstClock *net_clock;
   gchar *server_host;
@@ -55,7 +77,23 @@ struct _SnraClientClass
 };
 
 GType snra_client_get_type(void);
-SnraClient *snra_client_new(const gchar *server);
+SnraClient *snra_client_new(const gchar *server, SnraClientFlags flags);
+
+gboolean snra_client_is_connected (SnraClient * client);
+gboolean snra_client_is_enabled (SnraClient * client);
+gboolean snra_client_is_playing (SnraClient * client);
+void snra_client_set_media (SnraClient * client, const gchar * id);
+void snra_client_next (SnraClient * client, guint id);
+void snra_client_play (SnraClient * client);
+void snra_client_pause (SnraClient * client);
+void snra_client_seek (SnraClient * client, GstClockTime position);
+void snra_client_get_volume (SnraClient * client, gdouble volume);
+void snra_client_set_volume (SnraClient * client, gdouble volume);
+const GArray *snra_client_get_player_info (SnraClient * client);
+gboolean snra_client_get_player_enabled (SnraClient * client, guint id);
+void snra_client_set_player_enabled (SnraClient * client, guint id, gboolean enabled);
+void snra_client_set_player_volume (SnraClient * client, guint id, gdouble volume);
+void snra_client_set_language (SnraClient * client, const gchar *language_code);
 
 G_END_DECLS
 #endif

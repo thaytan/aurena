@@ -56,6 +56,8 @@ struct _SnraManager
   GPtrArray *playlist;
   gboolean paused;
   guint current_resource;
+  gchar *custom_file;
+  gchar *language;
 
   guint next_player_id;
   GList *player_info;
@@ -63,7 +65,7 @@ struct _SnraManager
   GList *ctrl_clients;
 
   GstClockTime base_time;
-  GstClockTime stream_time;
+  GstClockTime position;
 
   gdouble current_volume;
 

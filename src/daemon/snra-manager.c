@@ -68,7 +68,9 @@ enum _SnraControlEvent
   SNRA_CONTROL_PAUSE,
   SNRA_CONTROL_ENQUEUE,
   SNRA_CONTROL_VOLUME,
-  SNRA_CONTROL_CLIENT_SETTING
+  SNRA_CONTROL_CLIENT_SETTING,
+  SNRA_CONTROL_SEEK,
+  SNRA_CONTROL_LANGUAGE
 };
 
 static const struct
@@ -83,7 +85,9 @@ static const struct
   "pause", SNRA_CONTROL_PAUSE}, {
   "enqueue", SNRA_CONTROL_ENQUEUE}, {
   "volume", SNRA_CONTROL_VOLUME}, {
-  "setclient", SNRA_CONTROL_CLIENT_SETTING}
+  "setclient", SNRA_CONTROL_CLIENT_SETTING}, {
+  "seek", SNRA_CONTROL_SEEK}, {
+  "language", SNRA_CONTROL_LANGUAGE}
 };
 
 static const gint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
@@ -114,8 +118,12 @@ static GstStructure *manager_make_set_media_msg (SnraManager * manager,
     guint resource_id);
 static GstStructure *manager_make_player_clients_changed_msg
     (SnraManager * manager);
-static SnraPlayerInfo *
-get_player_info_by_id (SnraManager *manager, guint client_id);
+static SnraPlayerInfo * get_player_info_by_id (SnraManager *manager,
+    guint client_id);
+static void snra_manager_send_seek (SnraManager * manager,
+    SnraServerClient * client, GstClockTime position);
+static void snra_manager_send_language (SnraManager * manager,
+    SnraServerClient * client, const gchar * language);
 
 #define SEND_MSG_TO_PLAYERS 1
 #define SEND_MSG_TO_DISABLED_PLAYERS 2
@@ -487,7 +495,7 @@ get_playlist_len (SnraManager * mgr)
   return snra_media_db_get_file_count (mgr->media_db);
 }
 
-static gchar *
+static const gchar *
 find_param_str (const gchar * param_name, GHashTable * query_params,
     GHashTable * post_params)
 {
@@ -525,20 +533,26 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
 
   switch (event_type) {
     case SNRA_CONTROL_NEXT:{
-      gchar *id_str = find_param_str ("id", query, post_params);
+      const gchar *id_str = find_param_str ("id", query, post_params);
       guint resource_id;
 
-      if (id_str == NULL || !sscanf (id_str, "%d", &resource_id)) {
-        /* No or invalid resource id: skip to another random track */
+      g_print ("Next ID %s\n", id_str);
+
+      if (id_str && id_str[0] == '/') {
+        resource_id = G_MAXUINT;
+        g_free (manager->custom_file);
+        manager->custom_file = g_strdup (id_str);
+      } else if (get_playlist_len (manager) == 0) {
+        resource_id = 0;
+      } else if (id_str == NULL || !id_str[0]
+          || !sscanf (id_str, "%d", &resource_id)) {
+        /* No or invalid resource id: skip to next track */
         resource_id =
-            (guint) g_random_int_range (0, get_playlist_len (manager)) + 1;
+          (guint) (manager->current_resource % get_playlist_len (manager)) + 1;
       } else {
         resource_id = CLAMP (resource_id, 1, get_playlist_len (manager));
       }
-      if (resource_id != 0) {
-        manager->paused = FALSE;
-        snra_manager_play_resource (manager, resource_id);
-      }
+      snra_manager_play_resource (manager, resource_id);
       break;
     }
     case SNRA_CONTROL_PAUSE:{
@@ -549,23 +563,18 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
     }
     case SNRA_CONTROL_PLAY:{
       if (manager->paused) {
-        if (manager->current_resource == 0) {
-          guint resource_id =
-              g_random_int_range (0, get_playlist_len (manager) + 1);
-          if (resource_id != 0) {
-            manager->paused = FALSE;
-            snra_manager_play_resource (manager, resource_id);
-          }
-        } else {
-          manager->paused = FALSE;
+        manager->paused = FALSE;
+        if (manager->current_resource == 0)
+          snra_manager_play_resource (manager,
+              get_playlist_len (manager) ? 1 : 0);
+        else
           snra_manager_send_play (manager, NULL);
-        }
       }
       break;
     }
     case SNRA_CONTROL_VOLUME:{
-      gchar *vol_str = find_param_str ("level", query, post_params);
-      gchar *id_str = find_param_str ("client_id", query, post_params);
+      const gchar *vol_str = find_param_str ("level", query, post_params);
+      const gchar *id_str = find_param_str ("client_id", query, post_params);
       guint client_id = 0;
       gdouble new_vol;
 
@@ -584,8 +593,8 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
       break;
     }
     case SNRA_CONTROL_CLIENT_SETTING:{
-      gchar *set_str = find_param_str ("enable", query, post_params);
-      gchar *id_str = find_param_str ("client_id", query, post_params);
+      const gchar *set_str = find_param_str ("enable", query, post_params);
+      const gchar *id_str = find_param_str ("client_id", query, post_params);
       guint client_id = 0;
       gint enable = 1;
 
@@ -597,6 +606,21 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
           snra_manager_adjust_client_setting (manager, client_id, enable != 0);
       }
 
+      break;
+    }
+    case SNRA_CONTROL_SEEK:{
+      const gchar *pos_str = find_param_str ("position", query, post_params);
+      GstClockTime position = 0;
+
+      if (pos_str != NULL)
+        sscanf (pos_str, "%" G_GUINT64_FORMAT, &position);
+
+      snra_manager_send_seek (manager, NULL, position);
+      break;
+    }
+    case SNRA_CONTROL_LANGUAGE:{
+      const gchar *language = find_param_str ("language", query, post_params);
+      snra_manager_send_language (manager, NULL, language);
       break;
     }
     default:
@@ -620,9 +644,10 @@ snra_manager_init (SnraManager * manager)
   manager->playlist = g_ptr_array_new ();
   manager->net_clock = create_net_clock ();
   manager->paused = TRUE;
+  manager->language = g_strdup ("en");
 
   manager->base_time = GST_CLOCK_TIME_NONE;
-  manager->stream_time = GST_CLOCK_TIME_NONE;
+  manager->position = 0;
   manager->current_volume = 0.1;
 
   manager->current_resource = 0;
@@ -723,6 +748,9 @@ snra_manager_finalize (GObject * object)
 
   snra_server_stop (manager->server);
   g_object_unref (manager->server);
+
+  g_free (manager->custom_file);
+  g_free (manager->language);
 }
 
 static void
@@ -868,6 +896,10 @@ snra_manager_get_resource_cb (G_GNUC_UNUSED SnraServer * server,
   SnraHttpResource *ret;
   gchar *file;
 
+  if (resource_id == G_MAXUINT && manager->custom_file)
+    return g_object_new (SNRA_TYPE_HTTP_RESOURCE, "source-path",
+        manager->custom_file, NULL);
+
   if (resource_id < 1 || resource_id > get_playlist_len (manager))
     return NULL;
 
@@ -888,10 +920,11 @@ snra_manager_play_resource (SnraManager * manager, guint resource_id)
 {
   manager->current_resource = resource_id;
   manager->base_time = GST_CLOCK_TIME_NONE;
-  manager->stream_time = GST_CLOCK_TIME_NONE;
+  manager->position = 0;
 
-  manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_ALL,
-      manager_make_set_media_msg (manager, manager->current_resource));
+  if (manager->current_resource)
+    manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_ALL,
+        manager_make_set_media_msg (manager, manager->current_resource));
 }
 
 static void
@@ -902,10 +935,9 @@ snra_manager_send_play (SnraManager * manager, SnraServerClient * client)
 
   /* Update base time to match length of time paused */
   g_object_get (manager->net_clock, "clock", &clock, NULL);
-  manager->base_time =
-      gst_clock_get_time (clock) + (GST_SECOND / 4) - manager->stream_time;
+  manager->base_time = gst_clock_get_time (clock) - manager->position + (GST_SECOND / 30);
   gst_object_unref (clock);
-  manager->stream_time = GST_CLOCK_TIME_NONE;
+  manager->position = 0;
 
   msg = gst_structure_new ("json",
       "msg-type", G_TYPE_STRING, "play",
@@ -918,21 +950,24 @@ static void
 snra_manager_send_pause (SnraManager * manager, SnraServerClient * client)
 {
   GstClock *clock;
+  GstClockTime now;
   GstStructure *msg;
 
-  msg = gst_structure_new ("json", "msg-type", G_TYPE_STRING, "pause", NULL);
+  g_object_get (manager->net_clock, "clock", &clock, NULL);
+  now = gst_clock_get_time (clock);
+  gst_object_unref (clock);
+
+  /* Calculate how much of the current file we played up until now, and store */
+  manager->position = now - manager->base_time + (GST_SECOND / 30);
+  g_print ("Storing position %" GST_TIME_FORMAT "\n",
+      GST_TIME_ARGS (manager->position));
+
+  msg = gst_structure_new ("json",
+      "msg-type", G_TYPE_STRING, "pause",
+      "position", G_TYPE_INT64, (gint64) manager->position,
+      NULL);
 
   manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL, msg);
-
-  if (manager->stream_time == GST_CLOCK_TIME_NONE) {
-    g_object_get (manager->net_clock, "clock", &clock, NULL);
-    /* Calculate how much of the current file we played up until now, and store */
-    manager->stream_time =
-        gst_clock_get_time (clock) + (GST_SECOND / 4) - manager->base_time;
-    gst_object_unref (clock);
-    g_print ("Storing stream_time %" GST_TIME_FORMAT "\n",
-        GST_TIME_ARGS (manager->stream_time));
-  }
 }
 
 static void
@@ -1007,11 +1042,53 @@ snra_manager_adjust_volume (SnraManager * manager, gdouble volume)
   }
 }
 
+static void
+snra_manager_send_seek (SnraManager * manager, SnraServerClient * client,
+    GstClockTime position)
+{
+  GstClock *clock;
+  GstClockTime now;
+  GstStructure *msg;
+
+  g_object_get (manager->net_clock, "clock", &clock, NULL);
+  now = gst_clock_get_time (clock);
+  gst_object_unref (clock);
+
+  manager->base_time = now - position + (GST_SECOND / 4);
+  if (manager->paused)
+    manager->position = position;
+
+  msg = gst_structure_new ("json",
+      "msg-type", G_TYPE_STRING, "seek",
+      "base-time", G_TYPE_INT64, (gint64) manager->base_time,
+      "position", G_TYPE_INT64, (gint64) position,
+      NULL);
+
+  manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL, msg);
+}
+
+static void
+snra_manager_send_language (SnraManager * manager, SnraServerClient * client,
+    const gchar * language)
+{
+  GstStructure *msg;
+
+  g_free (manager->language);
+  manager->language = g_strdup (language ? language : "en");
+
+  msg = gst_structure_new ("json",
+      "msg-type", G_TYPE_STRING, "language",
+      "language", G_TYPE_STRING, manager->language,
+      NULL);
+
+  manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL, msg);
+}
+
 static GstStructure *
 manager_make_set_media_msg (SnraManager * manager, guint resource_id)
 {
   GstClock *clock;
-  GstClockTime cur_time;
+  GstClockTime cur_time, position;
   gchar *resource_path;
   GstStructure *msg;
   gint port;
@@ -1025,7 +1102,7 @@ manager_make_set_media_msg (SnraManager * manager, guint resource_id)
   if (manager->base_time == GST_CLOCK_TIME_NONE) {
     // configure a base time 0.25 seconds in the future
     manager->base_time = cur_time + (GST_SECOND / 4);
-    manager->stream_time = GST_CLOCK_TIME_NONE;
+    manager->position = 0;
     g_print ("Base time now %" G_GUINT64_FORMAT "\n", manager->base_time);
   }
 #if 1
@@ -1033,6 +1110,12 @@ manager_make_set_media_msg (SnraManager * manager, guint resource_id)
 #else
   g_object_get (manager->config, "rtsp-port", &port, NULL);
 #endif
+
+  /* Calculate position if currently playing */
+  if (!manager->paused && cur_time > manager->base_time)
+    position = cur_time - manager->base_time;
+  else
+    position = manager->position;
 
   msg = gst_structure_new ("json", "msg-type", G_TYPE_STRING, "set-media",
       "resource-id", G_TYPE_INT64, (gint64) resource_id,
@@ -1045,7 +1128,9 @@ manager_make_set_media_msg (SnraManager * manager, guint resource_id)
 #endif
       "resource-path", G_TYPE_STRING, resource_path,
       "base-time", G_TYPE_INT64, (gint64) (manager->base_time),
-      "paused", G_TYPE_BOOLEAN, manager->paused, NULL);
+      "position", G_TYPE_INT64, (gint64) (position),
+      "paused", G_TYPE_BOOLEAN, manager->paused,
+      "language", G_TYPE_STRING, manager->language, NULL);
 
   g_free (resource_path);
 

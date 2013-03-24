@@ -43,6 +43,82 @@ sigint_handler (G_GNUC_UNUSED void *data)
   return TRUE;
 }
 
+static gboolean
+print_position (gpointer user_data)
+{
+  GstElement * player = user_data;
+  GstFormat format = GST_FORMAT_TIME;
+  gint64 pos;
+
+#if  GST_CHECK_VERSION (0, 11, 1)
+  if (gst_element_query_position (player, format, &pos)) {
+#else
+  if (gst_element_query_position (player, &format, &pos)) {
+#endif
+    GstClock * clock;
+    GstClockTime base_time, stream_time, now;
+
+    if (format != GST_FORMAT_TIME)
+      goto end;
+
+    clock = gst_element_get_clock (player);
+    if (!clock)
+      goto end;
+
+    now = gst_clock_get_time (clock);
+    gst_object_unref (clock);
+    base_time = gst_element_get_base_time (player);
+    stream_time = now - base_time;
+
+    g_print ("Playback position %" GST_TIME_FORMAT " (now %" GST_TIME_FORMAT
+        " base_time %" GST_TIME_FORMAT " stream_time %" GST_TIME_FORMAT ")\n",
+        GST_TIME_ARGS (pos), GST_TIME_ARGS (now), GST_TIME_ARGS (base_time),
+        GST_TIME_ARGS (stream_time));
+  }
+
+end:
+  return TRUE;
+}
+
+static void
+player_disposed (gpointer user_data,
+    G_GNUC_UNUSED GObject * where_the_object_was)
+{
+  guint timeout = GPOINTER_TO_UINT (user_data);
+  g_source_remove (timeout);
+}
+
+static void
+on_eos_msg (SnraClient *client, G_GNUC_UNUSED GstMessage * msg)
+{
+  SoupMessage *soup_msg;
+  /* FIXME: Next song should all be handled server side */
+  char *url = g_strdup_printf ("http://%s:%u/control/next",
+      client->connected_server, client->connected_port);
+
+  g_print ("Got EOS message\n");
+
+  soup_msg = soup_message_new ("GET", url);
+  soup_session_send_message (client->soup, soup_msg);
+  g_free (url);
+}
+
+static void
+player_created (G_GNUC_UNUSED SnraClient *client, GstElement * player)
+{
+  GstBus *bus;
+  guint timeout;
+
+  timeout = g_timeout_add_seconds (1, print_position, player);
+  g_object_weak_ref (G_OBJECT (player), player_disposed,
+      GUINT_TO_POINTER (timeout));
+
+  bus = gst_element_get_bus (GST_ELEMENT (client->player));
+  g_signal_connect_swapped (bus, "message::eos", G_CALLBACK (on_eos_msg),
+      client);
+  gst_object_unref (bus);
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -61,9 +137,12 @@ main (int argc, char *argv[])
 
   g_unix_signal_add (SIGINT, sigint_handler, NULL);
 
-  client = snra_client_new (server);
+  client = snra_client_new (server, SNRA_CLIENT_PLAYER);
   if (client == NULL)
     goto fail;
+
+  g_signal_connect (client, "player-created", G_CALLBACK (player_created),
+      NULL);
 
   ml = g_main_loop_new (NULL, FALSE);
   g_main_loop_run (ml);

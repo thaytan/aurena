@@ -70,5 +70,6 @@ AC_CONFIG_FILES([
   src/client/Makefile
   src/daemon/Makefile
   src/static/Makefile
+  data/Makefile
 ])
 AC_OUTPUT

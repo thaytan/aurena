@@ -40,4 +40,4 @@ aurena_simple_controller_LDADD = $(aurena_simple_client_LDADD) $(GTKAPPS_LIBS)
 
 
 EXTRA_DIST = gnome-client.py
-DIST_SUBDIRS = client daemon static
+DIST_SUBDIRS = client daemon

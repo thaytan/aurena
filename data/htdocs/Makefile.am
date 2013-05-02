@@ -20,3 +20,5 @@ nobase_serverdata_DATA = \
   css/smoothness/images/ui-bg_glass_65_ffffff_1x400.png \
   css/smoothness/images/ui-icons_888888_256x240.png \
   css/aurena.css
+
+EXTRA_DIST = $(nobase_serverdata_DATA)

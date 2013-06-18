@@ -26,14 +26,30 @@ PKG_CHECK_MODULES(GST_1_0, [gstreamer-1.0 gstreamer-net-1.0 gstreamer-tag-1.0], 
 if test "x$HAVE_GST_1_0" = "xyes"; then
   GST_CFLAGS="$GST_1_0_CFLAGS -DGST_USE_UNSTABLE_API"
   GST_LIBS="$GST_1_0_LIBS"
-  PKG_CHECK_MODULES(GST_RTSP, [gstreamer-rtsp-server-1.0], [HAVE_GST_RTSP=yes], [HAVE_GST_RTSP=no])
 else
   AC_MSG_NOTICE([Checking for GStreamer 0.10])
   PKG_CHECK_MODULES(GST_0_10, [gstreamer-0.10 >= 0.10.31 gstreamer-net-0.10 gstreamer-tag-0.10])
   GST_CFLAGS="$GST_0_10_CFLAGS"
   GST_LIBS="$GST_0_10_LIBS"
-  PKG_CHECK_MODULES(GST_RTSP, [gst-rtsp-server-0.10], [HAVE_GST_RTSP=yes], [HAVE_GST_RTSP=no])
 fi
+
+AC_ARG_WITH([rtsp], AS_HELP_STRING([--with-rtsp], [Build with the GStreamer RTSP server]), [], [with_rtsp=no])
+
+AC_MSG_CHECKING([whether for RTSP support])
+AS_IF([test "x$with_rtsp" != "xno"], [
+  AS_IF([test "x$HAVE_GST_1_0" = "xyes"], [
+    PKG_CHECK_MODULES(GST_RTSP, [gstreamer-rtsp-server-1.0], [HAVE_GST_RTSP=yes], [HAVE_GST_RTSP=no])
+  ],[
+    PKG_CHECK_MODULES(GST_RTSP, [gst-rtsp-server-0.10], [HAVE_GST_RTSP=yes], [HAVE_GST_RTSP=no])
+  ])
+  AS_IF([test "x$HAVE_GST_RTSP" = "xyes"],
+    [AC_MSG_RESULT([yes])],
+    [
+      AC_MSG_RESULT([not available])
+      AC_MSG_ERROR([Requested build with RTSP support requires gst-rtsp-server])
+    ]
+  )
+],[ AC_MSG_RESULT([disabled]) ])
 
 AC_MSG_NOTICE([Check for GTK+ 3.0 requirements])
 PKG_CHECK_MODULES(GTKAPPS, [gtk+-3.0], [BUILD_GTKAPPS=yes],

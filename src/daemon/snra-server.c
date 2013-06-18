@@ -125,6 +125,47 @@ error:
   soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
 }
 
+static gchar *
+get_data_filename (const gchar *basename)
+{
+  const gchar * const * dirs;
+  gchar *filepath = NULL;
+  gint i;
+
+  dirs = g_get_system_data_dirs ();
+
+  for (i = 0; dirs[i] != NULL; i++) {
+    GFile *file;
+
+    filepath = g_build_filename (dirs[i], "aurena", "htdocs", basename, NULL);
+    g_print ("looking for %s\n", filepath);
+    file = g_file_new_for_path (filepath);
+    if (g_file_query_exists (file, NULL)) {
+      g_object_unref (file);
+      break;
+    }
+
+    g_object_unref (file);
+    g_free (filepath);
+    filepath = NULL;
+  }
+
+  if (!filepath) {
+    GFile *file;
+
+    filepath = g_build_filename (g_get_current_dir (), "data", "htdocs", basename, NULL);
+    g_print ("looking for %s\n", filepath);
+    file = g_file_new_for_path (filepath);
+    if (!g_file_query_exists (file, NULL)) {
+      g_free (filepath);
+      filepath = NULL;
+    }
+    g_object_unref (file);
+  }
+
+  return filepath;
+}
+
 static void
 server_ui_cb (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
     const char *path, G_GNUC_UNUSED GHashTable * query,
@@ -152,9 +193,7 @@ server_ui_cb (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
   if (g_str_equal (file_path, "/"))
     file_path = "/index.html";
 
-  filename = g_strdup_printf ("src/static%s", file_path);
-
-  g_print ("looking for %s\n", filename);
+  filename = get_data_filename (file_path);
 
   if (!g_file_get_contents (filename, &contents, &size, NULL))
     goto fail;

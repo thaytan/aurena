@@ -74,6 +74,7 @@ snra_http_resource_open (SnraHttpResource * resource)
       return FALSE;
     }
   }
+  g_object_ref (resource);
   resource->use_count++;
   return TRUE;
 }
@@ -85,7 +86,7 @@ snra_http_resource_close (SnraHttpResource * resource)
     resource->use_count--;
     if (resource->use_count == 0) {
       resources_open--;
-      g_print ("Releasing resource %s. %d now open\n", resource->source_path,
+      DEBUG_PRINT ("Releasing resource %s. %d now open\n", resource->source_path,
           resources_open);
 #if GLIB_CHECK_VERSION(2,22,0)
       g_mapped_file_unref (resource->data);
@@ -95,29 +96,37 @@ snra_http_resource_close (SnraHttpResource * resource)
       resource->data = NULL;
     }
   }
+
+  DEBUG_PRINT ("closed resource %s (%p) use count now %d\n",
+      resource->source_path, resource, resource->use_count);
+
+  g_object_unref (resource);
+}
+
+static SnraTransfer *
+snra_transfer_new (SnraHttpResource *resource)
+{
+  SnraTransfer *transfer;
+
+  if (!snra_http_resource_open (resource))
+    return NULL;
+
+  transfer = g_new0 (SnraTransfer, 1);
+  transfer->resource = g_object_ref (resource);
+
+  DEBUG_PRINT ("Started transfer with resource %s (%p) use count now %d\n",
+      resource->source_path, resource, resource->use_count);
+
+  return transfer;
 }
 
 static void
-resource_wrote_body (G_GNUC_UNUSED SoupMessage * msg, SnraTransfer * transfer)
+snra_transfer_free (SnraTransfer *transfer)
 {
-  g_print ("Got wrote-body for %s. Use count now %d\n",
-      transfer->resource->source_path, transfer->resource->use_count);
-}
-
-static void
-resource_finished (G_GNUC_UNUSED SoupMessage * msg, SnraTransfer * transfer)
-{
-  g_print ("Completed transfer of %s. Use count now %d\n",
-      transfer->resource->source_path, transfer->resource->use_count - 1);
-
-  /* Close the resource, destroy the transfer */
   snra_http_resource_close (transfer->resource);
 
-#if 0
-  g_print ("close resource %s (%p) use count now %d msg %p\n",
-      transfer->resource->source_path, transfer->resource,
-      transfer->resource->use_count, msg);
-#endif
+  DEBUG_PRINT ("Completed transfer of %s. Use count now %d\n",
+      transfer->resource->source_path, transfer->resource->use_count);
 
   g_object_unref (transfer->resource);
   g_free (transfer);
@@ -129,36 +138,25 @@ snra_http_resource_new_transfer (SnraHttpResource * resource, SoupMessage * msg)
   /* Create a new transfer structure, and pass the contents of our
    * resource to it */
   SnraTransfer *transfer;
+  SoupBuffer *buffer;
 
-  if (!snra_http_resource_open (resource)) {
+  transfer = snra_transfer_new (resource);
+
+  if (!transfer) {
     soup_message_set_status (msg, SOUP_STATUS_INTERNAL_SERVER_ERROR);
     return;
   }
 
-#if 0
-  g_print ("open resource %s (%p) use count now %d msg %p\n",
-      resource->source_path, resource, resource->use_count, msg);
-#endif
+  buffer = soup_buffer_new_with_owner (
+      g_mapped_file_get_contents (transfer->resource->data),
+      g_mapped_file_get_length (transfer->resource->data),
+      transfer, (GDestroyNotify) snra_transfer_free);
 
-  transfer = g_new0 (SnraTransfer, 1);
-  transfer->resource = g_object_ref (resource);
-
-  {
-    const gsize len = g_mapped_file_get_length (transfer->resource->data);
-    gchar *chunk = g_mapped_file_get_contents (transfer->resource->data);
-
-    g_signal_connect (msg, "finished", G_CALLBACK (resource_finished),
-        transfer);
-    g_signal_connect (msg, "wrote-body", G_CALLBACK (resource_wrote_body),
-        transfer);
-
-    soup_message_set_status (msg, SOUP_STATUS_OK);
-    //soup_message_headers_set_encoding (msg->response_headers,
-        //SOUP_ENCODING_CONTENT_LENGTH);
-    soup_message_set_response (msg,
-        snra_resource_get_mime_type (resource->source_path),
-        SOUP_MEMORY_TEMPORARY, chunk, len);
-  }
+  soup_message_set_status (msg, SOUP_STATUS_OK);
+  soup_message_headers_replace (msg->response_headers,
+      "Content-Type", snra_resource_get_mime_type (resource->source_path));
+  soup_message_body_append_buffer (msg->response_body, buffer);
+  soup_buffer_free (buffer);
 }
 
 static void

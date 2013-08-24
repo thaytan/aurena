@@ -14,10 +14,10 @@ ltmain.sh
 Makefile
 Makefile.in
 missing
-src/aurena
-src/simple-client
-src/simple-client-fullscreen
-src/simple-controller
+src/aurena-server
+src/aurena-simple-client
+src/aurena-simple-client-fullscreen
+src/aurena-simple-controller
 stamp-h1
 .deps
 *.swp

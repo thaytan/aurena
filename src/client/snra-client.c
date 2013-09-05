@@ -118,8 +118,8 @@ try_reconnect (SnraClient * client)
 static SnraClientFlags
 get_flag_from_msg (SoupMessage *msg)
 {
-  SoupURI *uri = soup_message_get_uri(msg);
   SnraClientFlags flag;
+  SoupURI *uri = soup_message_get_uri (msg);
 
   if (g_str_equal (soup_uri_get_path (uri), "/client/control_events"))
     flag = SNRA_CLIENT_CONTROLLER;
@@ -600,10 +600,12 @@ static void
 handle_player_info (G_GNUC_UNUSED SoupSession *session, SoupMessage *msg,
     SnraClient *client)
 {
+  SoupBuffer *buffer;
+
   if (msg->status_code < 200 || msg->status_code >= 300)
     return;
 
-  SoupBuffer *buffer = soup_message_body_flatten (msg->response_body);
+  buffer = soup_message_body_flatten (msg->response_body);
   if (json_parser_load_from_data (client->json, buffer->data, buffer->length,
           NULL)) {
     const GValue *v1;

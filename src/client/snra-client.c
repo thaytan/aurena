@@ -86,7 +86,7 @@ static void connect_to_server (SnraClient * client, const gchar * server,
     int port);
 static void construct_player (SnraClient * client);
 
-void
+static void
 free_player_info (GArray * player_info)
 {
   gsize i;
@@ -115,7 +115,7 @@ try_reconnect (SnraClient * client)
   return FALSE;
 }
 
-SnraClientFlags
+static SnraClientFlags
 get_flag_from_msg (SoupMessage *msg)
 {
   SoupURI *uri = soup_message_get_uri(msg);
@@ -596,7 +596,7 @@ handle_controller_enrol_message (SnraClient * client, GstStructure * s)
   }
 }
 
-void
+static void
 handle_player_info (G_GNUC_UNUSED SoupSession *session, SoupMessage *msg,
     SnraClient *client)
 {

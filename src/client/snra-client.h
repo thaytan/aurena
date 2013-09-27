@@ -5,12 +5,14 @@
 #include <gst/net/gstnet.h>
 #include <libsoup/soup.h>
 #include <json-glib/json-glib.h>
+
+#if HAVE_AVAHI
 #include <avahi-client/client.h>
 #include <avahi-client/lookup.h>
-
 #include <avahi-common/malloc.h>
 #include <avahi-common/error.h>
 #include <avahi-glib/glib-watch.h>
+#endif
 
 #include "src/snra-types.h"
 

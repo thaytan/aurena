@@ -7,7 +7,7 @@
 #include <pthread.h>
 #include <gst/video/videooverlay.h>
 
-#include "snra-client.h"
+#include "src/client/snra-client.h"
 
 GST_DEBUG_CATEGORY_STATIC( debug_category);
 #define GST_CAT_DEFAULT debug_category
@@ -178,7 +178,7 @@ static void setup_client(CustomData * data) {
 	if (data->client != NULL)
 		return;
 
-	data->client = snra_client_new(data->context, SERVER_ADDRESS);
+	data->client = snra_client_new(data->context, SERVER_ADDRESS, SNRA_CLIENT_PLAYER);
 
 	if (data->native_window) {
 		GST_DEBUG(

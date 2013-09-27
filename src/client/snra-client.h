@@ -57,6 +57,8 @@ struct _SnraClient
   SoupSession *soup;
   JsonParser *json;
 
+  GMainContext * context;
+
   GstElement *player;
 
   guint timeout;
@@ -66,9 +68,11 @@ struct _SnraClient
   gchar *connected_server;
   gint connected_port;
 
+#if HAVE_AVAHI
   AvahiGLibPoll *glib_poll;
   AvahiClient *avahi_client;
   AvahiServiceBrowser *avahi_sb;
+#endif
 };
 
 struct _SnraClientClass
@@ -77,7 +81,7 @@ struct _SnraClientClass
 };
 
 GType snra_client_get_type(void);
-SnraClient *snra_client_new(const gchar *server, SnraClientFlags flags);
+SnraClient *snra_client_new(GMainContext * context, const gchar *server, SnraClientFlags flags);
 
 gboolean snra_client_is_connected (SnraClient * client);
 gboolean snra_client_is_enabled (SnraClient * client);

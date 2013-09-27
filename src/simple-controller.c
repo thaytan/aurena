@@ -635,7 +635,7 @@ main (gint argc, gchar *argv[])
 
   /* Create Aurena client */
   avahi_set_allocator (avahi_glib_allocator ());
-  ctx.client = snra_client_new (server,
+  ctx.client = snra_client_new (NULL, server,
       SNRA_CLIENT_PLAYER | SNRA_CLIENT_CONTROLLER);
   if (ctx.client == NULL)
     goto fail;

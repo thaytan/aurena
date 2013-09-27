@@ -190,9 +190,6 @@ handle_player_enrol_message (SnraClient * client, GstStructure * s)
   cur_time = (GstClockTime) (tmp);
 
   if (snra_json_structure_get_double (s, "volume-level", &new_vol)) {
-    if (client->player == NULL)
-      construct_player (client);
-
     if (client->player) {
       //g_print ("New volume %g\n", new_vol);
       g_object_set (G_OBJECT (client->player), "volume", new_vol,
@@ -268,6 +265,11 @@ static void
 construct_player (SnraClient * client)
 {
   GstBus *bus;
+  GSource *bus_source;
+  guint flags;
+
+  client->soup = soup_session_async_new_with_options (SOUP_SESSION_ASYNC_CONTEXT, client->context, NULL);
+  g_assert (client->soup);
 
 #if GST_CHECK_VERSION (0, 11, 1)
   client->player = gst_element_factory_make ("playbin", NULL);
@@ -280,8 +282,19 @@ construct_player (SnraClient * client)
     return;
   }
 
+  g_object_get (client->player, "flags", &flags, NULL);
+  /* Disable subtitles for now */
+  flags &= ~0x00000004;
+  g_object_set (client->player, "flags", flags, NULL);
+
   bus = gst_element_get_bus (GST_ELEMENT (client->player));
-  gst_bus_add_signal_watch (bus);
+
+  bus_source = gst_bus_create_watch (bus);
+  g_source_set_callback (bus_source, (GSourceFunc) gst_bus_async_signal_func,
+      NULL, NULL);
+  g_source_attach (bus_source, client->context);
+  g_source_unref (bus_source);
+
   g_signal_connect (bus, "message::error", (GCallback) (on_error_msg), client);
   gst_object_unref (bus);
 
@@ -827,15 +840,20 @@ handle_received_chunk (SoupMessage * msg, SoupBuffer * chunk,
     client->was_connected |= flag;
   }
 
+#if HAVE_AVAHI
   /* Successful server connection, stop avahi discovery */
   if (client->avahi_client) {
     avahi_client_free (client->avahi_client);
     client->avahi_sb = NULL;
     client->avahi_client = NULL;
   }
+#endif
 
   if (client->json == NULL)
     client->json = json_parser_new ();
+  // Ignore null chunks
+  if (chunk->length < 2)
+	return;
 #if 0
   {
     gchar *tmp = g_strndup (chunk->data, chunk->length);
@@ -1035,12 +1053,14 @@ snra_client_finalize (GObject * object)
 {
   SnraClient *client = (SnraClient *) (object);
 
+#if HAVE_AVAHI
   if (client->avahi_sb)
     avahi_service_browser_free (client->avahi_sb);
   if (client->avahi_client)
     avahi_client_free (client->avahi_client);
   if (client->glib_poll)
     avahi_glib_poll_free (client->glib_poll);
+#endif
 
   if (client->net_clock)
     gst_object_unref (client->net_clock);
@@ -1054,6 +1074,8 @@ snra_client_finalize (GObject * object)
     gst_object_unref (bus);
     gst_object_unref (client->player);
   }
+  if (client->context)
+    g_main_context_unref (client->context);
 
   g_free (client->server_host);
   g_free (client->connected_server);
@@ -1175,6 +1197,7 @@ snra_client_get_property (GObject * object, guint prop_id,
   }
 }
 
+#if HAVE_AVAHI
 static void
 avahi_resolve_callback (AvahiServiceResolver * r,
     AVAHI_GCC_UNUSED AvahiIfIndex interface,
@@ -1280,14 +1303,24 @@ search_for_server (SnraClient * client)
   }
 
 }
+#else
+static void
+search_for_server (SnraClient * client)
+{
+}
+#endif
 
 SnraClient *
-snra_client_new (const char *server_host, SnraClientFlags flags)
+snra_client_new (GMainContext *context, const char *server_host, SnraClientFlags flags)
 {
   SnraClient *client = g_object_new (SNRA_TYPE_CLIENT,
       "server-host", server_host,
       "flags", flags,
       NULL);
+  client->context = context ? g_main_context_ref (context) : NULL;
+  construct_player (client);
+  try_reconnect (client);
+
   return client;
 }
 

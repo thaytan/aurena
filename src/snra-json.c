@@ -37,12 +37,14 @@ snra_json_node_into_val (JsonNode *element_node, GValue *v)
     GstStructure *child = snra_json_to_gst_structure (element_node);
     g_value_init (v, GST_TYPE_STRUCTURE);
     gst_value_set_structure (v, child);
-  } else if (JSON_NODE_HOLDS_ARRAY (element_node)) {
+  }
+  else if (JSON_NODE_HOLDS_ARRAY (element_node)) {
     JsonArray *arr = json_node_get_array (element_node);
     g_value_init (v, GST_TYPE_ARRAY);
     json_array_foreach_element (arr,
         (JsonArrayForeach) snra_json_array_add_to_val, v);
-  } else {
+  }
+  else {
     json_node_get_value (element_node, v);
   }
 }

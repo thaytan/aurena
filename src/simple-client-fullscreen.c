@@ -121,7 +121,7 @@ main (int argc, char *argv[])
 
   avahi_set_allocator (avahi_glib_allocator ());
 
-  client = snra_client_new (server, SNRA_CLIENT_PLAYER);
+  client = snra_client_new (NULL, server, SNRA_CLIENT_PLAYER);
   if (client == NULL)
     goto fail;
 

@@ -190,6 +190,9 @@ handle_player_enrol_message (SnraClient * client, GstStructure * s)
   cur_time = (GstClockTime) (tmp);
 
   if (snra_json_structure_get_double (s, "volume-level", &new_vol)) {
+    if (client->player == NULL)
+      construct_player(client);
+
     if (client->player) {
       //g_print ("New volume %g\n", new_vol);
       g_object_set (G_OBJECT (client->player), "volume", new_vol,
@@ -268,11 +271,9 @@ construct_player (SnraClient * client)
   GSource *bus_source;
   guint flags;
 
-  client->soup = soup_session_async_new_with_options (SOUP_SESSION_ASYNC_CONTEXT, client->context, NULL);
-  g_assert (client->soup);
-
-#if GST_CHECK_VERSION (0, 11, 1)
+#if GST_CHECK_VERSION (1, 0, 0)
   client->player = gst_element_factory_make ("playbin", NULL);
+  GST_DEBUG("Constructing playbin");
 #else
   client->player = gst_element_factory_make ("playbin2", NULL);
 #endif
@@ -906,7 +907,7 @@ connect_to_server (SnraClient * client, const gchar * server, int port)
 
   if (client->flags & SNRA_CLIENT_PLAYER
       && !(client->connecting & SNRA_CLIENT_PLAYER)) {
-    g_print ("Attemping to connect player to server %s:%d\n", server, port);
+    GST_DEBUG("Attemping to connect player to server %s:%d\n", server, port);
     client->connecting |= SNRA_CLIENT_PLAYER;
 
     uri = g_strdup_printf ("http://%s:%u/client/player_events", server, port);
@@ -920,7 +921,7 @@ connect_to_server (SnraClient * client, const gchar * server, int port)
 
   if (client->flags & SNRA_CLIENT_CONTROLLER
       && !(client->connecting & SNRA_CLIENT_CONTROLLER)) {
-    g_print ("Attemping to connect controller to server %s:%d\n", server, port);
+    GST_DEBUG("Attemping to connect controller to server %s:%d\n", server, port);
     client->connecting |= SNRA_CLIENT_CONTROLLER;
 
     uri = g_strdup_printf ("http://%s:%u/client/control_events", server, port);
@@ -938,9 +939,10 @@ connect_to_server (SnraClient * client, const gchar * server, int port)
 static void
 snra_client_init (SnraClient * client)
 {
-  client->soup = soup_session_async_new ();
   client->server_port = 5457;
   client->paused = TRUE;
+  client->soup = soup_session_async_new_with_options (SOUP_SESSION_ASYNC_CONTEXT, client->context, NULL);
+  g_assert (client->soup);
 
   if (!g_strcmp0 ("1", g_getenv ("AURENA_DEBUG")))
     soup_session_add_feature (client->soup,
@@ -1318,8 +1320,6 @@ snra_client_new (GMainContext *context, const char *server_host, SnraClientFlags
       "flags", flags,
       NULL);
   client->context = context ? g_main_context_ref (context) : NULL;
-  construct_player (client);
-  try_reconnect (client);
 
   return client;
 }

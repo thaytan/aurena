@@ -352,3 +352,29 @@ snra_media_db_get_file_by_id (SnraMediaDB * media_db, guint id)
 done:
   return ret_path;
 }
+
+void
+snra_media_db_begin_transaction (SnraMediaDB *media_db)
+{
+  sqlite3_stmt *stmt = NULL;
+  sqlite3 *handle = media_db->priv->handle;
+
+  if (sqlite3_prepare (handle,
+          "begin transaction", -1, &stmt, NULL) != SQLITE_OK)
+    return;
+  sqlite3_step (stmt);
+}
+
+void
+snra_media_db_commit_transaction (SnraMediaDB *media_db)
+{
+  sqlite3_stmt *stmt = NULL;
+  sqlite3 *handle = media_db->priv->handle;
+
+  if (sqlite3_prepare (handle,
+          "commit transaction", -1, &stmt, NULL) != SQLITE_OK)
+    return;
+  sqlite3_step (stmt);
+
+}
+

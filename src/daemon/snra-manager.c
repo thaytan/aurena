@@ -838,6 +838,8 @@ read_playlist_file (SnraManager * manager, const char *filename)
     return;
   }
 
+  snra_media_db_begin_transaction (manager->media_db);
+
   do {
     result = g_io_channel_read_line (io, &line, NULL, NULL, NULL);
     if (result == G_IO_STATUS_AGAIN)
@@ -848,8 +850,9 @@ read_playlist_file (SnraManager * manager, const char *filename)
     g_ptr_array_add (manager->playlist, line);
     snra_media_db_add_file (manager->media_db, line);
   } while (TRUE);
+  snra_media_db_commit_transaction (manager->media_db);
 
-  g_print ("Read %u entries\n", manager->playlist->len);
+  g_print ("Finished scanning playlist. Read %u entries\n", manager->playlist->len);
 
   g_io_channel_unref (io);
 }

@@ -985,10 +985,6 @@ connect_to_server (SnraClient * client, const gchar * server, int port)
 static void
 snra_client_init (SnraClient * client)
 {
-  /* Set a 20 second timeout on pings from the server */
-  g_object_set (G_OBJECT (client->soup), "idle-timeout", 20, NULL);
-  /* 5 second timeout before retrying with new connections */
-  g_object_set (G_OBJECT (client->soup), "timeout", 5, NULL);
   client->server_port = 5457;
   client->paused = TRUE;
 }
@@ -1007,6 +1003,11 @@ snra_client_constructed (GObject * object)
   if (!g_strcmp0 ("1", g_getenv ("AURENA_DEBUG")))
     soup_session_add_feature (client->soup,
         SOUP_SESSION_FEATURE (soup_logger_new (SOUP_LOGGER_LOG_BODY, -1)));
+
+  /* Set a 20 second timeout on pings from the server */
+  g_object_set (G_OBJECT (client->soup), "idle-timeout", 20, NULL);
+  /* 5 second timeout before retrying with new connections */
+  g_object_set (G_OBJECT (client->soup), "timeout", 5, NULL);
 
   if (client->flags & SNRA_CLIENT_PLAYER)
     max_con++;

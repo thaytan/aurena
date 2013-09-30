@@ -30,6 +30,9 @@
 #endif
 
 #include <stdio.h>
+#ifdef ANDROID
+#include <android/log.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <glib.h>
@@ -46,6 +49,10 @@
 
 G_DEFINE_TYPE (SnraClient, snra_client, G_TYPE_OBJECT);
 
+#ifdef ANDROID
+#define g_print(...) __android_log_print(ANDROID_LOG_ERROR, "aurena", __VA_ARGS__)
+#endif
+
 enum
 {
   PROP_0,
@@ -59,6 +66,7 @@ enum
   PROP_CONNECTED_SERVER,
   PROP_ENABLED,
   PROP_LANGUAGE,
+  PROP_ASYNC_MAIN_CONTEXT,
   PROP_LAST
 };
 
@@ -107,6 +115,7 @@ try_reconnect (SnraClient * client)
 {
   client->timeout = 0;
 
+  g_print("In try_reconnect()\n");
   if (client->server_host)
     connect_to_server (client, client->server_host, client->server_port);
   else
@@ -189,6 +198,9 @@ handle_player_enrol_message (SnraClient * client, GstStructure * s)
     return;                     /* Invalid message */
   cur_time = (GstClockTime) (tmp);
 
+  if (client->player == NULL)
+    construct_player(client);
+
   if (snra_json_structure_get_double (s, "volume-level", &new_vol)) {
     if (client->player == NULL)
       construct_player(client);
@@ -268,7 +280,6 @@ static void
 construct_player (SnraClient * client)
 {
   GstBus *bus;
-  GSource *bus_source;
   guint flags;
 
 #if GST_CHECK_VERSION (1, 0, 0)
@@ -290,11 +301,17 @@ construct_player (SnraClient * client)
 
   bus = gst_element_get_bus (GST_ELEMENT (client->player));
 
+#if 0
+  gst_bus_add_signal_watch(bus);
+#else
+  { GSource *bus_source;
   bus_source = gst_bus_create_watch (bus);
   g_source_set_callback (bus_source, (GSourceFunc) gst_bus_async_signal_func,
       NULL, NULL);
   g_source_attach (bus_source, client->context);
   g_source_unref (bus_source);
+  }
+#endif
 
   g_signal_connect (bus, "message::error", (GCallback) (on_error_msg), client);
   gst_object_unref (bus);
@@ -908,12 +925,14 @@ connect_to_server (SnraClient * client, const gchar * server, int port)
   client->connected_server = g_strdup (server);
   client->connected_port = port;
 
+  g_print("In connect_to_server(%s,%d), client->flags %u, connecting %u\n", server, port, client->flags, client->connecting);
+
   if (client->flags & SNRA_CLIENT_PLAYER
       && !(client->connecting & SNRA_CLIENT_PLAYER)) {
-    GST_DEBUG("Attemping to connect player to server %s:%d\n", server, port);
     client->connecting |= SNRA_CLIENT_PLAYER;
 
     uri = g_strdup_printf ("http://%s:%u/client/player_events", server, port);
+    g_print("Attemping to connect player to server %s:%d\n", server, port);
     msg = soup_message_new ("GET", uri);
     g_signal_connect (msg, "got-chunk", (GCallback) handle_received_chunk,
         client);
@@ -924,7 +943,7 @@ connect_to_server (SnraClient * client, const gchar * server, int port)
 
   if (client->flags & SNRA_CLIENT_CONTROLLER
       && !(client->connecting & SNRA_CLIENT_CONTROLLER)) {
-    GST_DEBUG("Attemping to connect controller to server %s:%d\n", server, port);
+    g_print("Attemping to connect controller to server %s:%d\n", server, port);
     client->connecting |= SNRA_CLIENT_CONTROLLER;
 
     uri = g_strdup_printf ("http://%s:%u/client/control_events", server, port);
@@ -944,12 +963,6 @@ snra_client_init (SnraClient * client)
 {
   client->server_port = 5457;
   client->paused = TRUE;
-  client->soup = soup_session_async_new_with_options (SOUP_SESSION_ASYNC_CONTEXT, client->context, NULL);
-  g_assert (client->soup);
-
-  if (!g_strcmp0 ("1", g_getenv ("AURENA_DEBUG")))
-    soup_session_add_feature (client->soup,
-        SOUP_SESSION_FEATURE (soup_logger_new (SOUP_LOGGER_LOG_BODY, -1)));
 }
 
 static void
@@ -960,6 +973,12 @@ snra_client_constructed (GObject * object)
 
   if (G_OBJECT_CLASS (snra_client_parent_class)->constructed != NULL)
     G_OBJECT_CLASS (snra_client_parent_class)->constructed (object);
+
+  client->soup = soup_session_async_new_with_options (SOUP_SESSION_ASYNC_CONTEXT, client->context, NULL);
+  g_assert (client->soup);
+  if (!g_strcmp0 ("1", g_getenv ("AURENA_DEBUG")))
+    soup_session_add_feature (client->soup,
+        SOUP_SESSION_FEATURE (soup_logger_new (SOUP_LOGGER_LOG_BODY, -1)));
 
   if (client->flags & SNRA_CLIENT_PLAYER)
     max_con++;
@@ -994,6 +1013,11 @@ snra_client_class_init (SnraClientClass * client_class)
           "Aurena Client flags to enable player and controller mode", 0,
           G_MAXUINT, 0,
           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_ASYNC_MAIN_CONTEXT,
+      g_param_spec_boxed ("main-context", "Async Main Context",
+          "GLib Main Context to use for HTTP connections", G_TYPE_MAIN_CONTEXT,
+          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 
   g_object_class_install_property (gobject_class, PROP_PAUSED,
       g_param_spec_boolean ("paused", "paused",
@@ -1138,6 +1162,12 @@ snra_client_set_property (GObject * object, guint prop_id,
       client->flags = g_value_get_uint (value);
       break;
     }
+    case PROP_ASYNC_MAIN_CONTEXT: {
+      if (client->context)
+	g_main_context_unref(client->context);
+      client->context = (GMainContext *)(g_value_dup_boxed(value));
+      break;
+    }
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -1195,6 +1225,11 @@ snra_client_get_property (GObject * object, guint prop_id,
       g_value_set_string (value, client->language);
       break;
     }
+    case PROP_ASYNC_MAIN_CONTEXT: {
+      g_value_set_boxed(value, client->context);
+      break;
+    }
+
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -1318,10 +1353,10 @@ SnraClient *
 snra_client_new (GMainContext *context, const char *server_host, SnraClientFlags flags)
 {
   SnraClient *client = g_object_new (SNRA_TYPE_CLIENT,
+      "main-context", context,
       "server-host", server_host,
       "flags", flags,
       NULL);
-  client->context = context ? g_main_context_ref (context) : NULL;
 
   return client;
 }

@@ -852,16 +852,6 @@ handle_received_chunk (SoupMessage * msg, SoupBuffer * chunk,
 
   if (client->json == NULL)
     client->json = json_parser_new ();
-  // Ignore null chunks
-  if (chunk->length < 2)
-	return;
-#if 0
-  {
-    gchar *tmp = g_strndup (chunk->data, chunk->length);
-    g_print ("%s\n", tmp);
-    g_free (tmp);
-  }
-#endif
 
   ptr = memchr (chunk->data, '\0', chunk->length);
   if (!ptr)
@@ -872,6 +862,19 @@ handle_received_chunk (SoupMessage * msg, SoupBuffer * chunk,
   length =(chunk->length - (ptr - chunk->data));
 
   chunk = soup_message_body_flatten (msg->response_body);
+
+  // Ignore null string chunks
+  if (chunk->length < 2)
+	goto end;
+
+#if 0
+  {
+    gchar *tmp = g_strndup (chunk->data, chunk->length);
+    g_print ("%s\n", tmp);
+    g_free (tmp);
+  }
+#endif
+
   if (json_parser_load_from_data (client->json, chunk->data, chunk->length,
           NULL)) {
     JsonNode *root = json_parser_get_root (client->json);
@@ -1072,7 +1075,6 @@ snra_client_finalize (GObject * object)
     g_object_unref (client->json);
   if (client->player) {
     GstBus *bus = gst_element_get_bus (client->player);
-    gst_bus_remove_signal_watch (bus);
     gst_object_unref (bus);
     gst_object_unref (client->player);
   }

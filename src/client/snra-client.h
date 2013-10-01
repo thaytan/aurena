@@ -14,7 +14,7 @@
 #include <avahi-glib/glib-watch.h>
 #endif
 
-#include "src/snra-types.h"
+#include "src/common/snra-types.h"
 
 G_BEGIN_DECLS
 

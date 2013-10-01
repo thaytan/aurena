@@ -44,7 +44,7 @@
 #include <netdb.h>
 #endif
 
-#include "src/snra-json.h"
+#include "src/common/snra-json.h"
 #include "snra-client.h"
 
 G_DEFINE_TYPE (SnraClient, snra_client, G_TYPE_OBJECT);

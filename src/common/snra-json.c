@@ -24,7 +24,7 @@
 #include <gst/gst.h>
 #include <json-glib/json-glib.h>
 
-#include <src/snra-json.h>
+#include <src/common/snra-json.h>
 
 static void
 snra_json_array_add_to_val (JsonArray *array, guint index_,

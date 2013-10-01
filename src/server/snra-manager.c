@@ -31,7 +31,7 @@
 
 #include <json-glib/json-glib.h>
 
-#include <src/snra-json.h>
+#include <src/common/snra-json.h>
 
 #include "snra-config.h"
 #include "snra-http-resource.h"

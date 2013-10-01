@@ -548,10 +548,11 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
           || !sscanf (id_str, "%d", &resource_id)) {
         /* No or invalid resource id: skip to next track */
         resource_id =
-          (guint) (manager->current_resource % get_playlist_len (manager)) + 1;
+          (guint) g_random_int_range (0, get_playlist_len (manager)) + 1;
       } else {
         resource_id = CLAMP (resource_id, 1, get_playlist_len (manager));
       }
+      manager->paused = FALSE;
       snra_manager_play_resource (manager, resource_id);
       break;
     }
@@ -563,12 +564,17 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
     }
     case SNRA_CONTROL_PLAY:{
       if (manager->paused) {
-        manager->paused = FALSE;
-        if (manager->current_resource == 0)
-          snra_manager_play_resource (manager,
-              get_playlist_len (manager) ? 1 : 0);
-        else
+        if (manager->current_resource == 0) {
+          guint resource_id =
+              g_random_int_range (0, get_playlist_len (manager) + 1);
+          if (resource_id != 0) {
+            manager->paused = FALSE;
+            snra_manager_play_resource (manager, resource_id);
+          }
+        } else {
+          manager->paused = FALSE;
           snra_manager_send_play (manager, NULL);
+        }
       }
       break;
     }
@@ -925,9 +931,8 @@ snra_manager_play_resource (SnraManager * manager, guint resource_id)
   manager->base_time = GST_CLOCK_TIME_NONE;
   manager->position = 0;
 
-  if (manager->current_resource)
-    manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_ALL,
-        manager_make_set_media_msg (manager, manager->current_resource));
+  manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_ALL,
+      manager_make_set_media_msg (manager, manager->current_resource));
 }
 
 static void

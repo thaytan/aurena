@@ -1,6 +1,6 @@
-noinst_LTLIBRARIES        = libsnra_daemon.la
+noinst_LTLIBRARIES        = libsnra_server.la
 
-libsnra_daemon_la_SOURCES = \
+libsnra_server_la_SOURCES = \
     snra-avahi.c \
     snra-avahi.h \
     snra-config.c \
@@ -17,5 +17,5 @@ libsnra_daemon_la_SOURCES = \
     snra-server.h \
     snra-server-client.c \
     snra-server-client.h 
-libsnra_daemon_la_CPPFLAGS = -I$(top_srcdir) $(SNRA_COMMON_CFLAGS) $(GST_CFLAGS) $(GST_RTSP_CFLAGS) $(EXTRA_CFLAGS)
-libsnra_daemon_la_LIBADD  = 
+libsnra_server_la_CPPFLAGS = -I$(top_srcdir) $(SNRA_COMMON_CFLAGS) $(GST_CFLAGS) $(GST_RTSP_CFLAGS) $(EXTRA_CFLAGS)
+libsnra_server_la_LIBADD  = 

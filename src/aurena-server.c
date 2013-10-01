@@ -25,7 +25,7 @@
 #include <gst/gst.h>
 #include <glib-unix.h>
 
-#include "daemon/snra-manager.h"
+#include "server/snra-manager.h"
 
 GMainLoop *ml;
 

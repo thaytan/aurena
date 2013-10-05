@@ -88,5 +88,6 @@ AC_CONFIG_FILES([
   src/server/Makefile
   data/Makefile
   data/htdocs/Makefile
+  test/Makefile
 ])
 AC_OUTPUT

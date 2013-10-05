@@ -1,2 +1,2 @@
-SUBDIRS = src data
+SUBDIRS = src data test
 EXTRA_DIST = content

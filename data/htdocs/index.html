@@ -1,5 +1,6 @@
 <html>
 <head>
+<meta charset="UTF-8" />
 <title>Aurena</title>
   <link href="css/smoothness/jquery-ui-1.8.22.custom.css" rel="stylesheet" type="text/css"/>
   <script src="js/jquery-1.7.2.min.js"></script>
@@ -17,7 +18,11 @@
   <div id="nowplaying" class="inline"></div></div>
 
   <div id="clients"><p/>Connected outputs:<p id="cliententries"></p></div>
-  <div id="playlist"></div>
+  <div id="playlist">
+    <form action="" id="jumptrackform">
+    Jump to Track: <input type="text" id="jumptotrackid" /><input id="jumptrackbutton" type="submit" value="Go" />
+    </form>
+  </div>
   <div id="library"></div>
 </div>
 

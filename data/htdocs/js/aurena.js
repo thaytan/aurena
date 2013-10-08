@@ -193,7 +193,7 @@ send_slider_volume : function send_slider_volume(client_id) {
 
   if (aurena.sendingVol || !aurena.volChange || aurena.slide_update) return;
   aurena.sendingVol = true; aurena.volChange = false;
-  // $("#debug").prepend("<p>Sending volume " + curVol.toString() + "</p>");
+  $("#debug").prepend("<p>Sending volume " + curVol.toString() + "</p>");
   $.ajax({
     type: 'POST',
     url: "../control/volume",
@@ -221,6 +221,15 @@ next : function() {
 previous : function() {
   $.ajax({ url: "../control/previous" , type: 'POST'});
 },
+jumpToTrack : function () {
+  track=parseInt($("#jumptotrackid").val());
+  
+  if (!isNaN(track)) {
+    $.ajax({ url: "../control/next", type: 'POST',
+       data: { id: track } });
+  }
+  $("#jumptotrackid").val("");
+},
 init : function() {
   aurena.sendingVol = false;
   aurena.volChange = false;
@@ -242,6 +251,7 @@ init : function() {
   $("#play").click(function() { aurena.play() });
   $("#pause").click(function() { aurena.pause() });
   $("#next").click(function() { aurena.next() });
+  $("#jumptrackform").submit(function(e) { aurena.jumpToTrack(); e.preventDefault(); return false; });
   aurena.websocket_listener();
 }
 

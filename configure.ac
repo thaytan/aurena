@@ -28,10 +28,7 @@ if test "x$HAVE_GST_1_0" = "xyes"; then
   GST_CFLAGS="$GST_1_0_CFLAGS -DGST_USE_UNSTABLE_API"
   GST_LIBS="$GST_1_0_LIBS"
 else
-  AC_MSG_NOTICE([Checking for GStreamer 0.10])
-  PKG_CHECK_MODULES(GST_0_10, [gstreamer-0.10 >= 0.10.31 gstreamer-net-0.10 gstreamer-tag-0.10])
-  GST_CFLAGS="$GST_0_10_CFLAGS"
-  GST_LIBS="$GST_0_10_LIBS"
+  AC_MSG_ERROR([GStreamer 1.0 required])
 fi
 
 AC_ARG_WITH([rtsp], AS_HELP_STRING([--with-rtsp], [Build with the GStreamer RTSP server]), [], [with_rtsp=no])

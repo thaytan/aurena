@@ -357,7 +357,7 @@ set_language (SnraClient * client)
     if (gst_tag_list_get_string (tags, GST_TAG_LANGUAGE_CODE, &str))
       found = g_str_equal (client->language, str);
 
-    gst_tag_list_free (tags);
+    gst_tag_list_unref (tags);
     g_free (str);
 
     if (found) {

@@ -22,16 +22,33 @@ intr_handler (G_GNUC_UNUSED gpointer user_data)
   return FALSE;
 }
 
+GstClockTime last_internal_time = -1, last_external_time = -1, last_rate_num = -1, last_rate_den = -1;
+
 gboolean
 clock_poll (GstClock *net_clock)
 {
   GstClockTime cur_sys_time = gst_clock_get_time (sys_clock);
   GstClockTime cur_net_time = gst_clock_get_time (net_clock);
-  g_print("%" G_GUINT64_FORMAT "\t%" G_GUINT64_FORMAT "\t%" GST_TIME_FORMAT
-      "\t%" G_GINT64_FORMAT "\n",
-      cur_sys_time, cur_net_time, GST_TIME_ARGS(cur_net_time),
-      GST_CLOCK_DIFF (cur_net_time, cur_sys_time));
+  GstClockTime internal_time, external_time, rate_num, rate_den;
 
+  gst_clock_get_calibration(net_clock, &internal_time, &external_time, &rate_num, &rate_den);
+
+  if (last_internal_time != internal_time ||
+      last_external_time != external_time ||
+      last_rate_num != rate_num ||
+      last_rate_den != rate_den)
+  {
+    g_print("%" G_GUINT64_FORMAT "\t%" G_GUINT64_FORMAT "\t%" GST_TIME_FORMAT
+        "\t%" G_GINT64_FORMAT "\t%" G_GUINT64_FORMAT
+        "\t%" G_GUINT64_FORMAT "\t%" G_GUINT64_FORMAT "\t%g\n",
+        cur_sys_time, cur_net_time, GST_TIME_ARGS(cur_net_time),
+        GST_CLOCK_DIFF (cur_net_time, cur_sys_time),
+        internal_time, rate_num, rate_den, (gdouble)(rate_num) / rate_den);
+    last_internal_time = internal_time;
+    last_external_time = external_time;
+    last_rate_num = rate_num;
+    last_rate_den = rate_den;
+  }
   return TRUE;
 }
 

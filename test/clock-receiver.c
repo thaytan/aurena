@@ -27,8 +27,8 @@ clock_poll (GstClock *net_clock)
 {
   GstClockTime cur_sys_time = gst_clock_get_time (sys_clock);
   GstClockTime cur_net_time = gst_clock_get_time (net_clock);
-  g_print("%" G_GUINT64_FORMAT " %" G_GUINT64_FORMAT " %" GST_TIME_FORMAT
-      " (%" G_GINT64_FORMAT ")\n",
+  g_print("%" G_GUINT64_FORMAT "\t%" G_GUINT64_FORMAT "\t%" GST_TIME_FORMAT
+      "\t%" G_GINT64_FORMAT "\n",
       cur_sys_time, cur_net_time, GST_TIME_ARGS(cur_net_time),
       GST_CLOCK_DIFF (cur_net_time, cur_sys_time));
 
@@ -46,7 +46,7 @@ main(int argc, char **argv)
 
   gst_init(&argc, &argv);
 
-  if (argc < 2) {
+  if (argc < 3) {
     g_print ("Usage %s <server> <port>\n", argv[0]);
     return 1;
   }
@@ -71,7 +71,8 @@ main(int argc, char **argv)
   loop = g_main_loop_new(NULL, FALSE);
   timeout_id = g_timeout_add(100, (GSourceFunc)clock_poll, net_clock);
 
-  g_print("Ready - polling clock server at %s:%d\n", server, clock_port);
+  //g_print("Ready - polling clock server at %s:%d\n", server, clock_port);
+  g_print("LocalSysTime\tRemoteTime\tRemoteTimeStr\tDiff\n");
   g_main_loop_run(loop);  
 
   gst_object_unref (net_clock);

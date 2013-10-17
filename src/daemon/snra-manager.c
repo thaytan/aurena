@@ -540,8 +540,8 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
 
       if (id_str && id_str[0] == '/') {
         resource_id = G_MAXUINT;
-        g_free (manager->custom_file);
-        manager->custom_file = g_strdup (id_str);
+        g_clear_object (&manager->custom_file);
+        manager->custom_file = g_file_new_for_commandline_arg (id_str);
       } else if (get_playlist_len (manager) == 0) {
         resource_id = 0;
       } else if (id_str == NULL || !id_str[0]
@@ -749,7 +749,7 @@ snra_manager_finalize (GObject * object)
   snra_server_stop (manager->server);
   g_object_unref (manager->server);
 
-  g_free (manager->custom_file);
+  g_clear_object (&manager->custom_file);
   g_free (manager->language);
 }
 
@@ -906,7 +906,7 @@ snra_manager_get_resource_cb (G_GNUC_UNUSED SnraServer * server,
   gchar *file_uri;
 
   if (resource_id == G_MAXUINT && manager->custom_file)
-    return g_object_new (SNRA_TYPE_HTTP_RESOURCE, "source-path",
+    return g_object_new (SNRA_TYPE_HTTP_RESOURCE, "source-file",
         manager->custom_file, NULL);
 
   if (resource_id < 1 || resource_id > get_playlist_len (manager))
@@ -920,7 +920,7 @@ snra_manager_get_resource_cb (G_GNUC_UNUSED SnraServer * server,
   g_print ("Creating resource %u for %s\n", resource_id, file_uri);
   g_free (file_uri);
 
-  ret = g_object_new (SNRA_TYPE_HTTP_RESOURCE, "source-path", file, NULL);
+  ret = g_object_new (SNRA_TYPE_HTTP_RESOURCE, "source-file", file, NULL);
   g_object_unref (file);
 
   return ret;

@@ -22,6 +22,7 @@
 
 #include <glib.h>
 #include <glib-object.h>
+#include <gio/gio.h>
 #include <sqlite3.h>
 
 #include <src/snra-types.h>
@@ -37,9 +38,9 @@ struct _SnraMediaDB
 };
 
 SnraMediaDB *snra_media_db_new(const char *db_path);
-void snra_media_db_add_file (SnraMediaDB *media_db, const gchar *filename);
+void snra_media_db_add_file (SnraMediaDB *media_db, GFile *file);
 guint snra_media_db_get_file_count (SnraMediaDB *media_db);
-gchar *snra_media_db_get_file_by_id (SnraMediaDB *media_db, guint id);
+GFile *snra_media_db_get_file_by_id (SnraMediaDB *media_db, guint id);
 
 G_END_DECLS
 

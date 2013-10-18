@@ -538,10 +538,21 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
 
       g_print ("Next ID %s\n", id_str);
 
-      if (id_str && id_str[0] == '/') {
+      /* Accept two forms of ID. If the ID can be parsed as an integer, use it
+       * to look up a file in the media DB and enqueue that. Otherwise, treat
+       * the ID as a URI and use the manager's custom_file functionality to
+       * enqueue that URI (which probably isn't in the media DB). Custom files
+       * are signified by the resource ID G_MAXUINT. Note that URIs may be
+       * fully qualified URIs, or absolute paths on the server (beginning with
+       * '/').
+       *
+       * FIXME: Allowing arbitrary files to be loaded from anywhere in the
+       * server's file system (that aurena-server has access to) is wide open
+       * to abuse. See the note in README for a disclaimer. */
+      if (id_str && !g_ascii_isdigit (id_str[0])) {
         resource_id = G_MAXUINT;
-        g_free (manager->custom_file);
-        manager->custom_file = g_strdup (id_str);
+        g_clear_object (&manager->custom_file);
+        manager->custom_file = g_file_new_for_commandline_arg (id_str);
       } else if (get_playlist_len (manager) == 0) {
         resource_id = 0;
       } else if (id_str == NULL || !id_str[0]
@@ -749,7 +760,7 @@ snra_manager_finalize (GObject * object)
   snra_server_stop (manager->server);
   g_object_unref (manager->server);
 
-  g_free (manager->custom_file);
+  g_clear_object (&manager->custom_file);
   g_free (manager->language);
 }
 
@@ -839,6 +850,8 @@ read_playlist_file (SnraManager * manager, const char *filename)
   }
 
   do {
+    GFile *file;
+
     result = g_io_channel_read_line (io, &line, NULL, NULL, NULL);
     if (result == G_IO_STATUS_AGAIN)
       continue;
@@ -846,7 +859,13 @@ read_playlist_file (SnraManager * manager, const char *filename)
       break;
     g_strchomp (line);
     g_ptr_array_add (manager->playlist, line);
-    snra_media_db_add_file (manager->media_db, line);
+
+    /* The line could either be a URI or an absolute path, for new- and
+     * old-style playlist files, respectively. g_file_new_for_commandline_arg()
+     * doesn't care. */
+    file = g_file_new_for_commandline_arg (line);
+    snra_media_db_add_file (manager->media_db, file);
+    g_object_unref (file);
   } while (TRUE);
 
   g_print ("Read %u entries\n", manager->playlist->len);
@@ -894,10 +913,11 @@ snra_manager_get_resource_cb (G_GNUC_UNUSED SnraServer * server,
 {
   SnraManager *manager = (SnraManager *) (userdata);
   SnraHttpResource *ret;
-  gchar *file;
+  GFile *file;
+  gchar *file_uri;
 
   if (resource_id == G_MAXUINT && manager->custom_file)
-    return g_object_new (SNRA_TYPE_HTTP_RESOURCE, "source-path",
+    return g_object_new (SNRA_TYPE_HTTP_RESOURCE, "source-file",
         manager->custom_file, NULL);
 
   if (resource_id < 1 || resource_id > get_playlist_len (manager))
@@ -907,10 +927,12 @@ snra_manager_get_resource_cb (G_GNUC_UNUSED SnraServer * server,
   if (file == NULL)
     return NULL;
 
-  g_print ("Creating resource %u for %s\n", resource_id, file);
+  file_uri = g_file_get_uri (file);
+  g_print ("Creating resource %u for %s\n", resource_id, file_uri);
+  g_free (file_uri);
 
-  ret = g_object_new (SNRA_TYPE_HTTP_RESOURCE, "source-path", file, NULL);
-  g_free (file);
+  ret = g_object_new (SNRA_TYPE_HTTP_RESOURCE, "source-file", file, NULL);
+  g_object_unref (file);
 
   return ret;
 }

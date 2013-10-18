@@ -2,6 +2,7 @@ Server TODO
  * Track metadata discovery
  * Support seeking.
  * Provide library hooks
+ * Tighten up security
 
 Control UI
  * Song library, searching, enqueueing

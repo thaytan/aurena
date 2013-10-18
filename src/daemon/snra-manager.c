@@ -538,7 +538,14 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
 
       g_print ("Next ID %s\n", id_str);
 
-      if (id_str && id_str[0] == '/') {
+      /* Accept two forms of ID. If the ID can be parsed as an integer, use it
+       * to look up a file in the media DB and enqueue that. Otherwise, treat
+       * the ID as a URI and use the manager's custom_file functionality to
+       * enqueue that URI (which probably isn't in the media DB). Custom files
+       * are signified by the resource ID G_MAXUINT. Note that URIs may be
+       * fully qualified URIs, or absolute paths on the server (beginning with
+       * '/'). */
+      if (id_str && !g_ascii_isdigit (id_str[0])) {
         resource_id = G_MAXUINT;
         g_clear_object (&manager->custom_file);
         manager->custom_file = g_file_new_for_commandline_arg (id_str);

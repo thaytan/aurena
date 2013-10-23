@@ -49,7 +49,7 @@
 
 G_DEFINE_TYPE (SnraClient, snra_client, G_TYPE_OBJECT);
 
-#ifdef ANDROID
+#if defined(ANDROID) && defined(NDK_DEBUG)
 #define g_print(...) __android_log_print(ANDROID_LOG_ERROR, "aurena", __VA_ARGS__)
 #endif
 

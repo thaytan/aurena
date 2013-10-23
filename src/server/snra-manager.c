@@ -40,6 +40,9 @@
 #include "snra-server.h"
 #include "snra-server-client.h"
 
+/* Set to 0 to walk the playlist linearly */
+#define RANDOM_SHUFFLE 1
+
 enum
 {
   PROP_0,
@@ -547,8 +550,13 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
       } else if (id_str == NULL || !id_str[0]
           || !sscanf (id_str, "%d", &resource_id)) {
         /* No or invalid resource id: skip to next track */
+#if RANDOM_SHUFFLE
         resource_id =
           (guint) g_random_int_range (0, get_playlist_len (manager)) + 1;
+#else
+        resource_id =
+          (guint) (manager->current_resource % get_playlist_len (manager)) + 1;
+#endif
       } else {
         resource_id = CLAMP (resource_id, 1, get_playlist_len (manager));
       }

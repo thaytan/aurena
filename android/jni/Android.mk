@@ -1,5 +1,5 @@
 LOCAL_PATH := $(call my-dir)
-APP_PLATFORM := android-9
+APP_PLATFORM := android-16
 
 include $(CLEAR_VARS)
 

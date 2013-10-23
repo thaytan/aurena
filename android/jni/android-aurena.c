@@ -35,6 +35,7 @@ typedef struct _CustomData {
 	gint64 position;
 	gint64 duration;
 	gboolean initialized;
+    gchar *server;
 } CustomData;
 
 static pthread_t gst_app_thread;
@@ -116,7 +117,8 @@ static gboolean refresh_ui(CustomData * data) {
 	gint64 current = -1;
 
 	/* We do not want to update anything unless we have a working pipeline */
-	if (!data || !data->client || !data->client->player)
+	if (!data || !data->client || !data->client->player
+		  || !snra_client_is_enabled (data->client))
 		return TRUE;
 
 	/* If we didn't know it yet, query the stream duration */
@@ -268,13 +270,21 @@ static void gst_native_finalize(JNIEnv * env, jobject thiz) {
 	GST_DEBUG("Done finalizing");
 }
 
-static void gst_native_play(JNIEnv * env, jobject thiz) {
+static void
+gst_native_play (JNIEnv * env, jobject thiz, jstring serverAddress)
+{
 	CustomData *data = GET_CUSTOM_DATA (env, thiz, custom_data_field_id);
 
 	if (!data)
 		return;
 
-	GST_DEBUG("Starting client");
+  s = (*env)->GetStringUTFChars(env, serverAddress, 0);
+  if (s && *s) {
+    g_free (data->server);
+    data->server = g_strdup (s);
+  }
+
+  GST_DEBUG ("Starting client (server %s)", data->server);
 
 	if (data->client)
 		return;
@@ -296,7 +306,9 @@ static void gst_native_pause(JNIEnv * env, jobject thiz) {
 	destroy_client(data);
 }
 
-static jboolean gst_class_init(JNIEnv * env, jclass klass) {
+static jboolean
+gst_class_init (JNIEnv * env, jclass klass)
+{
 	custom_data_field_id = (*env)->GetFieldID(env, klass, "native_custom_data",
 			"J");
 	GST_DEBUG("The FieldID for the native_custom_data field is %p",
@@ -374,14 +386,16 @@ static void gst_native_surface_finalize(JNIEnv * env, jobject thiz) {
 	data->native_window = NULL;
 }
 
-static JNINativeMethod native_methods[] = { { "nativeInit", "()V",
-		(void *) gst_native_init }, { "nativeFinalize", "()V",
-		(void *) gst_native_finalize }, { "nativePlay", "()V",
-		(void *) gst_native_play }, { "nativePause", "()V",
-		(void *) gst_native_pause }, { "classInit", "()Z",
-		(void *) gst_class_init }, { "nativeSurfaceInit",
-		"(Ljava/lang/Object;)V", (void *) gst_native_surface_init }, {
-		"nativeSurfaceFinalize", "()V", (void *) gst_native_surface_finalize } };
+static JNINativeMethod native_methods[] = {
+  {"nativeInit", "()V", (void *) gst_native_init},
+  {"nativeFinalize", "()V", (void *) gst_native_finalize},
+  {"nativePlay", "(Ljava/lang/String;)V", (void *) gst_native_play},
+  {"nativePause", "()V", (void *) gst_native_pause},
+  {"classInit", "()Z", (void *) gst_class_init},
+  {"nativeSurfaceInit", "(Ljava/lang/Object;)V",
+      (void *) gst_native_surface_init},
+  {"nativeSurfaceFinalize", "()V", (void *) gst_native_surface_finalize}
+};
 
 jint JNI_OnLoad(JavaVM * vm, void *reserved) {
 	JNIEnv *env = NULL;

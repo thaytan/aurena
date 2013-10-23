@@ -20,11 +20,14 @@ import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import android.net.nsd.NsdServiceInfo;
+import android.net.nsd.NsdManager;
+
 public class AndroidAurena extends Activity implements SurfaceHolder.Callback {
     private static native boolean classInit();
     private native void nativeInit();
     private native void nativeFinalize();
-    private native void nativePlay();
+    private native void nativePlay(String server);
     private native void nativePause();
     private native void nativeSurfaceInit(Object surface);
     private native void nativeSurfaceFinalize();
@@ -34,11 +37,24 @@ public class AndroidAurena extends Activity implements SurfaceHolder.Callback {
     private int duration;
     private PowerManager.WakeLock wake_lock;
 
+    /* mDNS members */
+    NsdManager mNsdManager;
+    NsdManager.ResolveListener mResolveListener;
+    NsdManager.DiscoveryListener mDiscoveryListener;
+    NsdServiceInfo mService;
+
+    private static final String SERVICE_TYPE = "_aurena._tcp.";
+    private static final String TAG = "GStreamer";
+
     /* Called when the activity is first created. */
     @Override
     public void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
+
+        mNsdManager = (NsdManager) getSystemService(Context.NSD_SERVICE);
+        initializeDiscoveryListener();
+        initializeResolveListener();
 
         try {
         GStreamer.init(this);
@@ -75,14 +91,16 @@ public class AndroidAurena extends Activity implements SurfaceHolder.Callback {
         final TextView tv = (TextView) this.findViewById(R.id.textview_message);
         runOnUiThread (new Runnable() {
           public void run() {
-            tv.setText(message);
+            /* Disable until we have got rid of non-fatal errors */
+            /*tv.setText(message);*/
           }
         });
     }
     
     /* Called from native code */
     private void onGStreamerInitialized () {
-        nativePlay();
+        mNsdManager.discoverServices(
+                SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
     }
 
     /* The text widget acts as an slave for the seek bar, so it reflects what the seek bar shows, whether
@@ -111,7 +129,7 @@ public class AndroidAurena extends Activity implements SurfaceHolder.Callback {
 
     /* Called from native code */
     private void setCurrentState (int state) {
-        Log.d ("GStreamer", "State has changed to " + state);
+        Log.d (TAG, "State has changed to " + state);
         switch (state) {
         case 1:
             setMessage ("NULL");
@@ -136,17 +154,85 @@ public class AndroidAurena extends Activity implements SurfaceHolder.Callback {
 
     public void surfaceChanged(SurfaceHolder holder, int format, int width,
             int height) {
-        Log.d("GStreamer", "Surface changed to format " + format + " width "
+        Log.d(TAG, "Surface changed to format " + format + " width "
                 + width + " height " + height);
         nativeSurfaceInit (holder.getSurface());
     }
 
     public void surfaceCreated(SurfaceHolder holder) {
-        Log.d("GStreamer", "Surface created: " + holder.getSurface());
+        Log.d(TAG, "Surface created: " + holder.getSurface());
     }
 
     public void surfaceDestroyed(SurfaceHolder holder) {
-        Log.d("GStreamer", "Surface destroyed");
+        Log.d(TAG, "Surface destroyed");
         nativeSurfaceFinalize ();
+    }
+
+    // mDNS Discovery
+    public void initializeDiscoveryListener() {
+        mDiscoveryListener = new NsdManager.DiscoveryListener() {
+
+          @Override
+          public void onDiscoveryStarted(String regType) {
+              Log.d(TAG, "Service discovery started");
+          }
+
+          @Override
+          public void onServiceFound(NsdServiceInfo service) {
+              Log.d(TAG, "Service discovery success" + service);
+              if (!service.getServiceType().equals(SERVICE_TYPE)) {
+                  Log.d(TAG, "Unknown Service Type: " + service.getServiceType());
+              } else {
+                  mNsdManager.resolveService(service, mResolveListener);
+              }
+          }
+
+          @Override
+          public void onServiceLost(NsdServiceInfo service) {
+              Log.e(TAG, "service lost" + service);
+              if (mService == service) {
+                  mService = null;
+              }
+          }
+
+          @Override
+          public void onDiscoveryStopped(String serviceType) {
+              Log.i(TAG, "Discovery stopped: " + serviceType);
+          }
+
+          @Override
+          public void onStartDiscoveryFailed(String serviceType, int errorCode) {
+              Log.e(TAG, "Discovery failed: Error code:" + errorCode);
+              mNsdManager.stopServiceDiscovery(this);
+          }
+
+          @Override
+          public void onStopDiscoveryFailed(String serviceType, int errorCode) {
+              Log.e(TAG, "Discovery failed: Error code:" + errorCode);
+              mNsdManager.stopServiceDiscovery(this);
+          }
+        };
+    }
+
+    public void initializeResolveListener() {
+        mResolveListener = new NsdManager.ResolveListener() {
+
+          @Override
+          public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
+              Log.e(TAG, "Resolve failed" + errorCode);
+          }
+
+          @Override
+          public void onServiceResolved(NsdServiceInfo serviceInfo) {
+              Log.e(TAG, "Resolve Succeeded. " + serviceInfo);
+
+              mService = serviceInfo;
+              String server = mService.getHost().getHostAddress() + ":" + mService.getPort();
+
+              Log.d(TAG, "Connecting to server: " + server);
+              nativePause ();
+              nativePlay (server);
+          }
+        };
     }
 }

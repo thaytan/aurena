@@ -274,17 +274,18 @@ static void
 gst_native_play (JNIEnv * env, jobject thiz, jstring serverAddress)
 {
 	CustomData *data = GET_CUSTOM_DATA (env, thiz, custom_data_field_id);
+	const gchar *s;
 
 	if (!data)
 		return;
 
-  s = (*env)->GetStringUTFChars(env, serverAddress, 0);
-  if (s && *s) {
-    g_free (data->server);
-    data->server = g_strdup (s);
-  }
+  	s = (*env)->GetStringUTFChars(env, serverAddress, 0);
+  	if (s && *s) {
+    		g_free (data->server);
+    		data->server = g_strdup (s);
+  	}
 
-  GST_DEBUG ("Starting client (server %s)", data->server);
+	GST_DEBUG ("Starting client (server %s)", data->server);
 
 	if (data->client)
 		return;

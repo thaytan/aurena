@@ -57,10 +57,10 @@ public class AndroidAurena extends Activity implements SurfaceHolder.Callback {
         initializeResolveListener();
 
         try {
-        GStreamer.init(this);
+            GStreamer.init(this);
         } catch (Exception e) {
             Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show();
-            finish(); 
+            finish();
             return;
         }
 
@@ -96,7 +96,7 @@ public class AndroidAurena extends Activity implements SurfaceHolder.Callback {
           }
         });
     }
-    
+
     /* Called from native code */
     private void onGStreamerInitialized () {
         mNsdManager.discoverServices(
@@ -112,7 +112,7 @@ public class AndroidAurena extends Activity implements SurfaceHolder.Callback {
         SimpleDateFormat df = new SimpleDateFormat("HH:mm:ss");
         df.setTimeZone(TimeZone.getTimeZone("UTC"));
         final String message = df.format(new Date (position)) + " / " + df.format(new Date (duration));
-        tv.setText(message);        
+        tv.setText(message);
     }
 
     /* Called from native code */

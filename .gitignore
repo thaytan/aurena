@@ -12,6 +12,7 @@ install-sh
 libtool
 ltmain.sh
 Makefile
+!android/Makefile
 Makefile.in
 missing
 src/aurena-server

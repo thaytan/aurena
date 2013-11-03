@@ -203,7 +203,7 @@ public class AndroidAurena extends Activity implements SurfaceHolder.Callback {
           @Override
           public void onStartDiscoveryFailed(String serviceType, int errorCode) {
               Log.e(TAG, "Discovery failed: Error code:" + errorCode);
-              mNsdManager.stopServiceDiscovery(this);
+              // mNsdManager.stopServiceDiscovery(this);
           }
 
           @Override

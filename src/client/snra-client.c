@@ -175,7 +175,7 @@ handle_connection_closed_cb (G_GNUC_UNUSED SoupSession * session,
   client->was_connected &= ~flag;
 
   if (flag == SNRA_CLIENT_PLAYER && client->player)
-    gst_element_set_state (client->player, GST_STATE_NULL);
+    gst_element_set_state (client->player, GST_STATE_READY);
 
   if (client->player_info) {
     free_player_info (client->player_info);
@@ -334,6 +334,8 @@ construct_player (SnraClient * client)
   g_signal_connect (bus, "message::error", (GCallback) (on_error_msg), client);
   gst_object_unref (bus);
 
+  gst_element_set_state (client->player, GST_STATE_READY);
+
   g_signal_emit (client, signals[SIGNAL_PLAYER_CREATED], 0, client->player);
 }
 
@@ -374,9 +376,9 @@ set_media (SnraClient * client)
     construct_player (client);
     if (client->player == NULL)
       return;
-  } else {
-    gst_element_set_state (client->player, GST_STATE_NULL);
   }
+
+  gst_element_set_state (client->player, GST_STATE_READY);
 
   g_print ("Setting media URI %s base_time %" GST_TIME_FORMAT " position %"
       GST_TIME_FORMAT " paused %i\n", client->uri, GST_TIME_ARGS (client->base_time),
@@ -581,7 +583,7 @@ handle_player_set_client_message (SnraClient * client, GstStructure * s)
   if (client->enabled && client->uri)
     set_media (client);
   else
-    gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_NULL);
+    gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_READY);
 
   g_object_notify (G_OBJECT (client), "enabled");
 }
@@ -717,6 +719,9 @@ refresh_clients_array (SnraClient * client)
 {
   SoupMessage *soup_msg;
   gchar *uri;
+
+  if (client->shutting_down)
+    return;
 
   uri = g_strdup_printf ("http://%s:%u/client/player_info",
       client->connected_server, client->connected_port);
@@ -949,6 +954,9 @@ connect_to_server (SnraClient * client, const gchar * server, int port)
   client->connected_server = g_strdup (server);
   client->connected_port = port;
 
+  if (client->shutting_down)
+    return;
+
   g_print("In connect_to_server(%s,%d), client->flags %u, connecting %u\n", server, port, client->flags, client->connecting);
 
   if (client->flags & SNRA_CLIENT_PLAYER
@@ -1009,8 +1017,10 @@ snra_client_constructed (GObject * object)
   /* 5 second timeout before retrying with new connections */
   g_object_set (G_OBJECT (client->soup), "timeout", 5, NULL);
 
-  if (client->flags & SNRA_CLIENT_PLAYER)
+  if (client->flags & SNRA_CLIENT_PLAYER) {
     max_con++;
+    construct_player (client);
+  }
 
   if (client->flags & SNRA_CLIENT_CONTROLLER)
     max_con++;
@@ -1127,8 +1137,6 @@ snra_client_finalize (GObject * object)
   if (client->json)
     g_object_unref (client->json);
   if (client->player) {
-    GstBus *bus = gst_element_get_bus (client->player);
-    gst_object_unref (bus);
     gst_object_unref (client->player);
   }
   if (client->context)
@@ -1147,6 +1155,8 @@ static void
 snra_client_dispose (GObject * object)
 {
   SnraClient *client = (SnraClient *) (object);
+
+  client->shutting_down = TRUE;
 
   if (client->soup)
     soup_session_abort (client->soup);
@@ -1408,6 +1418,15 @@ snra_client_is_playing (SnraClient * client)
   return !client->paused;
 }
 
+static void
+snra_client_submit_msg (SnraClient * client, SoupMessage *msg)
+{
+  if (client->shutting_down)
+    g_object_unref(msg);
+  else
+    soup_session_queue_message (client->soup, msg, NULL, NULL);
+}
+
 void
 snra_client_set_media (SnraClient * client, const gchar * id)
 {
@@ -1420,7 +1439,8 @@ snra_client_set_media (SnraClient * client, const gchar * id)
   else
     soup_msg = soup_message_new ("GET", uri);
 
-  soup_session_queue_message (client->soup, soup_msg, NULL, NULL);
+  snra_client_submit_msg (client, soup_msg);
+
   g_free (uri);
 }
 
@@ -1443,7 +1463,7 @@ snra_client_play (SnraClient * client)
   uri = g_strdup_printf ("http://%s:%u/control/play",
       client->connected_server, client->connected_port);
   soup_msg = soup_message_new ("GET", uri);
-  soup_session_queue_message (client->soup, soup_msg, NULL, NULL);
+  snra_client_submit_msg (client, soup_msg);
 
   g_free (uri);
 }
@@ -1457,7 +1477,7 @@ snra_client_pause (SnraClient * client)
   uri = g_strdup_printf ("http://%s:%u/control/pause",
       client->connected_server, client->connected_port);
   soup_msg = soup_message_new ("GET", uri);
-  soup_session_queue_message (client->soup, soup_msg, NULL, NULL);
+  snra_client_submit_msg (client, soup_msg);
 
   g_free (uri);
 }
@@ -1474,7 +1494,7 @@ snra_client_seek (SnraClient * client, GstClockTime position)
   position_str = g_strdup_printf ("%" G_GUINT64_FORMAT, position);
   soup_msg = soup_form_request_new ("POST", uri, "position", position_str,
       NULL);
-  soup_session_queue_message (client->soup, soup_msg, NULL, NULL);
+  snra_client_submit_msg (client, soup_msg);
 
   g_free (position_str);
   g_free (uri);
@@ -1491,7 +1511,7 @@ snra_client_set_volume (SnraClient * client, gdouble volume)
       client->connected_server, client->connected_port);
   g_ascii_dtostr (volume_str, sizeof (volume_str), volume);
   soup_msg = soup_form_request_new ("POST", uri, "level", volume_str, NULL);
-  soup_session_queue_message (client->soup, soup_msg, NULL, NULL);
+  snra_client_submit_msg (client, soup_msg);
 
   g_free (uri);
 }
@@ -1531,7 +1551,7 @@ snra_client_set_player_enabled (SnraClient * client, guint id,
   id_str = g_strdup_printf ("%u", id);
   soup_msg = soup_form_request_new ("POST", uri, "client_id", id_str, "enable",
       enabled ? "1" : "0", NULL);
-  soup_session_queue_message (client->soup, soup_msg, NULL, NULL);
+  snra_client_submit_msg (client, soup_msg);
 
   g_free (id_str);
   g_free (uri);
@@ -1551,7 +1571,7 @@ snra_client_set_player_volume (SnraClient * client, guint id, gdouble volume)
   g_ascii_dtostr (volume_str, sizeof (volume_str), volume);
   soup_msg = soup_form_request_new ("POST", uri, "client_id", id_str, "level",
       volume_str, NULL);
-  soup_session_queue_message (client->soup, soup_msg, NULL, NULL);
+  snra_client_submit_msg (client, soup_msg);
 
   g_free (id_str);
   g_free (uri);
@@ -1566,6 +1586,6 @@ snra_client_set_language (SnraClient * client, const gchar *language_code)
       client->connected_server, client->connected_port);
   soup_msg = soup_form_request_new ("POST", uri, "language", language_code,
       NULL);
-  soup_session_queue_message (client->soup, soup_msg, NULL, NULL);
+  snra_client_submit_msg (client, soup_msg);
   g_free (uri);
 }

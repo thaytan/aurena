@@ -178,6 +178,16 @@ check_initialization_complete (CustomData * data)
     GST_DEBUG
         ("Initialization complete, notifying application. native_window:%p main_loop:%p",
         data->native_window, data->main_loop);
+    if (data->client && data->client->player) {
+      GST_DEBUG
+          ("Pipeline already created, notifying it about the native window.");
+      gst_video_overlay_set_window_handle (GST_VIDEO_OVERLAY (data->client->
+              player), (guintptr) data->native_window);
+    } else {
+      GST_DEBUG
+          ("Pipeline not created yet, it will later be notified about the native window.");
+    }
+
     (*env)->CallVoidMethod (env, data->app, on_gstreamer_initialized_method_id);
     if ((*env)->ExceptionCheck (env)) {
       GST_ERROR ("Failed to call Java method");
@@ -237,6 +247,7 @@ app_function (void *userdata)
 
   /* create our own GLib Main Context, so we do not interfere with other libraries using GLib */
   data->context = g_main_context_new ();
+  g_main_context_push_thread_default(data->context);
 
   /* Register a function that GLib will call 4 times per second */
   timeout_source = g_timeout_source_new (250);
@@ -255,6 +266,8 @@ app_function (void *userdata)
 
   /* Free resources */
   destroy_client (data);
+
+  g_main_context_pop_thread_default(data->context);
   g_main_context_unref (data->context);
 
   return NULL;
@@ -380,16 +393,6 @@ gst_native_surface_init (JNIEnv * env, jobject thiz, jobject surface)
   }
   data->native_window = ANativeWindow_fromSurface (env, surface);
   GST_DEBUG ("Got Native Window %p", data->native_window);
-
-  if (data->client && data->client->player) {
-    GST_DEBUG
-        ("Pipeline already created, notifying the it about the native window.");
-    gst_video_overlay_set_window_handle (GST_VIDEO_OVERLAY (data->client->
-            player), (guintptr) data->native_window);
-  } else {
-    GST_DEBUG
-        ("Pipeline not created yet, it will later be notified about the native window.");
-  }
 
   check_initialization_complete (data);
 }

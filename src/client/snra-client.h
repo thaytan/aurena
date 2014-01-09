@@ -63,12 +63,14 @@ struct _SnraClient
   GMainContext * context;
 
   GstElement *player;
+  GSource *bus_source;
 
   guint timeout;
   guint idle_timeout;
 
   gboolean connecting;
   gboolean was_connected;
+  gboolean shutting_down;
   gchar *connected_server;
   gint connected_port;
 

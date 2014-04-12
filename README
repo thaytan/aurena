@@ -23,3 +23,14 @@ Notes/future ideas:
 - player
   + playbin wrapper that does rtsp or http + network clock subscription
     and follows remote volume control, pause/play etc.
+
+
+Security
+========
+
+Very little effort has been put into making the server secure. It allows
+making clients play any arbitrary http URI. No authentication is required
+for clients to connect.
+
+This software should only ever be run on a private network, where all software
+running on the network and its clients is trusted.

@@ -17,6 +17,19 @@
  * Boston, MA 02111-1307, USA.
  */
 
+/*
+ * Media database interface.
+ *
+ * The database has three tables: files, paths and songs. The songs table isn't
+ * used at all. The files and paths tables store paths and basenames for media
+ * files, split up to reduce path duplication. However, URIs may also be stored
+ * in the database, in a slightly different format. In the case of storing
+ * normal paths or local URIs, the path and basename are calculated and split
+ * between the files and paths tables. The files.base_path_id is positive. In
+ * the case of storing non-local URIs, the entire URI is stored in
+ * files.filename and files.base_path_id is 0.
+ */
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -286,20 +299,34 @@ done:
 }
 
 void
-snra_media_db_add_file (SnraMediaDB * media_db, const gchar * filename)
+snra_media_db_add_file (SnraMediaDB * media_db, GFile *file)
 {
-  gchar *path = g_path_get_dirname (filename);
-  gchar *file = g_path_get_basename (filename);
+  gchar *basename;
   guint64 path_id;
 
-  path_id = snra_media_path_to_id (media_db, path);
-  snra_media_file_to_id (media_db, path_id, file);
+  if (g_file_is_native (file)) {
+    gchar *filename, *dirname;
 
-  //g_print ("File %s has id %" G_GUINT64_FORMAT "\n",
-  //filename, file_id);
+    /* Old-style local file. Split it into its basename and filename and
+     * insert them into different tables. */
+    filename = g_file_get_path (file);
+    dirname = g_path_get_dirname (filename);
 
-  g_free (path);
-  g_free (file);
+    path_id = snra_media_path_to_id (media_db, dirname);
+    basename = g_path_get_basename (filename);
+
+    g_free (dirname);
+    g_free (filename);
+  } else {
+    /* New-style URI. Insert the entire URI into the files table with a path ID
+     * of 0 to indicate it has no associated entry in the paths table. */
+    basename = g_file_get_uri (file);
+    path_id = 0;
+  }
+
+  snra_media_file_to_id (media_db, path_id, basename);
+
+  g_free (basename);
 }
 
 guint
@@ -323,7 +350,7 @@ done:
   return count;
 }
 
-gchar *
+GFile *
 snra_media_db_get_file_by_id (SnraMediaDB * media_db, guint id)
 {
   sqlite3_stmt *stmt = NULL;
@@ -334,8 +361,9 @@ snra_media_db_get_file_by_id (SnraMediaDB * media_db, guint id)
     goto done;
 
   if (sqlite3_prepare (handle,
-          "select base_path, filename from paths, files where paths.id = files.base_path_id "
-          "limit 1 offset ?", -1, &stmt, NULL) != SQLITE_OK)
+          "select base_path, filename, files.base_path_id from paths, files where "
+          "(paths.id = files.base_path_id or files.base_path_id = 0) and files.id = ?"
+          "limit 1", -1, &stmt, NULL) != SQLITE_OK)
     goto done;
 
   if (sqlite3_bind_int64 (stmt, 1, id - 1) != SQLITE_OK)
@@ -343,14 +371,28 @@ snra_media_db_get_file_by_id (SnraMediaDB * media_db, guint id)
 
   if (sqlite3_step (stmt) == SQLITE_ROW) {
     const gchar *base_path, *filename;
-    base_path = (gchar *) sqlite3_column_text (stmt, 0);
-    filename = (gchar *) sqlite3_column_text (stmt, 1);
-    ret_path = g_build_filename (base_path, filename, NULL);
+    gint base_path_id;
+
+    base_path_id = sqlite3_column_int (stmt, 2);
+
+    if (base_path_id > 0) {
+      /* Old-style local file. */
+      base_path = (gchar *) sqlite3_column_text (stmt, 0);
+      filename = (gchar *) sqlite3_column_text (stmt, 1);
+      ret_path = g_build_filename (base_path, filename, NULL);
+    } else {
+      /* New-style URI. The base_path is empty. */
+      ret_path = g_strdup ((char *) sqlite3_column_text (stmt, 1));
+    }
+
     goto done;
   }
 
 done:
-  return ret_path;
+  if (ret_path == NULL)
+    return NULL;
+
+  return g_file_new_for_path (ret_path);
 }
 
 void

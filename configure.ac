@@ -19,7 +19,7 @@ AC_PROG_CC_STDC
 LT_INIT
 
 PKG_PROG_PKG_CONFIG([0.22])
-PKG_CHECK_MODULES(SNRA_COMMON, [gobject-2.0 glib-2.0 >= 2.30 avahi-client avahi-glib >= 0.6.24 json-glib-1.0 libsoup-2.4 >= 2.26.1])
+PKG_CHECK_MODULES(SNRA_COMMON, [gobject-2.0 glib-2.0 >= 2.30 gio-2.0 avahi-client avahi-glib >= 0.6.24 json-glib-1.0 libsoup-2.4 >= 2.26.1])
 AC_DEFINE([HAVE_AVAHI], 1, [Defined if compiling with Avahi support])
 
 AC_MSG_NOTICE([Checking for GStreamer 1.0])

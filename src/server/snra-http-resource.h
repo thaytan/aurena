@@ -36,7 +36,7 @@ struct _SnraHttpResource
 {
   GObject parent;
 
-  gchar *source_path;
+  GFile *source_file;
   guint use_count;
   GMappedFile *data;
 };

@@ -69,6 +69,11 @@ set_vol_slider : function set_vol_slider(client_id, vol, anim) {
   }
 },
 
+add_client_message : function f(client_id, msg) {
+   c = $("#clientmsgs");
+   c.text(c.text() + msg);
+},
+
 set_client_enable : function f(client_id, enable) {
   if (client_id < 1)
     return;
@@ -98,6 +103,9 @@ handle_event : function handle_event(data) {
     case "client-setting":
       var en = json["enabled"];
       aurena.set_client_enable (json["client-id"], en);
+      break;
+    case "client-message":
+      aurena.add_client_message(json["client-id"], json["message"]);
       break;
     case "pause":
       aurena.paused = true;

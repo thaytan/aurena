@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -16,35 +16,35 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  */
-#ifndef __SRNA_AVAHI_H__
-#define __SRNA_AVAHI_H__
+#ifndef __AUR_AVAHI_H__
+#define __AUR_AVAHI_H__
 
 #include <glib.h>
 #include <glib-object.h>
 
-#include <src/common/snra-types.h>
+#include <src/common/aur-types.h>
 
 G_BEGIN_DECLS
 
-#define SNRA_TYPE_AVAHI (snra_avahi_get_type ())
+#define AUR_TYPE_AVAHI (aur_avahi_get_type ())
 
-typedef struct _SnraAvahiClass SnraAvahiClass;
-typedef struct _SnraAvahiPrivate SnraAvahiPrivate;
+typedef struct _AurAvahiClass AurAvahiClass;
+typedef struct _AurAvahiPrivate AurAvahiPrivate;
 
-struct _SnraAvahi
+struct _AurAvahi
 {
   GObject parent;
-  SnraAvahiPrivate *priv;
+  AurAvahiPrivate *priv;
 };
 
-struct _SnraAvahiClass
+struct _AurAvahiClass
 {
   GObjectClass parent;
 };
 
-GType snra_avahi_get_type(void);
+GType aur_avahi_get_type(void);
 
-SnraAvahi *snra_avahi_new(int port);
+AurAvahi *aur_avahi_new(int port);
 
 G_END_DECLS
 

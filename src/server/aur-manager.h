@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -16,8 +16,8 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  */
-#ifndef __SNRA_MANAGER_H__
-#define __SNRA_MANAGER_H__
+#ifndef __AUR_MANAGER_H__
+#define __AUR_MANAGER_H__
 
 #include <stdio.h>
 #include <gst/gst.h>
@@ -28,30 +28,30 @@
 #include <gst/rtsp-server/rtsp-server.h>
 #endif
 
-#include <src/common/snra-types.h>
-#include "snra-avahi.h"
+#include <src/common/aur-types.h>
+#include "aur-avahi.h"
 
 G_BEGIN_DECLS
 
-#define SNRA_TYPE_MANAGER (snra_manager_get_type ())
+#define AUR_TYPE_MANAGER (aur_manager_get_type ())
 
-typedef struct _SnraManagerClass SnraManagerClass;
+typedef struct _AurManagerClass AurManagerClass;
 
-struct _SnraManager
+struct _AurManager
 {
   GObject parent;
 
-  SnraServer *server;
+  AurServer *server;
   GstNetTimeProvider *net_clock;
 #ifdef HAVE_GST_RTSP
   GstRTSPServer *rtsp;
 #endif
   int rtsp_port;
 
-  SnraAvahi *avahi;
+  AurAvahi *avahi;
 
-  SnraConfig *config;
-  SnraMediaDB *media_db;
+  AurConfig *config;
+  AurMediaDB *media_db;
 
   GPtrArray *playlist;
   gboolean paused;
@@ -72,13 +72,13 @@ struct _SnraManager
   guint ping_timeout;
 };
 
-struct _SnraManagerClass
+struct _AurManagerClass
 {
   GObjectClass parent;
 };
 
-GType snra_manager_get_type(void);
-SnraManager *snra_manager_new(const char *config_file);
+GType aur_manager_get_type(void);
+AurManager *aur_manager_new(const char *config_file);
 
 G_END_DECLS
 #endif

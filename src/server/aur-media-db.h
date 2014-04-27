@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -17,24 +17,32 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#ifndef __SNRA_JSON_H__
-#define __SNRA_JSON_H__
+#ifndef __AUR_MEDIA_DB_H__
+#define __AUR_MEDIA_DB_H__
 
-#include <gst/gst.h>
-#include <json-glib/json-glib.h>
+#include <glib.h>
+#include <glib-object.h>
+#include <gio/gio.h>
+#include <sqlite3.h>
+
+#include <src/common/aur-types.h>
 
 G_BEGIN_DECLS
 
-GstStructure *snra_json_to_gst_structure (JsonNode *root);
-JsonNode *snra_json_from_gst_structure (const GstStructure *s);
-gboolean snra_json_structure_get_int (const GstStructure *structure,
-    const gchar *fieldname, gint *value);
-gboolean snra_json_structure_get_int64 (const GstStructure *structure,
-    const gchar *fieldname, gint64 *value);
-gboolean snra_json_structure_get_double (const GstStructure *structure,
-    const gchar *fieldname, gdouble *value);
-gboolean snra_json_structure_get_boolean (const GstStructure *structure,
-    const gchar *fieldname, gboolean *value);
+typedef struct _AurMediaDBPriv AurMediaDBPriv;
+
+struct _AurMediaDB
+{
+  GObject parent;
+  AurMediaDBPriv *priv;
+};
+
+AurMediaDB *aur_media_db_new(const char *db_path);
+void aur_media_db_add_file (AurMediaDB *media_db, GFile *file);
+guint aur_media_db_get_file_count (AurMediaDB *media_db);
+GFile *aur_media_db_get_file_by_id (AurMediaDB *media_db, guint id);
+void aur_media_db_begin_transaction (AurMediaDB *media_db);
+void aur_media_db_commit_transaction (AurMediaDB *media_db);
 
 G_END_DECLS
 

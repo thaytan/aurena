@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -17,33 +17,33 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#ifndef __SNRA_SERVER_CLIENT_H__
-#define __SNRA_SERVER_CLIENT_H__
+#ifndef __AUR_SERVER_CLIENT_H__
+#define __AUR_SERVER_CLIENT_H__
 
 #include <gst/gst.h>
 #include <gst/net/gstnet.h>
 #include <libsoup/soup.h>
 
-#include <src/common/snra-types.h>
+#include <src/common/aur-types.h>
 
 G_BEGIN_DECLS
 
-#define SNRA_TYPE_SERVER_CLIENT (snra_server_client_get_type ())
+#define AUR_TYPE_SERVER_CLIENT (aur_server_client_get_type ())
 
-typedef struct _SnraServerClientClass SnraServerClientClass;
-typedef enum _SnraServerClientType SnraServerClientType;
+typedef struct _AurServerClientClass AurServerClientClass;
+typedef enum _AurServerClientType AurServerClientType;
 
-enum _SnraServerClientType {
-  SNRA_SERVER_CLIENT_CHUNKED,
-  SNRA_SERVER_CLIENT_WEBSOCKET,
-  SNRA_SERVER_CLIENT_SINGLE
+enum _AurServerClientType {
+  AUR_SERVER_CLIENT_CHUNKED,
+  AUR_SERVER_CLIENT_WEBSOCKET,
+  AUR_SERVER_CLIENT_SINGLE
 };
 
-struct _SnraServerClient
+struct _AurServerClient
 {
   GObject parent;
 
-  SnraServerClientType type;
+  AurServerClientType type;
   gboolean fired_conn_lost;
   gboolean need_body_complete;
 
@@ -74,22 +74,22 @@ struct _SnraServerClient
   gulong wrote_info_sig;
 };
 
-struct _SnraServerClientClass
+struct _AurServerClientClass
 {
   GObjectClass parent;
 };
 
-GType snra_server_client_get_type(void);
+GType aur_server_client_get_type(void);
 
-SnraServerClient *snra_server_client_new (SoupServer *soup,
+AurServerClient *aur_server_client_new (SoupServer *soup,
     SoupMessage *msg, SoupClientContext *context);
-SnraServerClient *snra_server_client_new_single (SoupServer * soup,
+AurServerClient *aur_server_client_new_single (SoupServer * soup,
     SoupMessage * msg, SoupClientContext * context);
 
-void snra_server_client_send_message (SnraServerClient *client,
+void aur_server_client_send_message (AurServerClient *client,
   gchar *body, gsize len);
 
-const gchar *snra_server_client_get_host (SnraServerClient *client);
+const gchar *aur_server_client_get_host (AurServerClient *client);
 
 G_END_DECLS
 

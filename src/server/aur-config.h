@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -17,30 +17,41 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#ifndef __AUR_CONFIG_H__
+#define __AUR_CONFIG_H__
 
-#include "snra-resource.h"
+#include <glib.h>
+#include <glib-object.h>
 
-const gchar *
-snra_resource_get_mime_type (const gchar *filename)
+#include <src/common/aur-types.h>
+
+G_BEGIN_DECLS
+
+#define AUR_TYPE_CONFIG (aur_config_get_type ())
+
+typedef struct _AurConfigClass AurConfigClass;
+
+struct _AurConfig
 {
-  const gchar *extension;
+  GObject parent;
 
-  extension = g_strrstr (filename, ".");
-  if (extension) {
-    if (g_str_equal (extension, ".html"))
-      return "text/html";
-    if (g_str_equal (extension, ".png"))
-      return "image/png";
-    if (g_str_equal (extension, ".css"))
-      return "text/css";
-    if (g_str_equal (extension, ".jpg"))
-      return "image/jpeg";
-    if (g_str_equal (extension, ".js"))
-      return "text/javascript";
-  }
+  gchar *config_file;
 
-  return "text/plain";
-}
+  int aur_port;
+  int rtsp_port;
+
+  gchar *database_location;
+  gchar *playlist_location;
+};
+
+struct _AurConfigClass
+{
+  GObjectClass parent;
+};
+
+GType aur_config_get_type(void);
+AurConfig *aur_config_new(const char *config_path);
+
+G_END_DECLS
+
+#endif

@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -17,48 +17,48 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#ifndef __SNRA_SERVER_H__
-#define __SNRA_SERVER_H__
+#ifndef __AUR_SERVER_H__
+#define __AUR_SERVER_H__
 
 #include <gst/gst.h>
 #include <gst/net/gstnet.h>
 #include <libsoup/soup.h>
 
-#include <src/common/snra-types.h>
+#include <src/common/aur-types.h>
 
 G_BEGIN_DECLS
 
-#define SNRA_TYPE_SERVER (snra_server_get_type ())
+#define AUR_TYPE_SERVER (aur_server_get_type ())
 
-typedef struct _SnraServerClass SnraServerClass;
+typedef struct _AurServerClass AurServerClass;
 
-struct _SnraServer
+struct _AurServer
 {
   GObject parent;
   SoupServer *soup;
 
   GHashTable *resources;
 
-  SnraHttpResource *(*get_resource)(SnraServer *server, guint resource_id, void *cb_data);
+  AurHttpResource *(*get_resource)(AurServer *server, guint resource_id, void *cb_data);
   void *get_resource_userdata;
 
-  SnraConfig *config;
+  AurConfig *config;
 };
 
-struct _SnraServerClass
+struct _AurServerClass
 {
   GObjectClass parent;
 };
 
-GType snra_server_get_type(void);
+GType aur_server_get_type(void);
 
-void snra_server_set_resource_callback (SnraServer *server, void *userdata);
-void snra_server_start (SnraServer *server);
-void snra_server_stop (SnraServer *server);
-void snra_server_set_resource_cb (SnraServer *server, 
-  SnraHttpResource *(*get_resource)(SnraServer *server, guint resource_id, void *cb_data), void *userdata);
+void aur_server_set_resource_callback (AurServer *server, void *userdata);
+void aur_server_start (AurServer *server);
+void aur_server_stop (AurServer *server);
+void aur_server_set_resource_cb (AurServer *server, 
+  AurHttpResource *(*get_resource)(AurServer *server, guint resource_id, void *cb_data), void *userdata);
 
-void snra_server_add_handler (SnraServer *server, const gchar *path, SoupServerCallback callback, gpointer user_data, GDestroyNotify destroy_notify);
+void aur_server_add_handler (AurServer *server, const gchar *path, SoupServerCallback callback, gpointer user_data, GDestroyNotify destroy_notify);
 
 G_END_DECLS
 #endif

@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -24,9 +24,9 @@
 #include <libsoup/soup-server.h>
 #include <string.h>
 
-#include "snra-server-client.h"
+#include "aur-server-client.h"
 
-G_DEFINE_TYPE (SnraServerClient, snra_server_client, G_TYPE_OBJECT);
+G_DEFINE_TYPE (AurServerClient, aur_server_client, G_TYPE_OBJECT);
 
 enum
 {
@@ -35,7 +35,7 @@ enum
   LAST_SIGNAL
 };
 
-static guint snra_server_client_signals[LAST_SIGNAL] = { 0 };
+static guint aur_server_client_signals[LAST_SIGNAL] = { 0 };
 
 typedef struct _PendingMsg PendingMsg;
 
@@ -47,38 +47,38 @@ struct _PendingMsg
 
 static guint next_conn_id = 1;
 
-static void snra_server_client_finalize (GObject * object);
-static void snra_server_client_dispose (GObject * object);
+static void aur_server_client_finalize (GObject * object);
+static void aur_server_client_dispose (GObject * object);
 
 static void
-snra_server_client_init (SnraServerClient * client)
+aur_server_client_init (AurServerClient * client)
 {
   client->conn_id = next_conn_id++;
 }
 
 static void
-snra_server_client_class_init (SnraServerClientClass * client_class)
+aur_server_client_class_init (AurServerClientClass * client_class)
 {
   GObjectClass *gobject_class = (GObjectClass *) (client_class);
 
-  gobject_class->dispose = snra_server_client_dispose;
-  gobject_class->finalize = snra_server_client_finalize;
+  gobject_class->dispose = aur_server_client_dispose;
+  gobject_class->finalize = aur_server_client_finalize;
 
-  snra_server_client_signals[CONNECTION_LOST] =
+  aur_server_client_signals[CONNECTION_LOST] =
       g_signal_new ("connection-lost", G_TYPE_FROM_CLASS (client_class),
       G_SIGNAL_RUN_LAST, 0, NULL, NULL,
       g_cclosure_marshal_generic, G_TYPE_NONE, 0, G_TYPE_NONE);
 
-  snra_server_client_signals[MSG_RECEIVED] =
+  aur_server_client_signals[MSG_RECEIVED] =
       g_signal_new ("message-received", G_TYPE_FROM_CLASS (client_class),
       G_SIGNAL_RUN_LAST, 0, NULL, NULL,
       g_cclosure_marshal_generic, G_TYPE_NONE, 2, G_TYPE_CHAR, G_TYPE_UINT64);
 }
 
 static void
-snra_server_client_finalize (GObject * object)
+aur_server_client_finalize (GObject * object)
 {
-  SnraServerClient *client = (SnraServerClient *) (object);
+  AurServerClient *client = (AurServerClient *) (object);
 
   if (client->disco_sig) {
     g_signal_handler_disconnect (client->event_pipe, client->disco_sig);
@@ -105,13 +105,13 @@ snra_server_client_finalize (GObject * object)
   g_free (client->in_buf);
   g_free (client->out_buf);
 
-  G_OBJECT_CLASS (snra_server_client_parent_class)->finalize (object);
+  G_OBJECT_CLASS (aur_server_client_parent_class)->finalize (object);
 }
 
 static void
-snra_server_client_dispose (GObject * object)
+aur_server_client_dispose (GObject * object)
 {
-  SnraServerClient *client = (SnraServerClient *) (object);
+  AurServerClient *client = (AurServerClient *) (object);
 
   if (client->io) {
     g_source_remove (client->io_watch);
@@ -120,11 +120,11 @@ snra_server_client_dispose (GObject * object)
     client->io = NULL;
   }
 
-  G_OBJECT_CLASS (snra_server_client_parent_class)->dispose (object);
+  G_OBJECT_CLASS (aur_server_client_parent_class)->dispose (object);
 }
 
 static void
-snra_server_connection_lost (SnraServerClient * client)
+aur_server_connection_lost (AurServerClient * client)
 {
   if (client->fired_conn_lost)
     return;
@@ -139,8 +139,8 @@ snra_server_connection_lost (SnraServerClient * client)
     client->io = NULL;
   }
 
-  if (client->type == SNRA_SERVER_CLIENT_CHUNKED ||
-      client->type == SNRA_SERVER_CLIENT_SINGLE) {
+  if (client->type == AUR_SERVER_CLIENT_CHUNKED ||
+      client->type == AUR_SERVER_CLIENT_SINGLE) {
     if (client->need_body_complete)
       soup_message_body_complete (client->event_pipe->response_body);
     client->need_body_complete = FALSE;
@@ -152,30 +152,30 @@ snra_server_connection_lost (SnraServerClient * client)
     client->socket = NULL;
   }
 
-  g_signal_emit (client, snra_server_client_signals[CONNECTION_LOST], 0, NULL);
+  g_signal_emit (client, aur_server_client_signals[CONNECTION_LOST], 0, NULL);
 }
 
 static void
-snra_server_client_disconnect (G_GNUC_UNUSED SoupMessage * message,
-    SnraServerClient * client)
+aur_server_client_disconnect (G_GNUC_UNUSED SoupMessage * message,
+    AurServerClient * client)
 {
   g_print ("client %u disconnect signal\n", client->conn_id);
   client->need_body_complete = FALSE;
-  snra_server_connection_lost (client);
+  aur_server_connection_lost (client);
 }
 
 static void
-snra_server_client_network_event (G_GNUC_UNUSED SoupMessage * msg,
+aur_server_client_network_event (G_GNUC_UNUSED SoupMessage * msg,
     G_GNUC_UNUSED GSocketClientEvent event,
     G_GNUC_UNUSED GIOStream * connection,
-    G_GNUC_UNUSED SnraServerClient * client)
+    G_GNUC_UNUSED AurServerClient * client)
 {
   g_print ("client %u network event %d\n", client->conn_id, event);
 }
 
 /* Callbacks used for websocket clients */
 static gboolean
-try_parse_websocket_fragment (SnraServerClient * client)
+try_parse_websocket_fragment (AurServerClient * client)
 {
   guint64 frag_size;
   gchar *header, *outptr;
@@ -215,7 +215,7 @@ try_parse_websocket_fragment (SnraServerClient * client)
   if ((header[1] & 0x80) == 0) {
     /* FIXME: drop the connection */
     g_print ("Received packet not masked. Skipping\n");
-    snra_server_connection_lost (client);
+    aur_server_connection_lost (client);
     goto skip_out;
   }
 
@@ -236,7 +236,7 @@ try_parse_websocket_fragment (SnraServerClient * client)
   decoded[frag_size] = 0;
 
   /* Fire a signal to get this packet processed */
-  g_signal_emit (client, snra_server_client_signals[MSG_RECEIVED], 0,
+  g_signal_emit (client, aur_server_client_signals[MSG_RECEIVED], 0,
       decoded, (guint64)(frag_size));
 
   g_free (decoded);
@@ -257,8 +257,8 @@ skip_out:
 }
 
 static gboolean
-snra_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
-    GIOCondition condition, SnraServerClient * client)
+aur_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
+    GIOCondition condition, AurServerClient * client)
 {
   GIOStatus status = G_IO_STATUS_NORMAL;
 #if 0
@@ -267,7 +267,7 @@ snra_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
 #endif
 
   if (condition & (G_IO_HUP | G_IO_ERR)) {
-    snra_server_connection_lost (client);
+    aur_server_connection_lost (client);
     return FALSE;
   }
 
@@ -291,7 +291,7 @@ snra_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
         client->in_bufsize - client->in_bufavail, &bread, NULL);
 
     if (status == G_IO_STATUS_ERROR) {
-      snra_server_connection_lost (client);
+      aur_server_connection_lost (client);
     } else {
       g_print ("Collected %" G_GSIZE_FORMAT " bytes to io buf\n", bread);
       client->in_bufavail += bread;
@@ -308,7 +308,7 @@ snra_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
 
   if (status == G_IO_STATUS_EOF) {
     // no more data
-    snra_server_connection_lost (client);
+    aur_server_connection_lost (client);
     return FALSE;
   }
 
@@ -316,7 +316,7 @@ snra_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
 }
 
 static void
-snra_server_client_wrote_headers (SoupMessage * msg, SnraServerClient * client)
+aur_server_client_wrote_headers (SoupMessage * msg, AurServerClient * client)
 {
   GList *cur;
 
@@ -329,7 +329,7 @@ snra_server_client_wrote_headers (SoupMessage * msg, SnraServerClient * client)
   g_io_channel_set_encoding (client->io, NULL, NULL);
   g_io_channel_set_buffered (client->io, FALSE);
   client->io_watch = g_io_add_watch (client->io, G_IO_IN | G_IO_HUP,
-      (GIOFunc) (snra_server_client_io_cb), client);
+      (GIOFunc) (aur_server_client_io_cb), client);
 
   /* Send any pending messages */
   while ((cur = client->pending_msgs)) {
@@ -338,7 +338,7 @@ snra_server_client_wrote_headers (SoupMessage * msg, SnraServerClient * client)
 
     next = g_list_next (cur);
 
-    snra_server_client_send_message (client, msg->body, msg->len);
+    aur_server_client_send_message (client, msg->body, msg->len);
     client->pending_msgs = g_list_delete_link (client->pending_msgs, cur);
     g_free (msg->body);
     g_free (msg);
@@ -393,7 +393,7 @@ http_list_contains_value (const gchar * val, const gchar * needle)
 }
 
 static gboolean
-is_websocket_client (SnraServerClient * client)
+is_websocket_client (AurServerClient * client)
 {
   /* Check for request headers. Example:
    * Upgrade: websocket
@@ -448,11 +448,11 @@ is_websocket_client (SnraServerClient * client)
   return TRUE;
 }
 
-SnraServerClient *
-snra_server_client_new (SoupServer * soup, SoupMessage * msg,
+AurServerClient *
+aur_server_client_new (SoupServer * soup, SoupMessage * msg,
     SoupClientContext * context)
 {
-  SnraServerClient *client = g_object_new (SNRA_TYPE_SERVER_CLIENT, NULL);
+  AurServerClient *client = g_object_new (AUR_TYPE_SERVER_CLIENT, NULL);
   const gchar *accept_challenge;
   gchar *accept_reply;
 
@@ -461,12 +461,12 @@ snra_server_client_new (SoupServer * soup, SoupMessage * msg,
   client->host = g_strdup (soup_client_context_get_host (context));
 
   client->net_event_sig = g_signal_connect (msg, "network-event",
-      G_CALLBACK (snra_server_client_network_event), client);
+      G_CALLBACK (aur_server_client_network_event), client);
   client->disco_sig = g_signal_connect (msg, "finished",
-      G_CALLBACK (snra_server_client_disconnect), client);
+      G_CALLBACK (aur_server_client_disconnect), client);
 
   if (!is_websocket_client (client)) {
-    client->type = SNRA_SERVER_CLIENT_CHUNKED;
+    client->type = AUR_SERVER_CLIENT_CHUNKED;
     client->need_body_complete = TRUE;
 
     soup_message_headers_set_encoding (msg->response_headers,
@@ -476,7 +476,7 @@ snra_server_client_new (SoupServer * soup, SoupMessage * msg,
   }
 
   /* Otherwise, it's a websocket client */
-  client->type = SNRA_SERVER_CLIENT_WEBSOCKET;
+  client->type = AUR_SERVER_CLIENT_WEBSOCKET;
   client->need_body_complete = FALSE;
 
   client->socket = soup_client_context_get_socket (context);
@@ -501,27 +501,27 @@ snra_server_client_new (SoupServer * soup, SoupMessage * msg,
   g_free (accept_reply);
 
   client->wrote_info_sig = g_signal_connect (msg, "wrote-informational",
-      G_CALLBACK (snra_server_client_wrote_headers), client);
+      G_CALLBACK (aur_server_client_wrote_headers), client);
 
   return client;
 }
 
-SnraServerClient *
-snra_server_client_new_single (SoupServer * soup, SoupMessage * msg,
+AurServerClient *
+aur_server_client_new_single (SoupServer * soup, SoupMessage * msg,
     G_GNUC_UNUSED SoupClientContext * context)
 {
-  SnraServerClient *client = g_object_new (SNRA_TYPE_SERVER_CLIENT, NULL);
+  AurServerClient *client = g_object_new (AUR_TYPE_SERVER_CLIENT, NULL);
 
   client->soup = soup;
   client->event_pipe = msg;
   client->host = g_strdup (soup_client_context_get_host (context));
 
   client->net_event_sig = g_signal_connect (msg, "network-event",
-      G_CALLBACK (snra_server_client_network_event), client);
+      G_CALLBACK (aur_server_client_network_event), client);
   client->disco_sig = g_signal_connect (msg, "finished",
-      G_CALLBACK (snra_server_client_disconnect), client);
+      G_CALLBACK (aur_server_client_disconnect), client);
 
-  client->type = SNRA_SERVER_CLIENT_SINGLE;
+  client->type = AUR_SERVER_CLIENT_SINGLE;
   client->need_body_complete = TRUE;
 
   soup_message_set_status (msg, SOUP_STATUS_OK);
@@ -551,7 +551,7 @@ write_to_io_channel (GIOChannel * io, const gchar * buf, gsize len)
 }
 
 static void
-write_fragment (SnraServerClient * client, gchar * body, gsize len)
+write_fragment (AurServerClient * client, gchar * body, gsize len)
 {
   gchar header[14];
   gsize header_len, i;
@@ -605,11 +605,11 @@ write_fragment (SnraServerClient * client, gchar * body, gsize len)
 
 done:
   if (status != G_IO_STATUS_NORMAL)
-    snra_server_connection_lost (client);
+    aur_server_connection_lost (client);
 }
 
 void
-snra_server_client_send_message (SnraServerClient * client,
+aur_server_client_send_message (AurServerClient * client,
     gchar * body, gsize len)
 {
   PendingMsg *msg;
@@ -617,7 +617,7 @@ snra_server_client_send_message (SnraServerClient * client,
   if (client->fired_conn_lost)
     return;
 
-  if (client->type == SNRA_SERVER_CLIENT_CHUNKED) {
+  if (client->type == AUR_SERVER_CLIENT_CHUNKED) {
     soup_message_body_append (client->event_pipe->response_body,
         SOUP_MEMORY_COPY, body, len);
     /* Add a NULL seperator, enable HTTP stack that abstract HTTP chunk. */
@@ -626,10 +626,10 @@ snra_server_client_send_message (SnraServerClient * client,
     soup_server_unpause_message (client->soup, client->event_pipe);
     return;
   }
-  if (client->type == SNRA_SERVER_CLIENT_SINGLE) {
+  if (client->type == AUR_SERVER_CLIENT_SINGLE) {
     soup_message_set_response (client->event_pipe,
         "application/json", SOUP_MEMORY_COPY, body, len);
-    snra_server_connection_lost (client);
+    aur_server_connection_lost (client);
     return;
   }
 
@@ -648,7 +648,7 @@ snra_server_client_send_message (SnraServerClient * client,
 }
 
 const gchar *
-snra_server_client_get_host (SnraServerClient *client)
+aur_server_client_get_host (AurServerClient *client)
 {
   return client->host;
 }

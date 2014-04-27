@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -30,9 +30,9 @@
 #include <avahi-glib/glib-watch.h>
 #include <avahi-glib/glib-malloc.h>
 
-#include "snra-avahi.h"
+#include "aur-avahi.h"
 
-G_DEFINE_TYPE (SnraAvahi, snra_avahi, G_TYPE_OBJECT);
+G_DEFINE_TYPE (AurAvahi, aur_avahi, G_TYPE_OBJECT);
 
 enum
 {
@@ -41,13 +41,13 @@ enum
   PROP_LAST
 };
 
-static void snra_avahi_constructed (GObject * object);
-static void snra_avahi_set_property (GObject * object, guint prop_id,
+static void aur_avahi_constructed (GObject * object);
+static void aur_avahi_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
-static void snra_avahi_get_property (GObject * object, guint prop_id,
+static void aur_avahi_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-struct _SnraAvahiPrivate
+struct _AurAvahiPrivate
 {
   const AvahiPoll *poll_api;
   AvahiGLibPoll *glib_poll;
@@ -57,16 +57,16 @@ struct _SnraAvahiPrivate
   int port;
 };
 
-static void snra_avahi_finalize (GObject * object);
+static void aur_avahi_finalize (GObject * object);
 
-static void create_service (SnraAvahi * avahi);
+static void create_service (AurAvahi * avahi);
 
 static void
 entry_group_callback (AVAHI_GCC_UNUSED AvahiEntryGroup * g, AvahiEntryGroupState state,
     AVAHI_GCC_UNUSED void *userdata)
 {
-  SnraAvahi *avahi = (SnraAvahi *) (userdata);
-  SnraAvahiPrivate *priv = avahi->priv;
+  AurAvahi *avahi = (AurAvahi *) (userdata);
+  AurAvahiPrivate *priv = avahi->priv;
 
   switch (state) {
     case AVAHI_ENTRY_GROUP_ESTABLISHED:
@@ -99,9 +99,9 @@ entry_group_callback (AVAHI_GCC_UNUSED AvahiEntryGroup * g, AvahiEntryGroupState
 }
 
 static void
-create_service (SnraAvahi * avahi)
+create_service (AurAvahi * avahi)
 {
-  SnraAvahiPrivate *priv = avahi->priv;
+  AurAvahiPrivate *priv = avahi->priv;
   int ret;
 
   do {
@@ -169,7 +169,7 @@ static void
 avahi_client_callback (AVAHI_GCC_UNUSED AvahiClient * client,
     AvahiClientState state, void *userdata)
 {
-  SnraAvahi *avahi = (SnraAvahi *) (userdata);
+  AurAvahi *avahi = (AurAvahi *) (userdata);
 
   switch (state) {
     case AVAHI_CLIENT_S_RUNNING:
@@ -200,10 +200,10 @@ avahi_client_callback (AVAHI_GCC_UNUSED AvahiClient * client,
 }
 
 static void
-snra_avahi_set_property (GObject * object, guint prop_id,
+aur_avahi_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  SnraAvahi *avahi = (SnraAvahi *) (object);
+  AurAvahi *avahi = (AurAvahi *) (object);
 
   switch (prop_id) {
     case PROP_PORT:
@@ -217,10 +217,10 @@ snra_avahi_set_property (GObject * object, guint prop_id,
 }
 
 static void
-snra_avahi_get_property (GObject * object, guint prop_id,
+aur_avahi_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  SnraAvahi *avahi = (SnraAvahi *) (object);
+  AurAvahi *avahi = (AurAvahi *) (object);
 
   switch (prop_id) {
     case PROP_PORT:
@@ -234,9 +234,9 @@ snra_avahi_get_property (GObject * object, guint prop_id,
 
 
 static void
-snra_avahi_finalize (GObject * object)
+aur_avahi_finalize (GObject * object)
 {
-  SnraAvahi *avahi = (SnraAvahi *) (object);
+  AurAvahi *avahi = (AurAvahi *) (object);
 
   if (avahi->priv->group)
     avahi_entry_group_free (avahi->priv->group);
@@ -247,10 +247,10 @@ snra_avahi_finalize (GObject * object)
 }
 
 static void
-snra_avahi_init (SnraAvahi * avahi)
+aur_avahi_init (AurAvahi * avahi)
 {
-  SnraAvahiPrivate *priv = avahi->priv =
-      G_TYPE_INSTANCE_GET_PRIVATE (avahi, SNRA_TYPE_AVAHI, SnraAvahiPrivate);
+  AurAvahiPrivate *priv = avahi->priv =
+      G_TYPE_INSTANCE_GET_PRIVATE (avahi, AUR_TYPE_AVAHI, AurAvahiPrivate);
 
   priv->service_name = g_strdup ("Aurena media server");
 
@@ -260,19 +260,19 @@ snra_avahi_init (SnraAvahi * avahi)
 }
 
 static void
-snra_avahi_class_init (SnraAvahiClass * klass)
+aur_avahi_class_init (AurAvahiClass * klass)
 {
   GObjectClass *gobject_class = (GObjectClass *) (klass);
 
-  gobject_class->constructed = snra_avahi_constructed;
-  gobject_class->finalize = snra_avahi_finalize;
-  gobject_class->set_property = snra_avahi_set_property;
-  gobject_class->get_property = snra_avahi_get_property;
+  gobject_class->constructed = aur_avahi_constructed;
+  gobject_class->finalize = aur_avahi_finalize;
+  gobject_class->set_property = aur_avahi_set_property;
+  gobject_class->get_property = aur_avahi_get_property;
 
-  g_type_class_add_private (gobject_class, sizeof (SnraAvahiPrivate));
+  g_type_class_add_private (gobject_class, sizeof (AurAvahiPrivate));
 
   g_object_class_install_property (gobject_class, PROP_PORT,
-    g_param_spec_int ("snra-port", "Aurena port",
+    g_param_spec_int ("aur-port", "Aurena port",
                          "port for Aurena service",
                          1, 65535, 5457,
                          G_PARAM_READWRITE|G_PARAM_CONSTRUCT));
@@ -281,14 +281,14 @@ snra_avahi_class_init (SnraAvahiClass * klass)
 }
 
 static void
-snra_avahi_constructed (GObject * object)
+aur_avahi_constructed (GObject * object)
 {
-  SnraAvahi *avahi = (SnraAvahi *) (object);
-  SnraAvahiPrivate *priv = avahi->priv;
+  AurAvahi *avahi = (AurAvahi *) (object);
+  AurAvahiPrivate *priv = avahi->priv;
   int error = 0;
 
-  if (G_OBJECT_CLASS (snra_avahi_parent_class)->constructed != NULL)
-    G_OBJECT_CLASS (snra_avahi_parent_class)->constructed (object);
+  if (G_OBJECT_CLASS (aur_avahi_parent_class)->constructed != NULL)
+    G_OBJECT_CLASS (aur_avahi_parent_class)->constructed (object);
 
   priv->client =
       avahi_client_new (priv->poll_api, 0, avahi_client_callback, avahi,
@@ -301,8 +301,8 @@ snra_avahi_constructed (GObject * object)
   }
 }
 
-SnraAvahi *
-snra_avahi_new (int port)
+AurAvahi *
+aur_avahi_new (int port)
 {
-  return g_object_new (SNRA_TYPE_AVAHI, "snra-port", port, NULL);
+  return g_object_new (AUR_TYPE_AVAHI, "aur-port", port, NULL);
 }

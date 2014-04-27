@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -28,13 +28,13 @@
 #include <libsoup/soup-socket.h>
 #include <libsoup/soup-address.h>
 
-#include "snra-config.h"
-#include "snra-server.h"
-#include "snra-server-client.h"
-#include "snra-resource.h"
-#include "snra-http-resource.h"
+#include "aur-config.h"
+#include "aur-server.h"
+#include "aur-server-client.h"
+#include "aur-resource.h"
+#include "aur-http-resource.h"
 
-G_DEFINE_TYPE (SnraServer, snra_server, G_TYPE_OBJECT);
+G_DEFINE_TYPE (AurServer, aur_server, G_TYPE_OBJECT);
 
 enum
 {
@@ -44,18 +44,18 @@ enum
   PROP_LAST
 };
 
-static void snra_server_set_property (GObject * object, guint prop_id,
+static void aur_server_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
-static void snra_server_get_property (GObject * object, guint prop_id,
+static void aur_server_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-static void snra_soup_message_set_redirect (SoupMessage * msg,
+static void aur_soup_message_set_redirect (SoupMessage * msg,
     guint status_code, const char *redirect_uri);
-static void snra_server_finalize (GObject * object);
-static void snra_server_dispose (GObject * object);
+static void aur_server_finalize (GObject * object);
+static void aur_server_dispose (GObject * object);
 
 static void
-snra_soup_message_set_redirect (SoupMessage * msg, guint status_code,
+aur_soup_message_set_redirect (SoupMessage * msg, guint status_code,
     const char *redirect_uri)
 {
   SoupURI *location;
@@ -75,19 +75,19 @@ snra_soup_message_set_redirect (SoupMessage * msg, guint status_code,
 static void
 server_fallback_cb (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
     G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable * query,
-    G_GNUC_UNUSED SoupClientContext * client, G_GNUC_UNUSED SnraServer * server)
+    G_GNUC_UNUSED SoupClientContext * client, G_GNUC_UNUSED AurServer * server)
 {
   if (g_str_equal (path, "/")) {
-    snra_soup_message_set_redirect (msg, SOUP_STATUS_MOVED_PERMANENTLY, "/ui/");
+    aur_soup_message_set_redirect (msg, SOUP_STATUS_MOVED_PERMANENTLY, "/ui/");
   } else {
     soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
   }
 }
 
-static SnraHttpResource *
-snra_server_get_resource (SnraServer * server, guint resource_id)
+static AurHttpResource *
+aur_server_get_resource (AurServer * server, guint resource_id)
 {
-  SnraHttpResource *resource = NULL;
+  AurHttpResource *resource = NULL;
 
   resource =
       g_hash_table_lookup (server->resources, GINT_TO_POINTER (resource_id));
@@ -105,20 +105,20 @@ snra_server_get_resource (SnraServer * server, guint resource_id)
 static void
 server_resource_cb (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
     const char *path, G_GNUC_UNUSED GHashTable * query,
-    G_GNUC_UNUSED SoupClientContext * client, SnraServer * server)
+    G_GNUC_UNUSED SoupClientContext * client, AurServer * server)
 {
   guint resource_id = 0;
-  SnraHttpResource *resource;
+  AurHttpResource *resource;
 
   if (!sscanf (path, "/resource/%u", &resource_id))
     goto error;
 
-  resource = snra_server_get_resource (server, resource_id);
+  resource = aur_server_get_resource (server, resource_id);
   if (resource == NULL)
     goto error;
 
   g_print ("Hit on resource %u\n", resource_id);
-  snra_http_resource_new_transfer (resource, msg);
+  aur_http_resource_new_transfer (resource, msg);
 
   return;
 error:
@@ -169,7 +169,7 @@ get_data_filename (const gchar *basename)
 static void
 server_ui_cb (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
     const char *path, G_GNUC_UNUSED GHashTable * query,
-    G_GNUC_UNUSED SoupClientContext * client, G_GNUC_UNUSED SnraServer * server)
+    G_GNUC_UNUSED SoupClientContext * client, G_GNUC_UNUSED AurServer * server)
 {
   const gchar *file_path;
   gchar *filename = NULL;
@@ -186,7 +186,7 @@ server_ui_cb (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
     goto fail;
 
   if (g_str_equal (file_path, "")) {
-    snra_soup_message_set_redirect (msg, SOUP_STATUS_MOVED_PERMANENTLY, "/ui/");
+    aur_soup_message_set_redirect (msg, SOUP_STATUS_MOVED_PERMANENTLY, "/ui/");
     return;
   }
 
@@ -198,7 +198,7 @@ server_ui_cb (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
   if (!g_file_get_contents (filename, &contents, &size, NULL))
     goto fail;
 
-  mime_type = snra_resource_get_mime_type (filename);
+  mime_type = aur_resource_get_mime_type (filename);
   g_print ("Returning %s - %s\n", mime_type, filename);
 
   soup_message_set_response (msg, mime_type, SOUP_MEMORY_TAKE, contents, size);
@@ -213,7 +213,7 @@ fail:
 }
 
 static void
-snra_server_init (SnraServer * server)
+aur_server_init (AurServer * server)
 {
   server->resources =
       g_hash_table_new_full (g_direct_hash,
@@ -221,16 +221,16 @@ snra_server_init (SnraServer * server)
 }
 
 static void
-snra_server_constructed (GObject * object)
+aur_server_constructed (GObject * object)
 {
-  SnraServer *server = (SnraServer *) (object);
+  AurServer *server = (AurServer *) (object);
   SoupSocket *socket;
   gint port;
 
-  if (G_OBJECT_CLASS (snra_server_parent_class)->constructed != NULL)
-    G_OBJECT_CLASS (snra_server_parent_class)->constructed (object);
+  if (G_OBJECT_CLASS (aur_server_parent_class)->constructed != NULL)
+    G_OBJECT_CLASS (aur_server_parent_class)->constructed (object);
 
-  g_object_get (server->config, "snra-port", &port, NULL);
+  g_object_get (server->config, "aur-port", &port, NULL);
 
   server->soup = soup_server_new (SOUP_SERVER_PORT, port, NULL);
 
@@ -255,20 +255,20 @@ snra_server_constructed (GObject * object)
 }
 
 static void
-snra_server_class_init (SnraServerClass * server_class)
+aur_server_class_init (AurServerClass * server_class)
 {
   GObjectClass *gobject_class = (GObjectClass *) (server_class);
 
-  gobject_class->constructed = snra_server_constructed;
-  gobject_class->dispose = snra_server_dispose;
-  gobject_class->finalize = snra_server_finalize;
-  gobject_class->set_property = snra_server_set_property;
-  gobject_class->get_property = snra_server_get_property;
+  gobject_class->constructed = aur_server_constructed;
+  gobject_class->dispose = aur_server_dispose;
+  gobject_class->finalize = aur_server_finalize;
+  gobject_class->set_property = aur_server_set_property;
+  gobject_class->get_property = aur_server_get_property;
 
   g_object_class_install_property (gobject_class, PROP_CONFIG,
       g_param_spec_object ("config", "config",
           "Aurena service configuration object",
-          SNRA_TYPE_CONFIG, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
+          AUR_TYPE_CONFIG, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
   g_object_class_install_property (gobject_class, PROP_CLOCK,
       g_param_spec_object ("clock", "clock",
           "clock to synchronise playback",
@@ -276,33 +276,33 @@ snra_server_class_init (SnraServerClass * server_class)
 }
 
 static void
-snra_server_finalize (GObject * object)
+aur_server_finalize (GObject * object)
 {
-  SnraServer *server = (SnraServer *) (object);
+  AurServer *server = (AurServer *) (object);
   g_object_unref (server->soup);
   g_hash_table_remove_all (server->resources);
 
   if (server->config)
     g_object_unref (server->config);
 
-  G_OBJECT_CLASS (snra_server_parent_class)->finalize (object);
+  G_OBJECT_CLASS (aur_server_parent_class)->finalize (object);
 }
 
 static void
-snra_server_dispose (GObject * object)
+aur_server_dispose (GObject * object)
 {
-  SnraServer *server = (SnraServer *) (object);
+  AurServer *server = (AurServer *) (object);
 
   soup_server_quit (server->soup);
 
-  G_OBJECT_CLASS (snra_server_parent_class)->dispose (object);
+  G_OBJECT_CLASS (aur_server_parent_class)->dispose (object);
 }
 
 static void
-snra_server_set_property (GObject * object, guint prop_id,
+aur_server_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  SnraServer *server = (SnraServer *) (object);
+  AurServer *server = (AurServer *) (object);
 
   switch (prop_id) {
     case PROP_CONFIG:
@@ -315,10 +315,10 @@ snra_server_set_property (GObject * object, guint prop_id,
 }
 
 static void
-snra_server_get_property (GObject * object, guint prop_id,
+aur_server_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  SnraServer *server = (SnraServer *) (object);
+  AurServer *server = (AurServer *) (object);
 
   switch (prop_id) {
     case PROP_CONFIG:
@@ -331,20 +331,20 @@ snra_server_get_property (GObject * object, guint prop_id,
 }
 
 void
-snra_server_start (SnraServer * server)
+aur_server_start (AurServer * server)
 {
   soup_server_run_async (server->soup);
 }
 
 void
-snra_server_stop (SnraServer * server)
+aur_server_stop (AurServer * server)
 {
   soup_server_quit (server->soup);
 }
 
 void
-snra_server_set_resource_cb (SnraServer * server,
-    SnraHttpResource * (*callback) (SnraServer * server, guint resource_id,
+aur_server_set_resource_cb (AurServer * server,
+    AurHttpResource * (*callback) (AurServer * server, guint resource_id,
         void *cb_data), void *userdata)
 {
   server->get_resource = callback;
@@ -352,7 +352,7 @@ snra_server_set_resource_cb (SnraServer * server,
 }
 
 void
-snra_server_add_handler (SnraServer * server, const gchar * path,
+aur_server_add_handler (AurServer * server, const gchar * path,
     SoupServerCallback callback, gpointer user_data,
     GDestroyNotify destroy_notify)
 {

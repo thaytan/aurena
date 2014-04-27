@@ -7,7 +7,7 @@
 #include <pthread.h>
 #include <gst/video/videooverlay.h>
 
-#include "src/client/snra-client.h"
+#include "src/client/aur-client.h"
 
 GST_DEBUG_CATEGORY_STATIC (debug_category);
 #define GST_CAT_DEFAULT debug_category
@@ -30,7 +30,7 @@ typedef struct _CustomData
   GMainContext *context;
   GMainLoop *main_loop;
   ANativeWindow *native_window;
-  SnraClient *client;
+  AurClient *client;
   gint64 position;
   gint64 duration;
   gboolean initialized;
@@ -126,7 +126,7 @@ refresh_ui (CustomData * data)
 
   /* We do not want to update anything unless we have a working pipeline */
   if (!data || !data->client || !data->client->player
-      || !snra_client_is_enabled (data->client))
+      || !aur_client_is_enabled (data->client))
     return TRUE;
 
   /* If we didn't know it yet, query the stream duration */
@@ -207,7 +207,7 @@ setup_client (CustomData * data)
     return;
 
   data->client = 
-      snra_client_new (data->context, data->server, SNRA_CLIENT_PLAYER);
+      aur_client_new (data->context, data->server, AUR_CLIENT_PLAYER);
 
   if (data->native_window) {
     GST_DEBUG

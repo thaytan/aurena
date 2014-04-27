@@ -40,7 +40,7 @@
 #include <gst/interfaces/xoverlay.h>
 #endif
 
-#include <src/client/snra-client.h>
+#include <src/client/aur-client.h>
 
 static GMainLoop *ml = NULL;
 
@@ -73,7 +73,7 @@ bus_sync_handler (G_GNUC_UNUSED GstBus *bus, GstMessage *message,
 #endif
 
 static void
-player_created (G_GNUC_UNUSED SnraClient *client, GstElement *playbin,
+player_created (G_GNUC_UNUSED AurClient *client, GstElement *playbin,
     GtkWidget *window)
 {
 #if  GST_CHECK_VERSION (0, 11, 1)
@@ -97,7 +97,7 @@ player_created (G_GNUC_UNUSED SnraClient *client, GstElement *playbin,
 int
 main (int argc, char *argv[])
 {
-  SnraClient *client = NULL;
+  AurClient *client = NULL;
   int ret = 1;
   const gchar *server = NULL;
   GOptionContext *ctx;
@@ -121,7 +121,7 @@ main (int argc, char *argv[])
 
   avahi_set_allocator (avahi_glib_allocator ());
 
-  client = snra_client_new (NULL, server, SNRA_CLIENT_PLAYER);
+  client = aur_client_new (NULL, server, AUR_CLIENT_PLAYER);
   if (client == NULL)
     goto fail;
 

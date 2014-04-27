@@ -30,7 +30,7 @@
 
 #include <avahi-glib/glib-malloc.h>
 
-#include <src/client/snra-client.h>
+#include <src/client/aur-client.h>
 
 static GMainLoop *ml = NULL;
 
@@ -89,7 +89,7 @@ player_disposed (gpointer user_data,
 }
 
 static void
-on_eos_msg (SnraClient *client, G_GNUC_UNUSED GstMessage * msg)
+on_eos_msg (AurClient *client, G_GNUC_UNUSED GstMessage * msg)
 {
   SoupMessage *soup_msg;
   /* FIXME: Next song should all be handled server side */
@@ -104,7 +104,7 @@ on_eos_msg (SnraClient *client, G_GNUC_UNUSED GstMessage * msg)
 }
 
 static void
-player_created (G_GNUC_UNUSED SnraClient *client, GstElement * player)
+player_created (G_GNUC_UNUSED AurClient *client, GstElement * player)
 {
   GstBus *bus;
   guint timeout;
@@ -122,7 +122,7 @@ player_created (G_GNUC_UNUSED SnraClient *client, GstElement * player)
 int
 main (int argc, char *argv[])
 {
-  SnraClient *client = NULL;
+  AurClient *client = NULL;
   int ret = 1;
   const gchar *server = NULL;
 
@@ -137,7 +137,7 @@ main (int argc, char *argv[])
 
   g_unix_signal_add (SIGINT, sigint_handler, NULL);
 
-  client = snra_client_new (NULL, server, SNRA_CLIENT_PLAYER);
+  client = aur_client_new (NULL, server, AUR_CLIENT_PLAYER);
   if (client == NULL)
     goto fail;
 

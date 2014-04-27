@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -17,33 +17,30 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#ifndef __SNRA_MEDIA_DB_H__
-#define __SNRA_MEDIA_DB_H__
-
-#include <glib.h>
-#include <glib-object.h>
-#include <gio/gio.h>
-#include <sqlite3.h>
-
-#include <src/common/snra-types.h>
-
-G_BEGIN_DECLS
-
-typedef struct _SnraMediaDBPriv SnraMediaDBPriv;
-
-struct _SnraMediaDB
-{
-  GObject parent;
-  SnraMediaDBPriv *priv;
-};
-
-SnraMediaDB *snra_media_db_new(const char *db_path);
-void snra_media_db_add_file (SnraMediaDB *media_db, GFile *file);
-guint snra_media_db_get_file_count (SnraMediaDB *media_db);
-GFile *snra_media_db_get_file_by_id (SnraMediaDB *media_db, guint id);
-void snra_media_db_begin_transaction (SnraMediaDB *media_db);
-void snra_media_db_commit_transaction (SnraMediaDB *media_db);
-
-G_END_DECLS
-
+#ifdef HAVE_CONFIG_H
+#include "config.h"
 #endif
+
+#include "aur-resource.h"
+
+const gchar *
+aur_resource_get_mime_type (const gchar *filename)
+{
+  const gchar *extension;
+
+  extension = g_strrstr (filename, ".");
+  if (extension) {
+    if (g_str_equal (extension, ".html"))
+      return "text/html";
+    if (g_str_equal (extension, ".png"))
+      return "image/png";
+    if (g_str_equal (extension, ".css"))
+      return "text/css";
+    if (g_str_equal (extension, ".jpg"))
+      return "image/jpeg";
+    if (g_str_equal (extension, ".js"))
+      return "text/javascript";
+  }
+
+  return "text/plain";
+}

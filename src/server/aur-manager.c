@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -31,14 +31,14 @@
 
 #include <json-glib/json-glib.h>
 
-#include <src/common/snra-json.h>
+#include <src/common/aur-json.h>
 
-#include "snra-config.h"
-#include "snra-http-resource.h"
-#include "snra-manager.h"
-#include "snra-media-db.h"
-#include "snra-server.h"
-#include "snra-server-client.h"
+#include "aur-config.h"
+#include "aur-http-resource.h"
+#include "aur-manager.h"
+#include "aur-media-db.h"
+#include "aur-server.h"
+#include "aur-server-client.h"
 
 /* Set to 0 to walk the playlist linearly */
 #define RANDOM_SHUFFLE 1
@@ -50,83 +50,83 @@ enum
   PROP_LAST
 };
 
-typedef struct _SnraPlayerInfo SnraPlayerInfo;
-struct _SnraPlayerInfo
+typedef struct _AurPlayerInfo AurPlayerInfo;
+struct _AurPlayerInfo
 {
   guint id;
   gchar *host;
-  SnraServerClient *conn;
+  AurServerClient *conn;
 
   gdouble volume;
   gboolean enabled;
 };
 
-typedef enum _SnraControlEvent SnraControlEvent;
-enum _SnraControlEvent
+typedef enum _AurControlEvent AurControlEvent;
+enum _AurControlEvent
 {
-  SNRA_CONTROL_NONE,
-  SNRA_CONTROL_NEXT,
-  SNRA_CONTROL_PREV,
-  SNRA_CONTROL_PLAY,
-  SNRA_CONTROL_PAUSE,
-  SNRA_CONTROL_ENQUEUE,
-  SNRA_CONTROL_VOLUME,
-  SNRA_CONTROL_CLIENT_SETTING,
-  SNRA_CONTROL_SEEK,
-  SNRA_CONTROL_LANGUAGE
+  AUR_CONTROL_NONE,
+  AUR_CONTROL_NEXT,
+  AUR_CONTROL_PREV,
+  AUR_CONTROL_PLAY,
+  AUR_CONTROL_PAUSE,
+  AUR_CONTROL_ENQUEUE,
+  AUR_CONTROL_VOLUME,
+  AUR_CONTROL_CLIENT_SETTING,
+  AUR_CONTROL_SEEK,
+  AUR_CONTROL_LANGUAGE
 };
 
 static const struct
 {
   const char *name;
-  SnraControlEvent type;
+  AurControlEvent type;
 } control_event_names[] = {
   {
-  "next", SNRA_CONTROL_NEXT}, {
-  "previous", SNRA_CONTROL_PREV}, {
-  "play", SNRA_CONTROL_PLAY}, {
-  "pause", SNRA_CONTROL_PAUSE}, {
-  "enqueue", SNRA_CONTROL_ENQUEUE}, {
-  "volume", SNRA_CONTROL_VOLUME}, {
-  "setclient", SNRA_CONTROL_CLIENT_SETTING}, {
-  "seek", SNRA_CONTROL_SEEK}, {
-  "language", SNRA_CONTROL_LANGUAGE}
+  "next", AUR_CONTROL_NEXT}, {
+  "previous", AUR_CONTROL_PREV}, {
+  "play", AUR_CONTROL_PLAY}, {
+  "pause", AUR_CONTROL_PAUSE}, {
+  "enqueue", AUR_CONTROL_ENQUEUE}, {
+  "volume", AUR_CONTROL_VOLUME}, {
+  "setclient", AUR_CONTROL_CLIENT_SETTING}, {
+  "seek", AUR_CONTROL_SEEK}, {
+  "language", AUR_CONTROL_LANGUAGE}
 };
 
 static const gint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
 
-G_DEFINE_TYPE (SnraManager, snra_manager, G_TYPE_OBJECT);
+G_DEFINE_TYPE (AurManager, aur_manager, G_TYPE_OBJECT);
 
-static void snra_manager_dispose (GObject * object);
-static void snra_manager_finalize (GObject * object);
-static SnraHttpResource *snra_manager_get_resource_cb (SnraServer * server,
+static void aur_manager_dispose (GObject * object);
+static void aur_manager_finalize (GObject * object);
+static AurHttpResource *aur_manager_get_resource_cb (AurServer * server,
     guint resource_id, void *userdata);
-static void snra_manager_set_property (GObject * object, guint prop_id,
+static void aur_manager_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
-static void snra_manager_get_property (GObject * object, guint prop_id,
+static void aur_manager_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
-static void snra_manager_play_resource (SnraManager * manager,
+static void aur_manager_play_resource (AurManager * manager,
     guint resource_id);
-static void snra_manager_send_play (SnraManager * manager,
-    SnraServerClient * client);
-static void snra_manager_send_pause (SnraManager * manager,
-    SnraServerClient * client);
-static void snra_manager_adjust_volume (SnraManager * manager,
+static void aur_manager_send_play (AurManager * manager,
+    AurServerClient * client);
+static void aur_manager_send_pause (AurManager * manager,
+    AurServerClient * client);
+static void aur_manager_adjust_volume (AurManager * manager,
     gdouble volume);
-static void snra_manager_adjust_client_volume (SnraManager * manager,
+static void aur_manager_adjust_client_volume (AurManager * manager,
     guint client_id, gdouble volume);
-static void snra_manager_adjust_client_setting (SnraManager * manager,
+static void aur_manager_adjust_client_setting (AurManager * manager,
     guint client_id, gboolean enable);
-static GstStructure *manager_make_set_media_msg (SnraManager * manager,
+static GstStructure *manager_make_set_media_msg (AurManager * manager,
     guint resource_id);
 static GstStructure *manager_make_player_clients_changed_msg
-    (SnraManager * manager);
-static SnraPlayerInfo * get_player_info_by_id (SnraManager *manager,
+    (AurManager * manager);
+static AurPlayerInfo * get_player_info_by_id (AurManager *manager,
     guint client_id);
-static void snra_manager_send_seek (SnraManager * manager,
-    SnraServerClient * client, GstClockTime position);
-static void snra_manager_send_language (SnraManager * manager,
-    SnraServerClient * client, const gchar * language);
+static void aur_manager_send_seek (AurManager * manager,
+    AurServerClient * client, GstClockTime position);
+static void aur_manager_send_language (AurManager * manager,
+    AurServerClient * client, const gchar * language);
 
 #define SEND_MSG_TO_PLAYERS 1
 #define SEND_MSG_TO_DISABLED_PLAYERS 2
@@ -135,7 +135,7 @@ static void snra_manager_send_language (SnraManager * manager,
 #define SEND_MSG_TO_ALL (SEND_MSG_TO_PLAYERS|SEND_MSG_TO_CONTROLLERS)
 
 static void
-manager_send_msg_to_client (SnraManager * manager, SnraServerClient * client,
+manager_send_msg_to_client (AurManager * manager, AurServerClient * client,
     gint send_to_mask, GstStructure * msg);
 
 static GstNetTimeProvider *
@@ -153,7 +153,7 @@ create_net_clock ()
 
 #ifdef HAVE_GST_RTSP
 static GstRTSPServer *
-create_rtsp_server (G_GNUC_UNUSED SnraManager * mgr)
+create_rtsp_server (G_GNUC_UNUSED AurManager * mgr)
 {
   GstRTSPServer *server = NULL;
 
@@ -178,7 +178,7 @@ failed:
 #endif
 
 static GstStructure *
-manager_make_enrol_msg (SnraManager * manager, SnraPlayerInfo *info)
+manager_make_enrol_msg (AurManager * manager, AurPlayerInfo *info)
 {
   int clock_port;
   GstClock *clock;
@@ -210,7 +210,7 @@ manager_make_enrol_msg (SnraManager * manager, SnraPlayerInfo *info)
 }
 
 static GstStructure *
-make_player_clients_list_msg (SnraManager * manager)
+make_player_clients_list_msg (AurManager * manager)
 {
   GstStructure *msg;
   GValue p = G_VALUE_INIT;
@@ -222,7 +222,7 @@ make_player_clients_list_msg (SnraManager * manager)
       "msg-type", G_TYPE_STRING, "player-clients", NULL);
 
   for (cur = manager->player_info; cur != NULL; cur = g_list_next (cur)) {
-    SnraPlayerInfo *info = (SnraPlayerInfo *) (cur->data);
+    AurPlayerInfo *info = (AurPlayerInfo *) (cur->data);
     if (info->conn != NULL) {
       GValue tmp = G_VALUE_INIT;
       GstStructure *cur_struct = gst_structure_new ("client",
@@ -245,7 +245,7 @@ make_player_clients_list_msg (SnraManager * manager)
 }
 
 static gint
-find_player_info_by_client (const SnraPlayerInfo *info, SnraServerClient *client)
+find_player_info_by_client (const AurPlayerInfo *info, AurServerClient *client)
 {
   if (info->conn == client)
     return 0;
@@ -254,12 +254,12 @@ find_player_info_by_client (const SnraPlayerInfo *info, SnraServerClient *client
 }
 
 static void
-manager_player_client_disconnect (SnraServerClient * client,
-    SnraManager * manager)
+manager_player_client_disconnect (AurServerClient * client,
+    AurManager * manager)
 {
   GList *item = g_list_find_custom (manager->player_info, client, (GCompareFunc)(find_player_info_by_client));
   if (item) {
-    SnraPlayerInfo *info = (SnraPlayerInfo *)(item->data);
+    AurPlayerInfo *info = (AurPlayerInfo *)(item->data);
 
     g_print ("Disconnecting player client %u\n", info->id);
 
@@ -272,8 +272,8 @@ manager_player_client_disconnect (SnraServerClient * client,
 }
 
 static void
-manager_ctrl_client_disconnect (SnraServerClient * client,
-    SnraManager * manager)
+manager_ctrl_client_disconnect (AurServerClient * client,
+    AurManager * manager)
 {
   GList *item = g_list_find (manager->ctrl_clients, client);
   if (item) {
@@ -284,14 +284,14 @@ manager_ctrl_client_disconnect (SnraServerClient * client,
 }
 
 static void
-manager_status_client_disconnect (SnraServerClient * client,
-    G_GNUC_UNUSED SnraManager * manager)
+manager_status_client_disconnect (AurServerClient * client,
+    G_GNUC_UNUSED AurManager * manager)
 {
   g_object_unref (client);
 }
 
 static gboolean
-handle_ping_timeout (SnraManager *manager)
+handle_ping_timeout (AurManager *manager)
 {
   GstStructure *msg;
 
@@ -308,8 +308,8 @@ handle_ping_timeout (SnraManager *manager)
 }
 
 static void
-send_enrol_events (SnraManager * manager, SnraServerClient * client,
-    SnraPlayerInfo *info)
+send_enrol_events (AurManager * manager, AurServerClient * client,
+    AurPlayerInfo *info)
 {
   manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL,
       manager_make_enrol_msg (manager, info));
@@ -329,7 +329,7 @@ send_enrol_events (SnraManager * manager, SnraServerClient * client,
 }
 
 static gint
-find_unlinked_player_info_by_host (const SnraPlayerInfo *p, const gchar *host)
+find_unlinked_player_info_by_host (const AurPlayerInfo *p, const gchar *host)
 {
   if (p->conn == NULL && g_str_equal (p->host, host))
     return 0;
@@ -337,7 +337,7 @@ find_unlinked_player_info_by_host (const SnraPlayerInfo *p, const gchar *host)
 }
 
 static gint
-find_player_info_by_client_id (const SnraPlayerInfo *p, const gpointer cid_ptr)
+find_player_info_by_client_id (const AurPlayerInfo *p, const gpointer cid_ptr)
 {
   const guint client_id = GPOINTER_TO_INT(cid_ptr);
   if (p->id == client_id)
@@ -345,32 +345,32 @@ find_player_info_by_client_id (const SnraPlayerInfo *p, const gpointer cid_ptr)
   return -1;
 }
 
-static SnraPlayerInfo *
-get_player_info_by_id (SnraManager *manager, guint client_id)
+static AurPlayerInfo *
+get_player_info_by_id (AurManager *manager, guint client_id)
 {
   GList *entry;
-  SnraPlayerInfo *info = NULL;
+  AurPlayerInfo *info = NULL;
 
   /* See if there's a player instance that matches */
   entry = g_list_find_custom (manager->player_info, GINT_TO_POINTER (client_id), (GCompareFunc) find_player_info_by_client_id);
   if (entry)
-    info = (SnraPlayerInfo *)(entry->data);
+    info = (AurPlayerInfo *)(entry->data);
 
   return info;
 }
 
-static SnraPlayerInfo *
-get_player_info_for_client (SnraManager *manager, SnraServerClient *client)
+static AurPlayerInfo *
+get_player_info_for_client (AurManager *manager, AurServerClient *client)
 {
   GList *entry;
-  SnraPlayerInfo *info = NULL;
+  AurPlayerInfo *info = NULL;
   const gchar *host;
 
   /* See if there's a disconnected player instance that matches */
-  host = snra_server_client_get_host (client);
+  host = aur_server_client_get_host (client);
   entry = g_list_find_custom (manager->player_info, host, (GCompareFunc) find_unlinked_player_info_by_host);
   if (entry == NULL) {
-    info = g_new0 (SnraPlayerInfo, 1);
+    info = g_new0 (AurPlayerInfo, 1);
     /* Init the player info */
     info->host = g_strdup (host);
     info->id = manager->next_player_id++;
@@ -382,7 +382,7 @@ get_player_info_for_client (SnraManager *manager, SnraServerClient *client)
     g_print ("New player id %u\n", info->id);
   }
   else {
-    info = (SnraPlayerInfo *)(entry->data);
+    info = (AurPlayerInfo *)(entry->data);
     g_print ("Player id %u rejoining\n", info->id);
   }
 
@@ -394,9 +394,9 @@ get_player_info_for_client (SnraManager *manager, SnraServerClient *client)
 static void
 manager_client_cb (SoupServer * soup, SoupMessage * msg,
     G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable * query,
-    G_GNUC_UNUSED SoupClientContext *ctx, SnraManager * manager)
+    G_GNUC_UNUSED SoupClientContext *ctx, AurManager * manager)
 {
-  SnraServerClient *client_conn = NULL;
+  AurServerClient *client_conn = NULL;
   gchar **parts = g_strsplit (path, "/", 3);
   guint n_parts = g_strv_length (parts);
 
@@ -406,9 +406,9 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
   }
 
   if (g_str_equal (parts[2], "player_events")) {
-    SnraPlayerInfo *info;
+    AurPlayerInfo *info;
 
-    client_conn = snra_server_client_new (soup, msg, ctx);
+    client_conn = aur_server_client_new (soup, msg, ctx);
     g_signal_connect (client_conn, "connection-lost",
         G_CALLBACK (manager_player_client_disconnect), manager);
 
@@ -418,13 +418,13 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
     manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS,
         manager_make_player_clients_changed_msg (manager));
   } else if (g_str_equal (parts[2], "control_events")) {
-    client_conn = snra_server_client_new (soup, msg, ctx);
+    client_conn = aur_server_client_new (soup, msg, ctx);
     g_signal_connect (client_conn, "connection-lost",
         G_CALLBACK (manager_ctrl_client_disconnect), manager);
     manager->ctrl_clients = g_list_prepend (manager->ctrl_clients, client_conn);
     send_enrol_events (manager, client_conn, NULL);
   } else if (g_str_equal (parts[2], "player_info")) {
-    client_conn = snra_server_client_new_single (soup, msg, ctx);
+    client_conn = aur_server_client_new_single (soup, msg, ctx);
     g_signal_connect (client_conn, "connection-lost",
         G_CALLBACK (manager_status_client_disconnect), manager);
     manager_send_msg_to_client (manager, client_conn, 0,
@@ -438,7 +438,7 @@ done:
 }
 
 static void
-manager_send_msg_to_client (SnraManager * manager, SnraServerClient * client,
+manager_send_msg_to_client (AurManager * manager, AurServerClient * client,
     gint send_to_mask, GstStructure * msg)
 {
   JsonGenerator *gen;
@@ -446,7 +446,7 @@ manager_send_msg_to_client (SnraManager * manager, SnraServerClient * client,
   gchar *body;
   gsize len;
 
-  root = snra_json_from_gst_structure (msg);
+  root = aur_json_from_gst_structure (msg);
   gst_structure_free (msg);
 
   gen = json_generator_new ();
@@ -459,28 +459,28 @@ manager_send_msg_to_client (SnraManager * manager, SnraServerClient * client,
   json_node_free (root);
 
   if (client) {
-    snra_server_client_send_message (client, body, len);
+    aur_server_client_send_message (client, body, len);
   } else {
     /* client == NULL - send to all clients */
     GList *cur;
     if (send_to_mask & SEND_MSG_TO_PLAYERS) {
       for (cur = manager->player_info; cur != NULL; cur = g_list_next (cur)) {
-        SnraPlayerInfo *info = (SnraPlayerInfo *) (cur->data);
+        AurPlayerInfo *info = (AurPlayerInfo *) (cur->data);
         if (info->conn)
-          snra_server_client_send_message (info->conn, body, len);
+          aur_server_client_send_message (info->conn, body, len);
       }
     }
     if (send_to_mask & SEND_MSG_TO_CONTROLLERS) {
       for (cur = manager->ctrl_clients; cur != NULL; cur = g_list_next (cur)) {
-        client = (SnraServerClient *) (cur->data);
-        snra_server_client_send_message (client, body, len);
+        client = (AurServerClient *) (cur->data);
+        aur_server_client_send_message (client, body, len);
       }
     }
   }
   g_free (body);
 }
 
-static SnraControlEvent
+static AurControlEvent
 str_to_control_event_type (const gchar * str)
 {
   gint i;
@@ -489,13 +489,13 @@ str_to_control_event_type (const gchar * str)
       return control_event_names[i].type;
   }
 
-  return SNRA_CONTROL_NONE;
+  return AUR_CONTROL_NONE;
 }
 
 static guint
-get_playlist_len (SnraManager * mgr)
+get_playlist_len (AurManager * mgr)
 {
-  return snra_media_db_get_file_count (mgr->media_db);
+  return aur_media_db_get_file_count (mgr->media_db);
 }
 
 static const gchar *
@@ -525,11 +525,11 @@ is_allowed_uri (const gchar *uri)
 static void
 control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
     const char *path, GHashTable * query,
-    G_GNUC_UNUSED SoupClientContext * client, SnraManager * manager)
+    G_GNUC_UNUSED SoupClientContext * client, AurManager * manager)
 {
   gchar **parts = g_strsplit (path, "/", 3);
   guint n_parts = g_strv_length (parts);
-  SnraControlEvent event_type;
+  AurControlEvent event_type;
   GHashTable *post_params = NULL;
   const gchar *content_type;
 
@@ -545,7 +545,7 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
     post_params = soup_form_decode (msg->request_body->data);
 
   switch (event_type) {
-    case SNRA_CONTROL_NEXT:{
+    case AUR_CONTROL_NEXT:{
       const gchar *id_str = find_param_str ("id", query, post_params);
       guint resource_id;
 
@@ -584,32 +584,32 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
         resource_id = CLAMP (resource_id, 1, get_playlist_len (manager));
       }
       manager->paused = FALSE;
-      snra_manager_play_resource (manager, resource_id);
+      aur_manager_play_resource (manager, resource_id);
       break;
     }
-    case SNRA_CONTROL_PAUSE:{
+    case AUR_CONTROL_PAUSE:{
       if (!manager->paused)
-        snra_manager_send_pause (manager, NULL);
+        aur_manager_send_pause (manager, NULL);
       manager->paused = TRUE;
       break;
     }
-    case SNRA_CONTROL_PLAY:{
+    case AUR_CONTROL_PLAY:{
       if (manager->paused) {
         if (manager->current_resource == 0) {
           guint resource_id =
               g_random_int_range (0, get_playlist_len (manager) + 1);
           if (resource_id != 0) {
             manager->paused = FALSE;
-            snra_manager_play_resource (manager, resource_id);
+            aur_manager_play_resource (manager, resource_id);
           }
         } else {
           manager->paused = FALSE;
-          snra_manager_send_play (manager, NULL);
+          aur_manager_send_play (manager, NULL);
         }
       }
       break;
     }
-    case SNRA_CONTROL_VOLUME:{
+    case AUR_CONTROL_VOLUME:{
       const gchar *vol_str = find_param_str ("level", query, post_params);
       const gchar *id_str = find_param_str ("client_id", query, post_params);
       guint client_id = 0;
@@ -622,14 +622,14 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
         new_vol = g_ascii_strtod (vol_str, NULL);
         new_vol = CLAMP (new_vol, 0.0, 10.0);
         if (client_id == 0)
-          snra_manager_adjust_volume (manager, new_vol);
+          aur_manager_adjust_volume (manager, new_vol);
         else
-          snra_manager_adjust_client_volume (manager, client_id, new_vol);
+          aur_manager_adjust_client_volume (manager, client_id, new_vol);
       }
 
       break;
     }
-    case SNRA_CONTROL_CLIENT_SETTING:{
+    case AUR_CONTROL_CLIENT_SETTING:{
       const gchar *set_str = find_param_str ("enable", query, post_params);
       const gchar *id_str = find_param_str ("client_id", query, post_params);
       guint client_id = 0;
@@ -640,24 +640,24 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
 
       if (set_str && sscanf (set_str, "%d", &enable)) {
         if (client_id > 0)
-          snra_manager_adjust_client_setting (manager, client_id, enable != 0);
+          aur_manager_adjust_client_setting (manager, client_id, enable != 0);
       }
 
       break;
     }
-    case SNRA_CONTROL_SEEK:{
+    case AUR_CONTROL_SEEK:{
       const gchar *pos_str = find_param_str ("position", query, post_params);
       GstClockTime position = 0;
 
       if (pos_str != NULL)
         sscanf (pos_str, "%" G_GUINT64_FORMAT, &position);
 
-      snra_manager_send_seek (manager, NULL, position);
+      aur_manager_send_seek (manager, NULL, position);
       break;
     }
-    case SNRA_CONTROL_LANGUAGE:{
+    case AUR_CONTROL_LANGUAGE:{
       const gchar *language = find_param_str ("language", query, post_params);
-      snra_manager_send_language (manager, NULL, language);
+      aur_manager_send_language (manager, NULL, language);
       break;
     }
     default:
@@ -676,7 +676,7 @@ done:
 
 
 static void
-snra_manager_init (SnraManager * manager)
+aur_manager_init (AurManager * manager)
 {
   manager->playlist = g_ptr_array_new ();
   manager->net_clock = create_net_clock ();
@@ -692,58 +692,58 @@ snra_manager_init (SnraManager * manager)
 }
 
 static void
-snra_manager_constructed (GObject * object)
+aur_manager_constructed (GObject * object)
 {
-  SnraManager *manager = (SnraManager *) (object);
+  AurManager *manager = (AurManager *) (object);
   gchar *db_file;
-  int snra_port;
+  int aur_port;
 
-  if (G_OBJECT_CLASS (snra_manager_parent_class)->constructed != NULL)
-    G_OBJECT_CLASS (snra_manager_parent_class)->constructed (object);
+  if (G_OBJECT_CLASS (aur_manager_parent_class)->constructed != NULL)
+    G_OBJECT_CLASS (aur_manager_parent_class)->constructed (object);
 
 #ifdef HAVE_GST_RTSP
   manager->rtsp = create_rtsp_server (manager);
 #endif
 
-  g_object_get (manager->config, "snra-port", &snra_port, NULL);
+  g_object_get (manager->config, "aur-port", &aur_port, NULL);
 
-  manager->server = g_object_new (SNRA_TYPE_SERVER,
+  manager->server = g_object_new (AUR_TYPE_SERVER,
       "config", manager->config, NULL);
-  snra_server_set_resource_cb (manager->server,
-      snra_manager_get_resource_cb, manager);
-  snra_server_add_handler (manager->server, "/control",
+  aur_server_set_resource_cb (manager->server,
+      aur_manager_get_resource_cb, manager);
+  aur_server_add_handler (manager->server, "/control",
       (SoupServerCallback) control_callback,
       g_object_ref (G_OBJECT (manager)), g_object_unref);
-  snra_server_add_handler (manager->server, "/client",
+  aur_server_add_handler (manager->server, "/client",
       (SoupServerCallback) manager_client_cb,
       g_object_ref (manager), g_object_unref);
 
-  manager->avahi = g_object_new (SNRA_TYPE_AVAHI, "snra-port", snra_port, NULL);
+  manager->avahi = g_object_new (AUR_TYPE_AVAHI, "aur-port", aur_port, NULL);
 
   g_object_get (manager->config, "database", &db_file, NULL);
-  manager->media_db = snra_media_db_new (db_file);
+  manager->media_db = aur_media_db_new (db_file);
   g_free (db_file);
 }
 
 static void
-snra_manager_class_init (SnraManagerClass * manager_class)
+aur_manager_class_init (AurManagerClass * manager_class)
 {
   GObjectClass *object_class = (GObjectClass *) (manager_class);
 
-  object_class->constructed = snra_manager_constructed;
-  object_class->set_property = snra_manager_set_property;
-  object_class->get_property = snra_manager_get_property;
-  object_class->dispose = snra_manager_dispose;
-  object_class->finalize = snra_manager_finalize;
+  object_class->constructed = aur_manager_constructed;
+  object_class->set_property = aur_manager_set_property;
+  object_class->get_property = aur_manager_get_property;
+  object_class->dispose = aur_manager_dispose;
+  object_class->finalize = aur_manager_finalize;
 
   g_object_class_install_property (object_class, PROP_CONFIG,
       g_param_spec_object ("config", "config",
           "Aurena service configuration object",
-          SNRA_TYPE_CONFIG, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
+          AUR_TYPE_CONFIG, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
 }
 
 static void
-free_player_info (SnraPlayerInfo *info)
+free_player_info (AurPlayerInfo *info)
 {
   if (info->conn)
     g_object_unref (info->conn);
@@ -752,9 +752,9 @@ free_player_info (SnraPlayerInfo *info)
 }
 
 static void
-snra_manager_dispose (GObject * object)
+aur_manager_dispose (GObject * object)
 {
-  SnraManager *manager = (SnraManager *) (object);
+  AurManager *manager = (AurManager *) (object);
 
   g_list_foreach (manager->ctrl_clients, (GFunc) g_object_unref, NULL);
   g_list_free (manager->ctrl_clients);
@@ -769,13 +769,13 @@ snra_manager_dispose (GObject * object)
     manager->ping_timeout = 0;
   }
 
-  G_OBJECT_CLASS (snra_manager_parent_class)->dispose (object);
+  G_OBJECT_CLASS (aur_manager_parent_class)->dispose (object);
 }
 
 static void
-snra_manager_finalize (GObject * object)
+aur_manager_finalize (GObject * object)
 {
-  SnraManager *manager = (SnraManager *) (object);
+  AurManager *manager = (AurManager *) (object);
 
   g_ptr_array_foreach (manager->playlist, (GFunc) g_free, NULL);
   g_ptr_array_free (manager->playlist, TRUE);
@@ -783,7 +783,7 @@ snra_manager_finalize (GObject * object)
   g_object_unref (manager->config);
   g_object_unref (manager->media_db);
 
-  snra_server_stop (manager->server);
+  aur_server_stop (manager->server);
   g_object_unref (manager->server);
 
   g_clear_object (&manager->custom_file);
@@ -791,10 +791,10 @@ snra_manager_finalize (GObject * object)
 }
 
 static void
-snra_manager_set_property (GObject * object, guint prop_id,
+aur_manager_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  SnraManager *manager = (SnraManager *) (object);
+  AurManager *manager = (AurManager *) (object);
 
   switch (prop_id) {
     case PROP_CONFIG:
@@ -807,10 +807,10 @@ snra_manager_set_property (GObject * object, guint prop_id,
 }
 
 static void
-snra_manager_get_property (GObject * object, guint prop_id,
+aur_manager_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  SnraManager *manager = (SnraManager *) (object);
+  AurManager *manager = (AurManager *) (object);
 
   switch (prop_id) {
     case PROP_CONFIG:
@@ -824,21 +824,21 @@ snra_manager_get_property (GObject * object, guint prop_id,
 
 #ifdef HAVE_GST_RTSP
 static void
-rtsp_media_prepared (GstRTSPMedia * media, G_GNUC_UNUSED SnraManager * mgr)
+rtsp_media_prepared (GstRTSPMedia * media, G_GNUC_UNUSED AurManager * mgr)
 {
   g_object_set (media->rtpbin, "use-pipeline-clock", TRUE, NULL);
 }
 
 static void
 new_stream_constructed_cb (G_GNUC_UNUSED GstRTSPMediaFactory * factory,
-    GstRTSPMedia * media, SnraManager * mgr)
+    GstRTSPMedia * media, AurManager * mgr)
 {
   g_print ("Media constructed: %p\n", media);
   g_signal_connect (media, "prepared", G_CALLBACK (rtsp_media_prepared), mgr);
 }
 
 static void
-add_rtsp_uri (SnraManager * manager, guint resource_id,
+add_rtsp_uri (AurManager * manager, guint resource_id,
     const gchar * source_uri)
 {
   GstRTSPMediaMapping *mapping;
@@ -862,7 +862,7 @@ add_rtsp_uri (SnraManager * manager, guint resource_id,
 #endif
 
 static void
-read_playlist_file (SnraManager * manager, const char *filename)
+read_playlist_file (AurManager * manager, const char *filename)
 {
   GError *error = NULL;
   GIOChannel *io = g_io_channel_new_file (filename, "r", &error);
@@ -875,7 +875,7 @@ read_playlist_file (SnraManager * manager, const char *filename)
     return;
   }
 
-  snra_media_db_begin_transaction (manager->media_db);
+  aur_media_db_begin_transaction (manager->media_db);
 
   do {
     GFile *file;
@@ -892,10 +892,10 @@ read_playlist_file (SnraManager * manager, const char *filename)
      * old-style playlist files, respectively. g_file_new_for_commandline_arg()
      * doesn't care. */
     file = g_file_new_for_commandline_arg (line);
-    snra_media_db_add_file (manager->media_db, file);
+    aur_media_db_add_file (manager->media_db, file);
     g_object_unref (file);
   } while (TRUE);
-  snra_media_db_commit_transaction (manager->media_db);
+  aur_media_db_commit_transaction (manager->media_db);
 
   g_print ("Finished scanning playlist. Read %u entries\n", manager->playlist->len);
 
@@ -903,18 +903,18 @@ read_playlist_file (SnraManager * manager, const char *filename)
 }
 
 
-SnraManager *
-snra_manager_new (const char *config_file)
+AurManager *
+aur_manager_new (const char *config_file)
 {
-  SnraConfig *config;
-  SnraManager *manager;
+  AurConfig *config;
+  AurManager *manager;
   gchar *playlist_file;
 
-  config = snra_config_new (config_file);
+  config = aur_config_new (config_file);
   if (config == NULL)
     return NULL;
 
-  manager = g_object_new (SNRA_TYPE_MANAGER, "config", config, NULL);
+  manager = g_object_new (AUR_TYPE_MANAGER, "config", config, NULL);
 
   g_object_get (config, "playlist", &playlist_file, NULL);
   if (playlist_file) {
@@ -931,28 +931,28 @@ snra_manager_new (const char *config_file)
 #endif
   }
 
-  snra_server_start (manager->server);
+  aur_server_start (manager->server);
 
   return manager;
 }
 
-static SnraHttpResource *
-snra_manager_get_resource_cb (G_GNUC_UNUSED SnraServer * server,
+static AurHttpResource *
+aur_manager_get_resource_cb (G_GNUC_UNUSED AurServer * server,
     guint resource_id, void *userdata)
 {
-  SnraManager *manager = (SnraManager *) (userdata);
-  SnraHttpResource *ret;
+  AurManager *manager = (AurManager *) (userdata);
+  AurHttpResource *ret;
   GFile *file;
   gchar *file_uri;
 
   if (resource_id == G_MAXUINT && manager->custom_file)
-    return g_object_new (SNRA_TYPE_HTTP_RESOURCE, "source-file",
+    return g_object_new (AUR_TYPE_HTTP_RESOURCE, "source-file",
         manager->custom_file, NULL);
 
   if (resource_id < 1 || resource_id > get_playlist_len (manager))
     return NULL;
 
-  file = snra_media_db_get_file_by_id (manager->media_db, resource_id);
+  file = aur_media_db_get_file_by_id (manager->media_db, resource_id);
   if (file == NULL)
     return NULL;
 
@@ -960,14 +960,14 @@ snra_manager_get_resource_cb (G_GNUC_UNUSED SnraServer * server,
   g_print ("Creating resource %u for %s\n", resource_id, file_uri);
   g_free (file_uri);
 
-  ret = g_object_new (SNRA_TYPE_HTTP_RESOURCE, "source-file", file, NULL);
+  ret = g_object_new (AUR_TYPE_HTTP_RESOURCE, "source-file", file, NULL);
   g_object_unref (file);
 
   return ret;
 }
 
 static void
-snra_manager_play_resource (SnraManager * manager, guint resource_id)
+aur_manager_play_resource (AurManager * manager, guint resource_id)
 {
   manager->current_resource = resource_id;
   manager->base_time = GST_CLOCK_TIME_NONE;
@@ -978,7 +978,7 @@ snra_manager_play_resource (SnraManager * manager, guint resource_id)
 }
 
 static void
-snra_manager_send_play (SnraManager * manager, SnraServerClient * client)
+aur_manager_send_play (AurManager * manager, AurServerClient * client)
 {
   GstClock *clock;
   GstStructure *msg;
@@ -997,7 +997,7 @@ snra_manager_send_play (SnraManager * manager, SnraServerClient * client)
 }
 
 static void
-snra_manager_send_pause (SnraManager * manager, SnraServerClient * client)
+aur_manager_send_pause (AurManager * manager, AurServerClient * client)
 {
   GstClock *clock;
   GstClockTime now;
@@ -1021,11 +1021,11 @@ snra_manager_send_pause (SnraManager * manager, SnraServerClient * client)
 }
 
 static void
-snra_manager_adjust_client_volume (SnraManager * manager, guint client_id,
+aur_manager_adjust_client_volume (AurManager * manager, guint client_id,
     gdouble volume)
 {
   GstStructure *msg = NULL;
-  SnraPlayerInfo *info;
+  AurPlayerInfo *info;
 
   info = get_player_info_by_id (manager, client_id);
   if (info == NULL)
@@ -1046,11 +1046,11 @@ snra_manager_adjust_client_volume (SnraManager * manager, guint client_id,
 }
 
 static void
-snra_manager_adjust_client_setting (SnraManager * manager, guint client_id,
+aur_manager_adjust_client_setting (AurManager * manager, guint client_id,
     gboolean enable)
 {
   GstStructure *msg = NULL;
-  SnraPlayerInfo *info;
+  AurPlayerInfo *info;
 
   info = get_player_info_by_id (manager, client_id);
   if (info == NULL)
@@ -1071,7 +1071,7 @@ snra_manager_adjust_client_setting (SnraManager * manager, guint client_id,
 }
 
 static void
-snra_manager_adjust_volume (SnraManager * manager, gdouble volume)
+aur_manager_adjust_volume (AurManager * manager, gdouble volume)
 {
   GstStructure *msg = NULL;
   GList *cur;
@@ -1084,7 +1084,7 @@ snra_manager_adjust_volume (SnraManager * manager, gdouble volume)
 
   /* Send a volume adjustment to each player */
   for (cur = manager->player_info; cur != NULL; cur = cur->next) {
-    SnraPlayerInfo *info = (SnraPlayerInfo *)(cur->data);
+    AurPlayerInfo *info = (AurPlayerInfo *)(cur->data);
     msg = gst_structure_new ("json",
            "msg-type", G_TYPE_STRING, "volume",
            "level", G_TYPE_DOUBLE, info->volume * volume, NULL);
@@ -1093,7 +1093,7 @@ snra_manager_adjust_volume (SnraManager * manager, gdouble volume)
 }
 
 static void
-snra_manager_send_seek (SnraManager * manager, SnraServerClient * client,
+aur_manager_send_seek (AurManager * manager, AurServerClient * client,
     GstClockTime position)
 {
   GstClock *clock;
@@ -1118,7 +1118,7 @@ snra_manager_send_seek (SnraManager * manager, SnraServerClient * client,
 }
 
 static void
-snra_manager_send_language (SnraManager * manager, SnraServerClient * client,
+aur_manager_send_language (AurManager * manager, AurServerClient * client,
     const gchar * language)
 {
   GstStructure *msg;
@@ -1135,7 +1135,7 @@ snra_manager_send_language (SnraManager * manager, SnraServerClient * client,
 }
 
 static GstStructure *
-manager_make_set_media_msg (SnraManager * manager, guint resource_id)
+manager_make_set_media_msg (AurManager * manager, guint resource_id)
 {
   GstClock *clock;
   GstClockTime cur_time, position;
@@ -1156,7 +1156,7 @@ manager_make_set_media_msg (SnraManager * manager, guint resource_id)
     g_print ("Base time now %" G_GUINT64_FORMAT "\n", manager->base_time);
   }
 #if 1
-  g_object_get (manager->config, "snra-port", &port, NULL);
+  g_object_get (manager->config, "aur-port", &port, NULL);
 #else
   g_object_get (manager->config, "rtsp-port", &port, NULL);
 #endif
@@ -1188,7 +1188,7 @@ manager_make_set_media_msg (SnraManager * manager, guint resource_id)
 }
 
 static GstStructure *
-manager_make_player_clients_changed_msg (G_GNUC_UNUSED SnraManager * manager)
+manager_make_player_clients_changed_msg (G_GNUC_UNUSED AurManager * manager)
 {
   GstStructure *msg;
   msg = gst_structure_new ("json",

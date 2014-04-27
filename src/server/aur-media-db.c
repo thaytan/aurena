@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -34,11 +34,11 @@
 #include "config.h"
 #endif
 
-#include "snra-media-db.h"
+#include "aur-media-db.h"
 
-#define SNRA_TYPE_MEDIA_DB (snra_media_db_get_type ())
+#define AUR_TYPE_MEDIA_DB (aur_media_db_get_type ())
 
-typedef struct _SnraMediaDBClass SnraMediaDBClass;
+typedef struct _AurMediaDBClass AurMediaDBClass;
 
 enum
 {
@@ -47,7 +47,7 @@ enum
   PROP_LAST
 };
 
-struct _SnraMediaDBPriv
+struct _AurMediaDBPriv
 {
   GObject parent;
 
@@ -56,37 +56,37 @@ struct _SnraMediaDBPriv
   gchar *db_file;
 };
 
-struct _SnraMediaDBClass
+struct _AurMediaDBClass
 {
   GObjectClass parent;
 };
 
-static GType snra_media_db_get_type (void);
-static void snra_media_db_finalize (GObject * object);
-static gboolean media_db_create_tables (SnraMediaDB * media_db);
-static void snra_media_db_set_property (GObject * object, guint prop_id,
+static GType aur_media_db_get_type (void);
+static void aur_media_db_finalize (GObject * object);
+static gboolean media_db_create_tables (AurMediaDB * media_db);
+static void aur_media_db_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
-static void snra_media_db_get_property (GObject * object, guint prop_id,
+static void aur_media_db_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-G_DEFINE_TYPE (SnraMediaDB, snra_media_db, G_TYPE_OBJECT);
+G_DEFINE_TYPE (AurMediaDB, aur_media_db, G_TYPE_OBJECT);
 
 static void
-snra_media_db_init (SnraMediaDB * media_db)
+aur_media_db_init (AurMediaDB * media_db)
 {
   media_db->priv = G_TYPE_INSTANCE_GET_PRIVATE (media_db,
-      SNRA_TYPE_MEDIA_DB, SnraMediaDBPriv);
+      AUR_TYPE_MEDIA_DB, AurMediaDBPriv);
 }
 
 static void
-snra_media_db_constructed (G_GNUC_UNUSED GObject * object)
+aur_media_db_constructed (G_GNUC_UNUSED GObject * object)
 {
-  SnraMediaDB *media_db = (SnraMediaDB *) (object);
+  AurMediaDB *media_db = (AurMediaDB *) (object);
   sqlite3 *handle = NULL;
   gchar *dir;
 
-  if (G_OBJECT_CLASS (snra_media_db_parent_class)->constructed != NULL)
-    G_OBJECT_CLASS (snra_media_db_parent_class)->constructed (object);
+  if (G_OBJECT_CLASS (aur_media_db_parent_class)->constructed != NULL)
+    G_OBJECT_CLASS (aur_media_db_parent_class)->constructed (object);
 
   dir = g_path_get_dirname (media_db->priv->db_file);
   g_mkdir_with_parents (dir, 0755);
@@ -104,37 +104,37 @@ snra_media_db_constructed (G_GNUC_UNUSED GObject * object)
 }
 
 static void
-snra_media_db_class_init (SnraMediaDBClass * media_db_class)
+aur_media_db_class_init (AurMediaDBClass * media_db_class)
 {
   GObjectClass *object_class = (GObjectClass *) (media_db_class);
 
-  object_class->constructed = snra_media_db_constructed;
-  object_class->set_property = snra_media_db_set_property;
-  object_class->get_property = snra_media_db_get_property;
+  object_class->constructed = aur_media_db_constructed;
+  object_class->set_property = aur_media_db_set_property;
+  object_class->get_property = aur_media_db_get_property;
 
-  object_class->finalize = snra_media_db_finalize;
+  object_class->finalize = aur_media_db_finalize;
 
   g_object_class_install_property (object_class, PROP_DB_FILE,
       g_param_spec_string ("db-file", "Database file",
           "Location for media DB file", NULL,
           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
-  g_type_class_add_private (object_class, sizeof (SnraMediaDBPriv));
+  g_type_class_add_private (object_class, sizeof (AurMediaDBPriv));
 }
 
 static void
-snra_media_db_finalize (GObject * object)
+aur_media_db_finalize (GObject * object)
 {
-  SnraMediaDB *media_db = (SnraMediaDB *) (object);
+  AurMediaDB *media_db = (AurMediaDB *) (object);
 
   if (media_db->priv->handle)
     sqlite3_close (media_db->priv->handle);
 }
 
 static void
-snra_media_db_set_property (GObject * object, guint prop_id,
+aur_media_db_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  SnraMediaDB *media_db = (SnraMediaDB *) (object);
+  AurMediaDB *media_db = (AurMediaDB *) (object);
 
   switch (prop_id) {
     case PROP_DB_FILE:
@@ -148,10 +148,10 @@ snra_media_db_set_property (GObject * object, guint prop_id,
 }
 
 static void
-snra_media_db_get_property (GObject * object, guint prop_id,
+aur_media_db_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  SnraMediaDB *media_db = (SnraMediaDB *) (object);
+  AurMediaDB *media_db = (AurMediaDB *) (object);
 
   switch (prop_id) {
     case PROP_DB_FILE:
@@ -164,7 +164,7 @@ snra_media_db_get_property (GObject * object, guint prop_id,
 }
 
 static gboolean
-media_db_create_tables (SnraMediaDB * media_db)
+media_db_create_tables (AurMediaDB * media_db)
 {
   sqlite3 *handle = media_db->priv->handle;
   if (sqlite3_exec (handle,
@@ -188,12 +188,12 @@ media_db_create_tables (SnraMediaDB * media_db)
   return TRUE;
 }
 
-SnraMediaDB *
-snra_media_db_new (const char *db_path)
+AurMediaDB *
+aur_media_db_new (const char *db_path)
 {
-  SnraMediaDB *media_db = NULL;
+  AurMediaDB *media_db = NULL;
 
-  media_db = g_object_new (SNRA_TYPE_MEDIA_DB, "db-file", db_path, NULL);
+  media_db = g_object_new (AUR_TYPE_MEDIA_DB, "db-file", db_path, NULL);
   if (media_db == NULL)
     return NULL;
 
@@ -206,7 +206,7 @@ snra_media_db_new (const char *db_path)
 }
 
 static guint64
-snra_media_path_to_id (SnraMediaDB * media_db, const gchar * path)
+aur_media_path_to_id (AurMediaDB * media_db, const gchar * path)
 {
   sqlite3_stmt *stmt = NULL;
   sqlite3_stmt *insert_stmt = NULL;
@@ -250,7 +250,7 @@ done:
 }
 
 static guint64
-snra_media_file_to_id (SnraMediaDB * media_db, guint64 path_id,
+aur_media_file_to_id (AurMediaDB * media_db, guint64 path_id,
     const gchar * file)
 {
   sqlite3_stmt *stmt = NULL;
@@ -299,7 +299,7 @@ done:
 }
 
 void
-snra_media_db_add_file (SnraMediaDB * media_db, GFile *file)
+aur_media_db_add_file (AurMediaDB * media_db, GFile *file)
 {
   gchar *basename;
   guint64 path_id;
@@ -312,7 +312,7 @@ snra_media_db_add_file (SnraMediaDB * media_db, GFile *file)
     filename = g_file_get_path (file);
     dirname = g_path_get_dirname (filename);
 
-    path_id = snra_media_path_to_id (media_db, dirname);
+    path_id = aur_media_path_to_id (media_db, dirname);
     basename = g_path_get_basename (filename);
 
     g_free (dirname);
@@ -324,13 +324,13 @@ snra_media_db_add_file (SnraMediaDB * media_db, GFile *file)
     path_id = 0;
   }
 
-  snra_media_file_to_id (media_db, path_id, basename);
+  aur_media_file_to_id (media_db, path_id, basename);
 
   g_free (basename);
 }
 
 guint
-snra_media_db_get_file_count (SnraMediaDB * media_db)
+aur_media_db_get_file_count (AurMediaDB * media_db)
 {
   sqlite3_stmt *stmt = NULL;
   gint count = -1;
@@ -351,7 +351,7 @@ done:
 }
 
 GFile *
-snra_media_db_get_file_by_id (SnraMediaDB * media_db, guint id)
+aur_media_db_get_file_by_id (AurMediaDB * media_db, guint id)
 {
   sqlite3_stmt *stmt = NULL;
   sqlite3 *handle = media_db->priv->handle;
@@ -396,7 +396,7 @@ done:
 }
 
 void
-snra_media_db_begin_transaction (SnraMediaDB *media_db)
+aur_media_db_begin_transaction (AurMediaDB *media_db)
 {
   sqlite3_stmt *stmt = NULL;
   sqlite3 *handle = media_db->priv->handle;
@@ -408,7 +408,7 @@ snra_media_db_begin_transaction (SnraMediaDB *media_db)
 }
 
 void
-snra_media_db_commit_transaction (SnraMediaDB *media_db)
+aur_media_db_commit_transaction (AurMediaDB *media_db)
 {
   sqlite3_stmt *stmt = NULL;
   sqlite3 *handle = media_db->priv->handle;

@@ -25,7 +25,7 @@
 #include <gst/gst.h>
 #include <glib-unix.h>
 
-#include "server/snra-manager.h"
+#include "server/aur-manager.h"
 
 GMainLoop *ml;
 
@@ -41,7 +41,7 @@ sigint_handler (G_GNUC_UNUSED void *data)
 int
 main (int argc, char *argv[])
 {
-  SnraManager *manager;
+  AurManager *manager;
   char *config_file = NULL;
 
   gst_init (&argc, &argv);
@@ -51,7 +51,7 @@ main (int argc, char *argv[])
 
   g_unix_signal_add (SIGINT, sigint_handler, NULL);
 
-  manager = snra_manager_new(config_file);
+  manager = aur_manager_new(config_file);
   if (manager == NULL)
     return -1;
 

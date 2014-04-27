@@ -1,6 +1,6 @@
-noinst_LTLIBRARIES = libsnra_client.la
+noinst_LTLIBRARIES = libaurena_client.la
 
-libsnra_client_la_SOURCES = \
-        snra-client.c snra-client.h
-libsnra_client_la_CPPFLAGS = -I$(top_srcdir) $(SNRA_COMMON_CFLAGS) $(GST_CFLAGS) $(EXTRA_CFLAGS)
-libsnra_client_la_LIBADD  = 
+libaurena_client_la_SOURCES = \
+        aur-client.c aur-client.h
+libaurena_client_la_CPPFLAGS = -I$(top_srcdir) $(AUR_COMMON_CFLAGS) $(GST_CFLAGS) $(EXTRA_CFLAGS)
+libaurena_client_la_LIBADD  = 

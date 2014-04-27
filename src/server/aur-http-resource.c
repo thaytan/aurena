@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -27,8 +27,8 @@
 #include <libsoup/soup-socket.h>
 #include <libsoup/soup-address.h>
 
-#include "snra-resource.h"
-#include "snra-http-resource.h"
+#include "aur-resource.h"
+#include "aur-http-resource.h"
 
 #if 0
 #define DEBUG_PRINT(...) g_print (__VA_ARGS__);
@@ -36,7 +36,7 @@
 #define DEBUG_PRINT(...)
 #endif
 
-G_DEFINE_TYPE (SnraHttpResource, snra_http_resource, G_TYPE_OBJECT);
+G_DEFINE_TYPE (AurHttpResource, aur_http_resource, G_TYPE_OBJECT);
 
 enum
 {
@@ -47,18 +47,18 @@ enum
 
 static gint resources_open = 0;
 
-static void snra_http_resource_set_property (GObject * object, guint prop_id,
+static void aur_http_resource_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
-static void snra_http_resource_get_property (GObject * object, guint prop_id,
+static void aur_http_resource_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-typedef struct _SnraTransfer
+typedef struct _AurTransfer
 {
-  SnraHttpResource *resource;
-} SnraTransfer;
+  AurHttpResource *resource;
+} AurTransfer;
 
 static gboolean
-snra_http_resource_open (SnraHttpResource * resource)
+aur_http_resource_open (AurHttpResource * resource)
 {
   if (resource->data == NULL) {
     GError *error = NULL;
@@ -98,7 +98,7 @@ snra_http_resource_open (SnraHttpResource * resource)
 }
 
 static void
-snra_http_resource_close (SnraHttpResource * resource)
+aur_http_resource_close (AurHttpResource * resource)
 {
   if (resource->use_count) {
     resource->use_count--;
@@ -132,15 +132,15 @@ snra_http_resource_close (SnraHttpResource * resource)
   g_object_unref (resource);
 }
 
-static SnraTransfer *
-snra_transfer_new (SnraHttpResource *resource)
+static AurTransfer *
+aur_transfer_new (AurHttpResource *resource)
 {
-  SnraTransfer *transfer;
+  AurTransfer *transfer;
 
-  if (!snra_http_resource_open (resource))
+  if (!aur_http_resource_open (resource))
     return NULL;
 
-  transfer = g_new0 (SnraTransfer, 1);
+  transfer = g_new0 (AurTransfer, 1);
   transfer->resource = g_object_ref (resource);
 
   DEBUG_PRINT ("Started transfer with resource %p use count now %d\n",
@@ -150,9 +150,9 @@ snra_transfer_new (SnraHttpResource *resource)
 }
 
 static void
-snra_transfer_free (SnraTransfer *transfer)
+aur_transfer_free (AurTransfer *transfer)
 {
-  snra_http_resource_close (transfer->resource);
+  aur_http_resource_close (transfer->resource);
 
   DEBUG_PRINT ("Completed transfer of %p. Use count now %d\n",
       transfer->resource, transfer->resource->use_count);
@@ -162,11 +162,11 @@ snra_transfer_free (SnraTransfer *transfer)
 }
 
 void
-snra_http_resource_new_transfer (SnraHttpResource * resource, SoupMessage * msg)
+aur_http_resource_new_transfer (AurHttpResource * resource, SoupMessage * msg)
 {
   /* Create a new transfer structure, and pass the contents of our
    * resource to it */
-  SnraTransfer *transfer;
+  AurTransfer *transfer;
   SoupBuffer *buffer;
   gchar *local_path;
 
@@ -185,7 +185,7 @@ snra_http_resource_new_transfer (SnraHttpResource * resource, SoupMessage * msg)
     return;
   }
 
-  transfer = snra_transfer_new (resource);
+  transfer = aur_transfer_new (resource);
 
   if (!transfer) {
     soup_message_set_status (msg, SOUP_STATUS_INTERNAL_SERVER_ERROR);
@@ -198,11 +198,11 @@ snra_http_resource_new_transfer (SnraHttpResource * resource, SoupMessage * msg)
   buffer = soup_buffer_new_with_owner (
       g_mapped_file_get_contents (transfer->resource->data),
       g_mapped_file_get_length (transfer->resource->data),
-      transfer, (GDestroyNotify) snra_transfer_free);
+      transfer, (GDestroyNotify) aur_transfer_free);
 
   soup_message_set_status (msg, SOUP_STATUS_OK);
   soup_message_headers_replace (msg->response_headers,
-      "Content-Type", snra_resource_get_mime_type (local_path));
+      "Content-Type", aur_resource_get_mime_type (local_path));
   soup_message_body_append_buffer (msg->response_body, buffer);
   soup_buffer_free (buffer);
 
@@ -210,17 +210,17 @@ snra_http_resource_new_transfer (SnraHttpResource * resource, SoupMessage * msg)
 }
 
 static void
-snra_http_resource_init (G_GNUC_UNUSED SnraHttpResource * resource)
+aur_http_resource_init (G_GNUC_UNUSED AurHttpResource * resource)
 {
 }
 
 static void
-snra_http_resource_class_init (SnraHttpResourceClass * resource_class)
+aur_http_resource_class_init (AurHttpResourceClass * resource_class)
 {
   GObjectClass *gobject_class = (GObjectClass *) (resource_class);
 
-  gobject_class->set_property = snra_http_resource_set_property;
-  gobject_class->get_property = snra_http_resource_get_property;
+  gobject_class->set_property = aur_http_resource_set_property;
+  gobject_class->get_property = aur_http_resource_get_property;
 
   g_object_class_install_property (gobject_class, PROP_SOURCE_FILE,
       g_param_spec_object ("source-file", "Source File",
@@ -228,10 +228,10 @@ snra_http_resource_class_init (SnraHttpResourceClass * resource_class)
 }
 
 static void
-snra_http_resource_set_property (GObject * object, guint prop_id,
+aur_http_resource_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  SnraHttpResource *resource = (SnraHttpResource *) (object);
+  AurHttpResource *resource = (AurHttpResource *) (object);
 
   switch (prop_id) {
     case PROP_SOURCE_FILE:
@@ -245,10 +245,10 @@ snra_http_resource_set_property (GObject * object, guint prop_id,
 }
 
 static void
-snra_http_resource_get_property (GObject * object, guint prop_id,
+aur_http_resource_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  SnraHttpResource *resource = (SnraHttpResource *) (object);
+  AurHttpResource *resource = (AurHttpResource *) (object);
 
   switch (prop_id) {
     case PROP_SOURCE_FILE:

@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -16,13 +16,22 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  */
-
-#ifndef __SNRA_RESOURCE_H__
-#define __SNRA_RESOURCE_H__
+#ifndef __AUR_TYPES_H__
+#define __AUR_TYPES_H__
 
 #include <glib.h>
 
-const gchar *
-snra_resource_get_mime_type (const gchar *filename);
+G_BEGIN_DECLS
+
+typedef struct _AurAvahi AurAvahi;
+typedef struct _AurClient AurClient;
+typedef struct _AurConfig AurConfig;
+typedef struct _AurHttpResource AurHttpResource;
+typedef struct _AurManager AurManager;
+typedef struct _AurMediaDB AurMediaDB;
+typedef struct _AurServer AurServer;
+typedef struct _AurServerClient AurServerClient;
+
+G_END_DECLS
 
 #endif

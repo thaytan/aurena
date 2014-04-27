@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -24,9 +24,9 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "snra-config.h"
+#include "aur-config.h"
 
-G_DEFINE_TYPE (SnraConfig, snra_config, G_TYPE_OBJECT);
+G_DEFINE_TYPE (AurConfig, aur_config, G_TYPE_OBJECT);
 
 enum
 {
@@ -39,13 +39,13 @@ enum
   PROP_LAST
 };
 
-static void snra_config_set_property (GObject * object, guint prop_id,
+static void aur_config_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
-static void snra_config_get_property (GObject * object, guint prop_id,
+static void aur_config_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-static void snra_config_finalize(GObject *object);
-static void snra_config_dispose(GObject *object);
+static void aur_config_finalize(GObject *object);
+static void aur_config_dispose(GObject *object);
 
 static gchar *
 get_default_db_location ()
@@ -69,10 +69,10 @@ get_default_config_location ()
 }
 
 static void
-snra_config_init (SnraConfig *config)
+aur_config_init (AurConfig *config)
 {
   config->config_file = get_default_config_location();
-  config->snra_port = 5457;
+  config->aur_port = 5457;
   config->rtsp_port = 5458;
   config->database_location = get_default_db_location();
   config->playlist_location = get_default_playlist_location();
@@ -121,7 +121,7 @@ make_abs_path (gchar **dest, gchar *rel)
 }
 
 static void
-load_config (G_GNUC_UNUSED SnraConfig *config)
+load_config (G_GNUC_UNUSED AurConfig *config)
 {
   /* Read in config_file and split out pieces to the vars */
   GKeyFile *kf = g_key_file_new();
@@ -132,8 +132,8 @@ load_config (G_GNUC_UNUSED SnraConfig *config)
       G_KEY_FILE_KEEP_COMMENTS, NULL))
     goto fail;
 
-  try_read_int(kf, "server", "port", &config->snra_port);
-  try_read_int(kf, "server", "rtsp-port", &config->snra_port);
+  try_read_int(kf, "server", "port", &config->aur_port);
+  try_read_int(kf, "server", "rtsp-port", &config->aur_port);
   try_read_string(kf, "server", "database", &config->database_location);
   try_read_string(kf, "server", "playlist", &config->playlist_location);
   make_abs_path(&config->database_location, config->config_file);
@@ -149,28 +149,28 @@ fail:
 }
 
 static void
-snra_config_constructed (GObject *object)
+aur_config_constructed (GObject *object)
 {
-  SnraConfig *config = (SnraConfig *)(object);
+  AurConfig *config = (AurConfig *)(object);
 
-  if (G_OBJECT_CLASS (snra_config_parent_class)->constructed != NULL)
-    G_OBJECT_CLASS (snra_config_parent_class)->constructed (object);
+  if (G_OBJECT_CLASS (aur_config_parent_class)->constructed != NULL)
+    G_OBJECT_CLASS (aur_config_parent_class)->constructed (object);
 
   load_config (config);
 }
 
 static void
-snra_config_class_init (SnraConfigClass *config_class)
+aur_config_class_init (AurConfigClass *config_class)
 {
   GObjectClass *gobject_class = (GObjectClass *)(config_class);
   gchar *location;
 
-  gobject_class->constructed = snra_config_constructed;
+  gobject_class->constructed = aur_config_constructed;
 
-  gobject_class->dispose = snra_config_dispose;
-  gobject_class->finalize = snra_config_finalize;
-  gobject_class->set_property = snra_config_set_property;
-  gobject_class->get_property = snra_config_get_property;
+  gobject_class->dispose = aur_config_dispose;
+  gobject_class->finalize = aur_config_finalize;
+  gobject_class->set_property = aur_config_set_property;
+  gobject_class->get_property = aur_config_get_property;
 
   location = get_default_config_location();
   g_object_class_install_property (gobject_class, PROP_CONFIG_FILE,
@@ -180,7 +180,7 @@ snra_config_class_init (SnraConfigClass *config_class)
   g_free(location);
 
   g_object_class_install_property (gobject_class, PROP_PORT,
-    g_param_spec_int ("snra-port", "Aurena port",
+    g_param_spec_int ("aur-port", "Aurena port",
                          "port for Aurena service",
                          1, 65535, 5457,
                          G_PARAM_READWRITE));
@@ -207,28 +207,28 @@ snra_config_class_init (SnraConfigClass *config_class)
 }
 
 static void
-snra_config_finalize(GObject *object)
+aur_config_finalize(GObject *object)
 {
-  SnraConfig *config = (SnraConfig *)(object);
+  AurConfig *config = (AurConfig *)(object);
 
   g_free (config->config_file);
   g_free (config->database_location);
   g_free (config->playlist_location);
 
-  G_OBJECT_CLASS (snra_config_parent_class)->finalize (object);
+  G_OBJECT_CLASS (aur_config_parent_class)->finalize (object);
 }
 
 static void
-snra_config_dispose(GObject *object)
+aur_config_dispose(GObject *object)
 {
-  G_OBJECT_CLASS (snra_config_parent_class)->dispose (object);
+  G_OBJECT_CLASS (aur_config_parent_class)->dispose (object);
 }
 
 static void
-snra_config_set_property (GObject * object, guint prop_id,
+aur_config_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  SnraConfig *config = (SnraConfig *)(object);
+  AurConfig *config = (AurConfig *)(object);
 
   switch (prop_id) {
     case PROP_CONFIG_FILE:
@@ -239,7 +239,7 @@ snra_config_set_property (GObject * object, guint prop_id,
         config->config_file = get_default_config_location();
       break;
     case PROP_PORT:
-      config->snra_port = g_value_get_int (value);
+      config->aur_port = g_value_get_int (value);
       break;
     case PROP_RTSP_PORT:
       config->rtsp_port = g_value_get_int (value);
@@ -265,17 +265,17 @@ snra_config_set_property (GObject * object, guint prop_id,
 }
 
 static void
-snra_config_get_property (GObject * object, guint prop_id,
+aur_config_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  SnraConfig *config = (SnraConfig *)(object);
+  AurConfig *config = (AurConfig *)(object);
 
   switch (prop_id) {
     case PROP_CONFIG_FILE:
       g_value_set_string (value, config->config_file);
       break;
     case PROP_PORT:
-      g_value_set_int (value, config->snra_port);
+      g_value_set_int (value, config->aur_port);
       break;
     case PROP_RTSP_PORT:
       g_value_set_int (value, config->rtsp_port);
@@ -292,9 +292,9 @@ snra_config_get_property (GObject * object, guint prop_id,
   }
 }
 
-SnraConfig *
-snra_config_new (const gchar *config_file)
+AurConfig *
+aur_config_new (const gchar *config_file)
 {
   /* FIXME: return NULL if config file loading failed? */ 
-  return g_object_new (SNRA_TYPE_CONFIG, "config-file", config_file, NULL);
+  return g_object_new (AUR_TYPE_CONFIG, "config-file", config_file, NULL);
 }

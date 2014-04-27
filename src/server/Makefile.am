@@ -1,21 +1,21 @@
-noinst_LTLIBRARIES        = libsnra_server.la
+noinst_LTLIBRARIES        = libaurena_server.la
 
-libsnra_server_la_SOURCES = \
-    snra-avahi.c \
-    snra-avahi.h \
-    snra-config.c \
-    snra-config.h \
-    snra-http-resource.c \
-    snra-http-resource.h \
-    snra-manager.c \
-    snra-manager.h \
-    snra-media-db.c \
-    snra-media-db.h \
-    snra-resource.c \
-    snra-resource.h \
-    snra-server.c \
-    snra-server.h \
-    snra-server-client.c \
-    snra-server-client.h 
-libsnra_server_la_CPPFLAGS = -I$(top_srcdir) $(SNRA_COMMON_CFLAGS) $(GST_CFLAGS) $(GST_RTSP_CFLAGS) $(EXTRA_CFLAGS)
-libsnra_server_la_LIBADD  = 
+libaurena_server_la_SOURCES = \
+    aur-avahi.c \
+    aur-avahi.h \
+    aur-config.c \
+    aur-config.h \
+    aur-http-resource.c \
+    aur-http-resource.h \
+    aur-manager.c \
+    aur-manager.h \
+    aur-media-db.c \
+    aur-media-db.h \
+    aur-resource.c \
+    aur-resource.h \
+    aur-server.c \
+    aur-server.h \
+    aur-server-client.c \
+    aur-server-client.h
+libaurena_server_la_CPPFLAGS = -I$(top_srcdir) $(AUR_COMMON_CFLAGS) $(GST_CFLAGS) $(GST_RTSP_CFLAGS) $(EXTRA_CFLAGS)
+libaurena_server_la_LIBADD  =

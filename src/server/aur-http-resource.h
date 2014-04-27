@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -16,22 +16,39 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  */
-#ifndef __SRNA_TYPES_H__
-#define __SRNA_TYPES_H__
 
-#include <glib.h>
+#ifndef __AUR_HTTP_RESOURCE_H__
+#define __AUR_HTTP_RESOURCE_H__
+
+#include <gst/gst.h>
+#include <gst/net/gstnet.h>
+#include <libsoup/soup-types.h>
+
+#include <src/common/aur-types.h>
 
 G_BEGIN_DECLS
 
-typedef struct _SnraAvahi SnraAvahi;
-typedef struct _SnraClient SnraClient;
-typedef struct _SnraConfig SnraConfig;
-typedef struct _SnraHttpResource SnraHttpResource;
-typedef struct _SnraManager SnraManager;
-typedef struct _SnraMediaDB SnraMediaDB;
-typedef struct _SnraServer SnraServer;
-typedef struct _SnraServerClient SnraServerClient;
+#define AUR_TYPE_HTTP_RESOURCE (aur_http_resource_get_type ())
+
+typedef struct _AurHttpResourceClass AurHttpResourceClass;
+
+struct _AurHttpResource
+{
+  GObject parent;
+
+  GFile *source_file;
+  guint use_count;
+  GMappedFile *data;
+};
+
+struct _AurHttpResourceClass
+{
+  GObjectClass parent;
+};
+
+GType aur_http_resource_get_type(void);
+
+void aur_http_resource_new_transfer (AurHttpResource *resource, SoupMessage *msg);
 
 G_END_DECLS
-
 #endif

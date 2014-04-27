@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -44,10 +44,10 @@
 #include <netdb.h>
 #endif
 
-#include "src/common/snra-json.h"
-#include "snra-client.h"
+#include "src/common/aur-json.h"
+#include "aur-client.h"
 
-G_DEFINE_TYPE (SnraClient, snra_client, G_TYPE_OBJECT);
+G_DEFINE_TYPE (AurClient, aur_client, G_TYPE_OBJECT);
 
 #if defined(ANDROID) && defined(NDK_DEBUG)
 #define g_print(...) __android_log_print(ANDROID_LOG_ERROR, "aurena", __VA_ARGS__)
@@ -81,18 +81,18 @@ enum
 
 int signals[NUM_SIGNALS];
 
-static void snra_client_set_property (GObject * object, guint prop_id,
+static void aur_client_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
-static void snra_client_get_property (GObject * object, guint prop_id,
+static void aur_client_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-static void snra_client_finalize (GObject * object);
-static void snra_client_dispose (GObject * object);
+static void aur_client_finalize (GObject * object);
+static void aur_client_dispose (GObject * object);
 
-static void search_for_server (SnraClient * client);
-static void connect_to_server (SnraClient * client, const gchar * server,
+static void search_for_server (AurClient * client);
+static void connect_to_server (AurClient * client, const gchar * server,
     int port);
-static void construct_player (SnraClient * client);
+static void construct_player (AurClient * client);
 
 static void
 free_player_info (GArray * player_info)
@@ -103,7 +103,7 @@ free_player_info (GArray * player_info)
     return;
 
   for (i = 0; i < player_info->len; i++) {
-    SnraPlayerInfo *info = &g_array_index (player_info, SnraPlayerInfo,  i);
+    AurPlayerInfo *info = &g_array_index (player_info, AurPlayerInfo,  i);
     g_free (info->host);
   }
 
@@ -111,7 +111,7 @@ free_player_info (GArray * player_info)
 }
 
 static gboolean
-try_reconnect (SnraClient * client)
+try_reconnect (AurClient * client)
 {
   client->timeout = 0;
 
@@ -124,22 +124,22 @@ try_reconnect (SnraClient * client)
   return FALSE;
 }
 
-static SnraClientFlags
+static AurClientFlags
 get_flag_from_msg (SoupMessage *msg)
 {
-  SnraClientFlags flag;
+  AurClientFlags flag;
   SoupURI *uri = soup_message_get_uri (msg);
 
   if (g_str_equal (soup_uri_get_path (uri), "/client/control_events"))
-    flag = SNRA_CLIENT_CONTROLLER;
+    flag = AUR_CLIENT_CONTROLLER;
   else
-    flag = SNRA_CLIENT_PLAYER;
+    flag = AUR_CLIENT_PLAYER;
 
   return flag;
 }
 
 static gboolean
-conn_idle_timeout (SnraClient * client)
+conn_idle_timeout (AurClient * client)
 {
   client->idle_timeout = 0;
 
@@ -153,9 +153,9 @@ conn_idle_timeout (SnraClient * client)
 
 static void
 handle_connection_closed_cb (G_GNUC_UNUSED SoupSession * session,
-    SoupMessage * msg, SnraClient * client)
+    SoupMessage * msg, AurClient * client)
 {
-  SnraClientFlags flag = get_flag_from_msg (msg);
+  AurClientFlags flag = get_flag_from_msg (msg);
 
   client->connecting &= ~flag;
 
@@ -169,12 +169,12 @@ handle_connection_closed_cb (G_GNUC_UNUSED SoupSession * session,
 
   if (client->was_connected & flag) {
     g_print ("%s disconnected from server. Reason %s status %d\n",
-        flag == SNRA_CLIENT_PLAYER ? "Player" : "Controller",
+        flag == AUR_CLIENT_PLAYER ? "Player" : "Controller",
         msg->reason_phrase, msg->status_code);
   }
   client->was_connected &= ~flag;
 
-  if (flag == SNRA_CLIENT_PLAYER && client->player)
+  if (flag == AUR_CLIENT_PLAYER && client->player)
     gst_element_set_state (client->player, GST_STATE_READY);
 
   if (client->player_info) {
@@ -201,7 +201,7 @@ handle_connection_closed_cb (G_GNUC_UNUSED SoupSession * session,
 }
 
 static void
-handle_player_enrol_message (SnraClient * client, GstStructure * s)
+handle_player_enrol_message (AurClient * client, GstStructure * s)
 {
   int clock_port;
   gint64 tmp;
@@ -209,17 +209,17 @@ handle_player_enrol_message (SnraClient * client, GstStructure * s)
   gchar *server_ip_str = NULL;
   gdouble new_vol;
 
-  if (!snra_json_structure_get_int (s, "clock-port", &clock_port))
+  if (!aur_json_structure_get_int (s, "clock-port", &clock_port))
     return;                     /* Invalid message */
 
-  if (!snra_json_structure_get_int64 (s, "current-time", &tmp))
+  if (!aur_json_structure_get_int64 (s, "current-time", &tmp))
     return;                     /* Invalid message */
   cur_time = (GstClockTime) (tmp);
 
   if (client->player == NULL)
     construct_player(client);
 
-  if (snra_json_structure_get_double (s, "volume-level", &new_vol)) {
+  if (aur_json_structure_get_double (s, "volume-level", &new_vol)) {
     if (client->player == NULL)
       construct_player(client);
 
@@ -230,8 +230,8 @@ handle_player_enrol_message (SnraClient * client, GstStructure * s)
     }
   }
 
-  snra_json_structure_get_boolean (s, "enabled", &client->enabled);
-  snra_json_structure_get_boolean (s, "paused", &client->paused);
+  aur_json_structure_get_boolean (s, "enabled", &client->enabled);
+  aur_json_structure_get_boolean (s, "paused", &client->paused);
 
 #if GLIB_CHECK_VERSION(2,22,0)
   {
@@ -281,7 +281,7 @@ handle_player_enrol_message (SnraClient * client, GstStructure * s)
 
 static void
 on_error_msg (G_GNUC_UNUSED GstBus * bus, GstMessage * msg,
-    G_GNUC_UNUSED SnraClient * client)
+    G_GNUC_UNUSED AurClient * client)
 {
   GError *err;
   gchar *dbg_info = NULL;
@@ -295,7 +295,7 @@ on_error_msg (G_GNUC_UNUSED GstBus * bus, GstMessage * msg,
 }
 
 static void
-construct_player (SnraClient * client)
+construct_player (AurClient * client)
 {
   GstBus *bus;
   guint flags;
@@ -340,7 +340,7 @@ construct_player (SnraClient * client)
 }
 
 static void
-set_language (SnraClient * client)
+set_language (AurClient * client)
 {
   gint num_audio, cur_audio, i;
 
@@ -370,7 +370,7 @@ set_language (SnraClient * client)
 }
 
 static void
-set_media (SnraClient * client)
+set_media (AurClient * client)
 {
   if (client->player == NULL) {
     construct_player (client);
@@ -421,7 +421,7 @@ set_media (SnraClient * client)
 }
 
 static void
-handle_player_set_media_message (SnraClient * client, GstStructure * s)
+handle_player_set_media_message (AurClient * client, GstStructure * s)
 {
   const gchar *protocol, *path, *language;
   int port;
@@ -433,18 +433,18 @@ handle_player_set_media_message (SnraClient * client, GstStructure * s)
   if (protocol == NULL || path == NULL)
     return;                     /* Invalid message */
 
-  if (!snra_json_structure_get_int (s, "resource-port", &port))
+  if (!aur_json_structure_get_int (s, "resource-port", &port))
     return;
 
-  if (!snra_json_structure_get_int64 (s, "base-time", &tmp))
+  if (!aur_json_structure_get_int64 (s, "base-time", &tmp))
     return;                     /* Invalid message */
   client->base_time = (GstClockTime) (tmp);
 
-  if (!snra_json_structure_get_int64 (s, "position", &tmp))
+  if (!aur_json_structure_get_int64 (s, "position", &tmp))
     return;                     /* Invalid message */
   client->position = (GstClockTime) (tmp);
 
-  if (!snra_json_structure_get_boolean (s, "paused", &client->paused))
+  if (!aur_json_structure_get_boolean (s, "paused", &client->paused))
     return;
 
   g_free (client->language);
@@ -463,11 +463,11 @@ handle_player_set_media_message (SnraClient * client, GstStructure * s)
 }
 
 static void
-handle_player_play_message (SnraClient * client, GstStructure * s)
+handle_player_play_message (AurClient * client, GstStructure * s)
 {
   gint64 tmp;
 
-  if (!snra_json_structure_get_int64 (s, "base-time", &tmp))
+  if (!aur_json_structure_get_int64 (s, "base-time", &tmp))
     return;                     /* Invalid message */
 
   client->base_time = (GstClockTime) (tmp);
@@ -488,12 +488,12 @@ handle_player_play_message (SnraClient * client, GstStructure * s)
 }
 
 static void
-handle_player_pause_message (SnraClient * client, GstStructure * s)
+handle_player_pause_message (AurClient * client, GstStructure * s)
 {
   GstClockTime old_position = client->position;
   gint64 tmp;
 
-  if (!snra_json_structure_get_int64 (s, "position", &tmp))
+  if (!aur_json_structure_get_int64 (s, "position", &tmp))
     return;                     /* Invalid message */
 
   client->position = (GstClockTime) (tmp);
@@ -515,16 +515,16 @@ handle_player_pause_message (SnraClient * client, GstStructure * s)
 }
 
 static void
-handle_player_seek_message (SnraClient * client, GstStructure * s)
+handle_player_seek_message (AurClient * client, GstStructure * s)
 {
   GstClockTime old_position = client->position;
   gint64 tmp;
 
-  if (!snra_json_structure_get_int64 (s, "base-time", &tmp))
+  if (!aur_json_structure_get_int64 (s, "base-time", &tmp))
     return;                     /* Invalid message */
   client->base_time = (GstClockTime) tmp;
 
-  if (!snra_json_structure_get_int64 (s, "position", &tmp))
+  if (!aur_json_structure_get_int64 (s, "position", &tmp))
     return;                     /* Invalid message */
   client->position = (GstClockTime) (tmp);
 
@@ -548,11 +548,11 @@ handle_player_seek_message (SnraClient * client, GstStructure * s)
 }
 
 static void
-handle_player_set_volume_message (SnraClient * client, GstStructure * s)
+handle_player_set_volume_message (AurClient * client, GstStructure * s)
 {
   gdouble new_vol;
 
-  if (!snra_json_structure_get_double (s, "level", &new_vol))
+  if (!aur_json_structure_get_double (s, "level", &new_vol))
     return;
 
   if (client->player == NULL)
@@ -566,11 +566,11 @@ handle_player_set_volume_message (SnraClient * client, GstStructure * s)
 }
 
 static void
-handle_player_set_client_message (SnraClient * client, GstStructure * s)
+handle_player_set_client_message (AurClient * client, GstStructure * s)
 {
   gboolean enabled;
 
-  if (!snra_json_structure_get_boolean (s, "enabled", &enabled))
+  if (!aur_json_structure_get_boolean (s, "enabled", &enabled))
     return;
 
   if (enabled == client->enabled)
@@ -589,7 +589,7 @@ handle_player_set_client_message (SnraClient * client, GstStructure * s)
 }
 
 static void
-handle_player_language_message (SnraClient * client, GstStructure * s)
+handle_player_language_message (AurClient * client, GstStructure * s)
 {
   const gchar *language;
 
@@ -607,7 +607,7 @@ handle_player_language_message (SnraClient * client, GstStructure * s)
 }
 
 static void
-handle_player_message (SnraClient * client, GstStructure * s)
+handle_player_message (AurClient * client, GstStructure * s)
 {
   const gchar *msg_type;
 
@@ -636,20 +636,20 @@ handle_player_message (SnraClient * client, GstStructure * s)
 }
 
 static void
-handle_controller_enrol_message (SnraClient * client, GstStructure * s)
+handle_controller_enrol_message (AurClient * client, GstStructure * s)
 {
-  if (snra_json_structure_get_double (s, "volume-level", &client->volume))
+  if (aur_json_structure_get_double (s, "volume-level", &client->volume))
     g_object_notify (G_OBJECT (client), "volume");
 
-  if (!(client->flags & SNRA_CLIENT_PLAYER)) {
-    if (snra_json_structure_get_boolean (s, "paused", &client->paused))
+  if (!(client->flags & AUR_CLIENT_PLAYER)) {
+    if (aur_json_structure_get_boolean (s, "paused", &client->paused))
       g_object_notify (G_OBJECT (client), "paused");
   }
 }
 
 static void
 handle_player_info (G_GNUC_UNUSED SoupSession *session, SoupMessage *msg,
-    SnraClient *client)
+    AurClient *client)
 {
   SoupBuffer *buffer;
 
@@ -663,7 +663,7 @@ handle_player_info (G_GNUC_UNUSED SoupSession *session, SoupMessage *msg,
     GArray *player_info = NULL;
     gsize i;
     JsonNode *root = json_parser_get_root (client->json);
-    GstStructure *s1 = snra_json_to_gst_structure (root);
+    GstStructure *s1 = aur_json_to_gst_structure (root);
 
     if (s1 == NULL)
       return;                   /* Invalid chunk */
@@ -673,10 +673,10 @@ handle_player_info (G_GNUC_UNUSED SoupSession *session, SoupMessage *msg,
       goto failed;
 
     player_info = g_array_sized_new (TRUE, TRUE,
-          sizeof (SnraPlayerInfo), gst_value_array_get_size (v1));
+          sizeof (AurPlayerInfo), gst_value_array_get_size (v1));
 
     for (i = 0; i < gst_value_array_get_size (v1); i++) {
-      SnraPlayerInfo info;
+      AurPlayerInfo info;
       const GValue *v2 = gst_value_array_get_value (v1, i);
       const GstStructure *s2;
       gint64 client_id;
@@ -685,14 +685,14 @@ handle_player_info (G_GNUC_UNUSED SoupSession *session, SoupMessage *msg,
         goto failed;
 
       s2 = gst_value_get_structure (v2);
-      if (!snra_json_structure_get_int64 (s2, "client-id", &client_id))
+      if (!aur_json_structure_get_int64 (s2, "client-id", &client_id))
         goto failed;
       info.id = client_id;
 
-      if (!snra_json_structure_get_boolean (s2, "enabled", &info.enabled))
+      if (!aur_json_structure_get_boolean (s2, "enabled", &info.enabled))
         goto failed;
 
-      if (!snra_json_structure_get_double (s2, "volume", &info.volume))
+      if (!aur_json_structure_get_double (s2, "volume", &info.volume))
         goto failed;
 
       if (!(info.host = g_strdup (gst_structure_get_string (s2, "host"))))
@@ -715,7 +715,7 @@ failed:
 }
 
 static void
-refresh_clients_array (SnraClient * client)
+refresh_clients_array (AurClient * client)
 {
   SoupMessage *soup_msg;
   gchar *uri;
@@ -733,36 +733,36 @@ refresh_clients_array (SnraClient * client)
 }
 
 static void
-handle_controller_set_media_message (SnraClient * client, GstStructure * s)
+handle_controller_set_media_message (AurClient * client, GstStructure * s)
 {
-  if (!(client->flags & SNRA_CLIENT_PLAYER))
+  if (!(client->flags & AUR_CLIENT_PLAYER))
     handle_player_set_media_message (client, s);
 
 }
 
 static void
-handle_controller_play_message (SnraClient * client, GstStructure * s)
+handle_controller_play_message (AurClient * client, GstStructure * s)
 {
-  if (!(client->flags & SNRA_CLIENT_PLAYER))
+  if (!(client->flags & AUR_CLIENT_PLAYER))
     handle_player_play_message (client, s);
 }
 
 static void
-handle_controller_pause_message (SnraClient * client, GstStructure * s)
+handle_controller_pause_message (AurClient * client, GstStructure * s)
 {
-  if (!(client->flags & SNRA_CLIENT_PLAYER))
+  if (!(client->flags & AUR_CLIENT_PLAYER))
     handle_player_pause_message (client, s);
 }
 
 static void
-handle_controller_seek_message (SnraClient * client, GstStructure * s)
+handle_controller_seek_message (AurClient * client, GstStructure * s)
 {
-  if (!(client->flags & SNRA_CLIENT_PLAYER))
+  if (!(client->flags & AUR_CLIENT_PLAYER))
     handle_player_seek_message (client, s);
 }
 
 static void
-handle_controller_client_volume_message (SnraClient * client, GstStructure * s)
+handle_controller_client_volume_message (AurClient * client, GstStructure * s)
 {
   gint64 client_id;
   gdouble new_vol;
@@ -771,15 +771,15 @@ handle_controller_client_volume_message (SnraClient * client, GstStructure * s)
   if (!client->player_info)
     return;
 
-  if (!snra_json_structure_get_int64 (s, "client-id", &client_id))
+  if (!aur_json_structure_get_int64 (s, "client-id", &client_id))
     return;
 
-  if (!snra_json_structure_get_double (s, "level", &new_vol))
+  if (!aur_json_structure_get_double (s, "level", &new_vol))
     return;
 
   for (i = 0; i < client->player_info->len; i++) {
-    SnraPlayerInfo *info;
-    info = &g_array_index (client->player_info, SnraPlayerInfo, i);
+    AurPlayerInfo *info;
+    info = &g_array_index (client->player_info, AurPlayerInfo, i);
     if (info->id == (guint) client_id) {
       info->volume = new_vol;
       g_signal_emit (client, signals[SIGNAL_CLIENT_VOLUME_CHANGED], 0,
@@ -790,16 +790,16 @@ handle_controller_client_volume_message (SnraClient * client, GstStructure * s)
 }
 
 static void
-handle_controller_volume_message (SnraClient * client, GstStructure * s)
+handle_controller_volume_message (AurClient * client, GstStructure * s)
 {
-  if (!snra_json_structure_get_double (s, "level", &client->volume))
+  if (!aur_json_structure_get_double (s, "level", &client->volume))
     return;
 
   g_object_notify (G_OBJECT (client), "volume");
 }
 
 static void
-handle_controller_client_setting_message (SnraClient * client, GstStructure * s)
+handle_controller_client_setting_message (AurClient * client, GstStructure * s)
 {
   gint64 client_id;
   gboolean enabled;
@@ -808,15 +808,15 @@ handle_controller_client_setting_message (SnraClient * client, GstStructure * s)
   if (!client->player_info)
     return;
 
-  if (!snra_json_structure_get_int64 (s, "client-id", &client_id))
+  if (!aur_json_structure_get_int64 (s, "client-id", &client_id))
     return;
 
-  if (!snra_json_structure_get_boolean (s, "enabled", &enabled))
+  if (!aur_json_structure_get_boolean (s, "enabled", &enabled))
     return;
 
   for (i = 0; i < client->player_info->len; i++) {
-    SnraPlayerInfo *info;
-    info = &g_array_index (client->player_info, SnraPlayerInfo, i);
+    AurPlayerInfo *info;
+    info = &g_array_index (client->player_info, AurPlayerInfo, i);
     if (info->id == (guint) client_id) {
       info->enabled = enabled;
       g_signal_emit (client, signals[SIGNAL_CLIENT_SETTING_CHANGED], 0,
@@ -827,14 +827,14 @@ handle_controller_client_setting_message (SnraClient * client, GstStructure * s)
 }
 
 static void
-handle_controller_language_message (SnraClient * client, GstStructure * s)
+handle_controller_language_message (AurClient * client, GstStructure * s)
 {
-  if (!(client->flags & SNRA_CLIENT_PLAYER))
+  if (!(client->flags & AUR_CLIENT_PLAYER))
     handle_player_language_message (client, s);
 }
 
 static void
-handle_controller_message (SnraClient * client, GstStructure * s)
+handle_controller_message (AurClient * client, GstStructure * s)
 {
   const gchar *msg_type;
 
@@ -868,15 +868,15 @@ handle_controller_message (SnraClient * client, GstStructure * s)
 
 static void
 handle_received_chunk (SoupMessage * msg, SoupBuffer * chunk,
-    SnraClient * client)
+    AurClient * client)
 {
   const gchar *ptr;
   gsize length;
-  SnraClientFlags flag = get_flag_from_msg (msg);
+  AurClientFlags flag = get_flag_from_msg (msg);
 
   if (client->was_connected & flag) {
     g_print ("Successfully connected %s to server %s:%d\n",
-        flag == SNRA_CLIENT_PLAYER ? "player" : "controller",
+        flag == AUR_CLIENT_PLAYER ? "player" : "controller",
         client->connected_server, client->connected_port);
     client->was_connected |= flag;
   }
@@ -924,12 +924,12 @@ handle_received_chunk (SoupMessage * msg, SoupBuffer * chunk,
   if (json_parser_load_from_data (client->json, chunk->data, chunk->length,
           NULL)) {
     JsonNode *root = json_parser_get_root (client->json);
-    GstStructure *s = snra_json_to_gst_structure (root);
+    GstStructure *s = aur_json_to_gst_structure (root);
 
     if (s == NULL)
       goto end;                   /* Invalid chunk */
 
-    if (flag == SNRA_CLIENT_PLAYER)
+    if (flag == AUR_CLIENT_PLAYER)
       handle_player_message (client, s);
     else
       handle_controller_message (client, s);
@@ -945,7 +945,7 @@ end:
 }
 
 static void
-connect_to_server (SnraClient * client, const gchar * server, int port)
+connect_to_server (AurClient * client, const gchar * server, int port)
 {
   SoupMessage *msg;
   char *uri;
@@ -959,9 +959,9 @@ connect_to_server (SnraClient * client, const gchar * server, int port)
 
   g_print("In connect_to_server(%s,%d), client->flags %u, connecting %u\n", server, port, client->flags, client->connecting);
 
-  if (client->flags & SNRA_CLIENT_PLAYER
-      && !(client->connecting & SNRA_CLIENT_PLAYER)) {
-    client->connecting |= SNRA_CLIENT_PLAYER;
+  if (client->flags & AUR_CLIENT_PLAYER
+      && !(client->connecting & AUR_CLIENT_PLAYER)) {
+    client->connecting |= AUR_CLIENT_PLAYER;
 
     uri = g_strdup_printf ("http://%s:%u/client/player_events", server, port);
     g_print("Attemping to connect player to server %s:%d\n", server, port);
@@ -973,10 +973,10 @@ connect_to_server (SnraClient * client, const gchar * server, int port)
     g_free (uri);
   }
 
-  if (client->flags & SNRA_CLIENT_CONTROLLER
-      && !(client->connecting & SNRA_CLIENT_CONTROLLER)) {
+  if (client->flags & AUR_CLIENT_CONTROLLER
+      && !(client->connecting & AUR_CLIENT_CONTROLLER)) {
     g_print("Attemping to connect controller to server %s:%d\n", server, port);
-    client->connecting |= SNRA_CLIENT_CONTROLLER;
+    client->connecting |= AUR_CLIENT_CONTROLLER;
 
     uri = g_strdup_printf ("http://%s:%u/client/control_events", server, port);
     msg = soup_message_new ("GET", uri);
@@ -991,20 +991,20 @@ connect_to_server (SnraClient * client, const gchar * server, int port)
 }
 
 static void
-snra_client_init (SnraClient * client)
+aur_client_init (AurClient * client)
 {
   client->server_port = 5457;
   client->paused = TRUE;
 }
 
 static void
-snra_client_constructed (GObject * object)
+aur_client_constructed (GObject * object)
 {
-  SnraClient *client = (SnraClient *) (object);
+  AurClient *client = (AurClient *) (object);
   gint max_con = 1;
 
-  if (G_OBJECT_CLASS (snra_client_parent_class)->constructed != NULL)
-    G_OBJECT_CLASS (snra_client_parent_class)->constructed (object);
+  if (G_OBJECT_CLASS (aur_client_parent_class)->constructed != NULL)
+    G_OBJECT_CLASS (aur_client_parent_class)->constructed (object);
 
   client->soup = soup_session_async_new_with_options (SOUP_SESSION_ASYNC_CONTEXT, client->context, NULL);
   g_assert (client->soup);
@@ -1017,12 +1017,12 @@ snra_client_constructed (GObject * object)
   /* 5 second timeout before retrying with new connections */
   g_object_set (G_OBJECT (client->soup), "timeout", 5, NULL);
 
-  if (client->flags & SNRA_CLIENT_PLAYER) {
+  if (client->flags & AUR_CLIENT_PLAYER) {
     max_con++;
     construct_player (client);
   }
 
-  if (client->flags & SNRA_CLIENT_CONTROLLER)
+  if (client->flags & AUR_CLIENT_CONTROLLER)
     max_con++;
 
   g_object_set (client->soup, "max-conns-per-host", max_con, NULL);
@@ -1031,16 +1031,16 @@ snra_client_constructed (GObject * object)
 }
 
 static void
-snra_client_class_init (SnraClientClass * client_class)
+aur_client_class_init (AurClientClass * client_class)
 {
   GObjectClass *gobject_class = (GObjectClass *) (client_class);
 
-  gobject_class->constructed = snra_client_constructed;
-  gobject_class->dispose = snra_client_dispose;
-  gobject_class->finalize = snra_client_finalize;
+  gobject_class->constructed = aur_client_constructed;
+  gobject_class->dispose = aur_client_dispose;
+  gobject_class->finalize = aur_client_finalize;
 
-  gobject_class->set_property = snra_client_set_property;
-  gobject_class->get_property = snra_client_get_property;
+  gobject_class->set_property = aur_client_set_property;
+  gobject_class->get_property = aur_client_get_property;
 
   g_object_class_install_property (gobject_class, PROP_SERVER_HOST,
       g_param_spec_string ("server-host", "Aurena Server",
@@ -1117,9 +1117,9 @@ snra_client_class_init (SnraClientClass * client_class)
 }
 
 static void
-snra_client_finalize (GObject * object)
+aur_client_finalize (GObject * object)
 {
-  SnraClient *client = (SnraClient *) (object);
+  AurClient *client = (AurClient *) (object);
 
 #if HAVE_AVAHI
   if (client->avahi_sb)
@@ -1148,13 +1148,13 @@ snra_client_finalize (GObject * object)
   g_free (client->language);
   free_player_info (client->player_info);
 
-  G_OBJECT_CLASS (snra_client_parent_class)->finalize (object);
+  G_OBJECT_CLASS (aur_client_parent_class)->finalize (object);
 }
 
 static void
-snra_client_dispose (GObject * object)
+aur_client_dispose (GObject * object)
 {
-  SnraClient *client = (SnraClient *) (object);
+  AurClient *client = (AurClient *) (object);
 
   client->shutting_down = TRUE;
 
@@ -1163,11 +1163,11 @@ snra_client_dispose (GObject * object)
   if (client->player)
     gst_element_set_state (client->player, GST_STATE_NULL);
 
-  G_OBJECT_CLASS (snra_client_parent_class)->dispose (object);
+  G_OBJECT_CLASS (aur_client_parent_class)->dispose (object);
 }
 
 static void
-split_server_host (SnraClient * client)
+split_server_host (AurClient * client)
 {
   /* See if the client->server_host string has a : and split into
    * server:port if so */
@@ -1183,10 +1183,10 @@ split_server_host (SnraClient * client)
 }
 
 static void
-snra_client_set_property (GObject * object, guint prop_id,
+aur_client_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  SnraClient *client = (SnraClient *) (object);
+  AurClient *client = (AurClient *) (object);
 
   switch (prop_id) {
     case PROP_SERVER_HOST:{
@@ -1214,10 +1214,10 @@ snra_client_set_property (GObject * object, guint prop_id,
 }
 
 static void
-snra_client_get_property (GObject * object, guint prop_id,
+aur_client_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  SnraClient *client = (SnraClient *) (object);
+  AurClient *client = (AurClient *) (object);
 
   switch (prop_id) {
     case PROP_SERVER_HOST:{
@@ -1287,7 +1287,7 @@ avahi_resolve_callback (AvahiServiceResolver * r,
     AVAHI_GCC_UNUSED AvahiLookupResultFlags flags,
     AVAHI_GCC_UNUSED void *userdata)
 {
-  SnraClient *client = userdata;
+  AurClient *client = userdata;
 
   switch (event) {
     case AVAHI_RESOLVER_FAILURE:
@@ -1309,7 +1309,7 @@ browse_callback (AVAHI_GCC_UNUSED AvahiServiceBrowser * b,
     const char *name, const char *type, const char *domain,
     AVAHI_GCC_UNUSED AvahiLookupResultFlags flags, void *userdata)
 {
-  SnraClient *client = userdata;
+  AurClient *client = userdata;
 
   switch (event) {
     case AVAHI_BROWSER_FAILURE:
@@ -1333,8 +1333,8 @@ browse_callback (AVAHI_GCC_UNUSED AvahiServiceBrowser * b,
 }
 
 static void
-snra_avahi_client_callback (AvahiClient * s, AvahiClientState state,
-    SnraClient * client)
+aur_avahi_client_callback (AvahiClient * s, AvahiClientState state,
+    AurClient * client)
 {
   switch (state) {
     case AVAHI_CLIENT_S_RUNNING:{
@@ -1356,7 +1356,7 @@ snra_avahi_client_callback (AvahiClient * s, AvahiClientState state,
 }
 
 static void
-search_for_server (SnraClient * client)
+search_for_server (AurClient * client)
 {
   const AvahiPoll *poll_api;
   int error;
@@ -1372,7 +1372,7 @@ search_for_server (SnraClient * client)
   if (client->avahi_client == NULL) {
     client->avahi_client =
         avahi_client_new (poll_api, AVAHI_CLIENT_NO_FAIL,
-        (AvahiClientCallback) snra_avahi_client_callback, client, &error);
+        (AvahiClientCallback) aur_avahi_client_callback, client, &error);
     if (client->avahi_client == NULL) {
       fprintf (stderr, "Failed to connect to Avahi: %s",
           avahi_strerror (error));
@@ -1383,15 +1383,15 @@ search_for_server (SnraClient * client)
 }
 #else
 static void
-search_for_server (SnraClient * client)
+search_for_server (AurClient * client)
 {
 }
 #endif
 
-SnraClient *
-snra_client_new (GMainContext *context, const char *server_host, SnraClientFlags flags)
+AurClient *
+aur_client_new (GMainContext *context, const char *server_host, AurClientFlags flags)
 {
-  SnraClient *client = g_object_new (SNRA_TYPE_CLIENT,
+  AurClient *client = g_object_new (AUR_TYPE_CLIENT,
       "main-context", context,
       "server-host", server_host,
       "flags", flags,
@@ -1401,25 +1401,25 @@ snra_client_new (GMainContext *context, const char *server_host, SnraClientFlags
 }
 
 gboolean
-snra_client_is_connected (SnraClient * client)
+aur_client_is_connected (AurClient * client)
 {
   return (client->connected_server != NULL);
 }
 
 gboolean
-snra_client_is_enabled (SnraClient * client)
+aur_client_is_enabled (AurClient * client)
 {
   return client->enabled;
 }
 
 gboolean
-snra_client_is_playing (SnraClient * client)
+aur_client_is_playing (AurClient * client)
 {
   return !client->paused;
 }
 
 static void
-snra_client_submit_msg (SnraClient * client, SoupMessage *msg)
+aur_client_submit_msg (AurClient * client, SoupMessage *msg)
 {
   if (client->shutting_down)
     g_object_unref(msg);
@@ -1428,7 +1428,7 @@ snra_client_submit_msg (SnraClient * client, SoupMessage *msg)
 }
 
 void
-snra_client_set_media (SnraClient * client, const gchar * id)
+aur_client_set_media (AurClient * client, const gchar * id)
 {
   SoupMessage *soup_msg;
   gchar *uri = g_strdup_printf ("http://%s:%u/control/next",
@@ -1439,23 +1439,23 @@ snra_client_set_media (SnraClient * client, const gchar * id)
   else
     soup_msg = soup_message_new ("GET", uri);
 
-  snra_client_submit_msg (client, soup_msg);
+  aur_client_submit_msg (client, soup_msg);
 
   g_free (uri);
 }
 
 void
-snra_client_next (SnraClient * client, guint id)
+aur_client_next (AurClient * client, guint id)
 {
   gchar *id_str = NULL;
   if (id)
     id_str = g_strdup_printf ("%u", id);
-  snra_client_set_media (client, id_str);
+  aur_client_set_media (client, id_str);
   g_free (id_str);
 }
 
 void
-snra_client_play (SnraClient * client)
+aur_client_play (AurClient * client)
 {
   SoupMessage *soup_msg;
   gchar *uri;
@@ -1463,13 +1463,13 @@ snra_client_play (SnraClient * client)
   uri = g_strdup_printf ("http://%s:%u/control/play",
       client->connected_server, client->connected_port);
   soup_msg = soup_message_new ("GET", uri);
-  snra_client_submit_msg (client, soup_msg);
+  aur_client_submit_msg (client, soup_msg);
 
   g_free (uri);
 }
 
 void
-snra_client_pause (SnraClient * client)
+aur_client_pause (AurClient * client)
 {
   SoupMessage *soup_msg;
   gchar *uri;
@@ -1477,13 +1477,13 @@ snra_client_pause (SnraClient * client)
   uri = g_strdup_printf ("http://%s:%u/control/pause",
       client->connected_server, client->connected_port);
   soup_msg = soup_message_new ("GET", uri);
-  snra_client_submit_msg (client, soup_msg);
+  aur_client_submit_msg (client, soup_msg);
 
   g_free (uri);
 }
 
 void
-snra_client_seek (SnraClient * client, GstClockTime position)
+aur_client_seek (AurClient * client, GstClockTime position)
 {
   SoupMessage *soup_msg;
   gchar *position_str;
@@ -1494,14 +1494,14 @@ snra_client_seek (SnraClient * client, GstClockTime position)
   position_str = g_strdup_printf ("%" G_GUINT64_FORMAT, position);
   soup_msg = soup_form_request_new ("POST", uri, "position", position_str,
       NULL);
-  snra_client_submit_msg (client, soup_msg);
+  aur_client_submit_msg (client, soup_msg);
 
   g_free (position_str);
   g_free (uri);
 }
 
 void
-snra_client_set_volume (SnraClient * client, gdouble volume)
+aur_client_set_volume (AurClient * client, gdouble volume)
 {
   SoupMessage *soup_msg;
   gchar volume_str[G_ASCII_DTOSTR_BUF_SIZE];
@@ -1511,25 +1511,25 @@ snra_client_set_volume (SnraClient * client, gdouble volume)
       client->connected_server, client->connected_port);
   g_ascii_dtostr (volume_str, sizeof (volume_str), volume);
   soup_msg = soup_form_request_new ("POST", uri, "level", volume_str, NULL);
-  snra_client_submit_msg (client, soup_msg);
+  aur_client_submit_msg (client, soup_msg);
 
   g_free (uri);
 }
 
 const GArray *
-snra_client_get_player_info (SnraClient * client)
+aur_client_get_player_info (AurClient * client)
 {
   return client->player_info;
 }
 
 gboolean
-snra_client_get_player_enabled (SnraClient * client, guint id)
+aur_client_get_player_enabled (AurClient * client, guint id)
 {
   gsize i;
 
   for (i = 0; i < client->player_info->len; i++) {
-    SnraPlayerInfo *info;
-    info = &g_array_index (client->player_info, SnraPlayerInfo, i);
+    AurPlayerInfo *info;
+    info = &g_array_index (client->player_info, AurPlayerInfo, i);
     if (info->id == id)
       return info->enabled;
   }
@@ -1539,7 +1539,7 @@ snra_client_get_player_enabled (SnraClient * client, guint id)
 }
 
 void
-snra_client_set_player_enabled (SnraClient * client, guint id,
+aur_client_set_player_enabled (AurClient * client, guint id,
     gboolean enabled)
 {
   gchar *uri;
@@ -1551,14 +1551,14 @@ snra_client_set_player_enabled (SnraClient * client, guint id,
   id_str = g_strdup_printf ("%u", id);
   soup_msg = soup_form_request_new ("POST", uri, "client_id", id_str, "enable",
       enabled ? "1" : "0", NULL);
-  snra_client_submit_msg (client, soup_msg);
+  aur_client_submit_msg (client, soup_msg);
 
   g_free (id_str);
   g_free (uri);
 }
 
 void
-snra_client_set_player_volume (SnraClient * client, guint id, gdouble volume)
+aur_client_set_player_volume (AurClient * client, guint id, gdouble volume)
 {
   gchar *uri;
   gchar volume_str[G_ASCII_DTOSTR_BUF_SIZE];
@@ -1571,14 +1571,14 @@ snra_client_set_player_volume (SnraClient * client, guint id, gdouble volume)
   g_ascii_dtostr (volume_str, sizeof (volume_str), volume);
   soup_msg = soup_form_request_new ("POST", uri, "client_id", id_str, "level",
       volume_str, NULL);
-  snra_client_submit_msg (client, soup_msg);
+  aur_client_submit_msg (client, soup_msg);
 
   g_free (id_str);
   g_free (uri);
 }
 
 void
-snra_client_set_language (SnraClient * client, const gchar *language_code)
+aur_client_set_language (AurClient * client, const gchar *language_code)
 {
   gchar *uri;
   SoupMessage *soup_msg;
@@ -1586,6 +1586,6 @@ snra_client_set_language (SnraClient * client, const gchar *language_code)
       client->connected_server, client->connected_port);
   soup_msg = soup_form_request_new ("POST", uri, "language", language_code,
       NULL);
-  snra_client_submit_msg (client, soup_msg);
+  aur_client_submit_msg (client, soup_msg);
   g_free (uri);
 }

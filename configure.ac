@@ -19,7 +19,7 @@ AC_PROG_CC_STDC
 LT_INIT
 
 PKG_PROG_PKG_CONFIG([0.22])
-PKG_CHECK_MODULES(SNRA_COMMON, [gobject-2.0 glib-2.0 >= 2.30 gio-2.0 avahi-client avahi-glib >= 0.6.24 json-glib-1.0 libsoup-2.4 >= 2.26.1])
+PKG_CHECK_MODULES(AUR_COMMON, [gobject-2.0 glib-2.0 >= 2.30 gio-2.0 avahi-client avahi-glib >= 0.6.24 json-glib-1.0 libsoup-2.4 >= 2.26.1])
 AC_DEFINE([HAVE_AVAHI], 1, [Defined if compiling with Avahi support])
 
 AC_MSG_NOTICE([Checking for GStreamer 1.0])
@@ -64,9 +64,9 @@ if test "x$BUILD_GTKAPPS" = "xyes"; then
 fi
 
 AC_MSG_NOTICE([Checking whether to build server (sqlite >= 3.3, glib >= 2.32)])
-PKG_CHECK_MODULES(SNRA_SERVER, [sqlite3 >= 3.3 glib-2.0 >= 2.32],
-    [BUILD_SNRA_SERVER=yes], [BUILD_SNRA_SERVER=no])
-AM_CONDITIONAL(BUILD_SNRA_SERVER, test "x$BUILD_SNRA_SERVER" = "xyes")
+PKG_CHECK_MODULES(AUR_SERVER, [sqlite3 >= 3.3 glib-2.0 >= 2.32],
+    [BUILD_AUR_SERVER=yes], [BUILD_AUR_SERVER=no])
+AM_CONDITIONAL(BUILD_AUR_SERVER, test "x$BUILD_AUR_SERVER" = "xyes")
 
 if test "x$HAVE_GST_RTSP" = "xyes"; then
   AC_DEFINE([HAVE_GST_RTSP], 1, [Define if gstreamer-rtsp-server is available])

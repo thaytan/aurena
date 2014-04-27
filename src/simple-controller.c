@@ -41,13 +41,13 @@
 #include <gst/interfaces/xoverlay.h>
 #endif
 
-#include "client/snra-client.h"
+#include "client/aur-client.h"
 
 const GdkRGBA BLACK_OPAQUE = {0.0, 0.0, 0.0, 1.0};
 
 typedef struct
 {
-  SnraClient *client;
+  AurClient *client;
   GtkLabel *status;
   GtkWidget *video;
   GtkWidget *video_image;
@@ -138,10 +138,10 @@ play_toggled_cb (GtkToggleButton * button, UIContext * ctx)
 {
   if (gtk_toggle_button_get_active (button)) {
     gtk_button_set_image (GTK_BUTTON (button), ctx->pause_image);
-    snra_client_play (ctx->client);
+    aur_client_play (ctx->client);
   } else {
     gtk_button_set_image (GTK_BUTTON (button), ctx->play_image);
-    snra_client_pause (ctx->client);
+    aur_client_pause (ctx->client);
   }
 }
 
@@ -160,7 +160,7 @@ next_clicked_cb (UIContext * ctx)
   gchar *filename;
   filename =
     gtk_file_chooser_get_filename (GTK_FILE_CHOOSER (ctx->file_chooser));
-  snra_client_set_media (ctx->client, filename);
+  aur_client_set_media (ctx->client, filename);
   g_free (filename);
 }
 
@@ -170,7 +170,7 @@ position_changed_cb (UIContext * ctx)
   if (!ctx->seeker_grabbed) {
     GstClockTime position; 
     position = (GstClockTime) gtk_range_get_value (GTK_RANGE (ctx->seeker));
-    snra_client_seek (ctx->client, position);
+    aur_client_seek (ctx->client, position);
   }
 }
 
@@ -192,14 +192,14 @@ seeker_released_cb (UIContext * ctx)
 static void
 client_active_changed_cb (PlayerContext * player)
 {
-  snra_client_set_player_enabled (player->ctx->client, player->id,
+  aur_client_set_player_enabled (player->ctx->client, player->id,
       gtk_switch_get_active (GTK_SWITCH (player->enable_switch)));
 }
 
 static void
 client_volume_changed_cb (PlayerContext * player, gdouble volume)
 {
-  snra_client_set_player_volume (player->ctx->client, player->id, volume);
+  aur_client_set_player_volume (player->ctx->client, player->id, volume);
 }
 
 static void
@@ -211,7 +211,7 @@ language_changed_cb (UIContext * ctx)
         &iter)) {
     gchar *lang;
     gtk_tree_model_get (GTK_TREE_MODEL (ctx->languages), &iter, 1, &lang, -1);
-    snra_client_set_language (ctx->client, lang);
+    aur_client_set_language (ctx->client, lang);
     g_free (lang);
   }
 }
@@ -219,13 +219,13 @@ language_changed_cb (UIContext * ctx)
 static void
 update_connected_status (UIContext * ctx)
 {
-  SnraClient *client = ctx->client;
+  AurClient *client = ctx->client;
 
   /* Update status message */
-  if (!snra_client_is_connected (client)) {
+  if (!aur_client_is_connected (client)) {
     gtk_label_set_label (ctx->status,
         "Searching for Aurena server on the network ...");
-  } else if (!snra_client_is_enabled (client)) {
+  } else if (!aur_client_is_enabled (client)) {
     gchar *host, *label;
     g_object_get (client, "connected-server", &host, NULL);
     label = g_strdup_printf ("Connnected to %s", host);
@@ -236,22 +236,22 @@ update_connected_status (UIContext * ctx)
 
   /* Ajust widget sensitivity */
   gtk_widget_set_sensitive (ctx->play_button,
-      snra_client_is_connected (client));
+      aur_client_is_connected (client));
   gtk_widget_set_sensitive (ctx->next_button,
-      snra_client_is_connected (client));
+      aur_client_is_connected (client));
   gtk_widget_set_sensitive (ctx->file_chooser,
-      snra_client_is_connected (client));
+      aur_client_is_connected (client));
   gtk_widget_set_sensitive (ctx->master_volume,
-      snra_client_is_connected (client));
+      aur_client_is_connected (client));
 }
 
 static void
 update_enabled_status (UIContext * ctx)
 {
-  SnraClient *client = ctx->client;
+  AurClient *client = ctx->client;
 
   /* Update audio tracks selection */
-  if (snra_client_is_enabled (client)) {
+  if (aur_client_is_enabled (client)) {
     gtk_widget_set_sensitive (ctx->lang_selector, TRUE);
     /* TODO Fill up audio track list */
   } else {
@@ -259,7 +259,7 @@ update_enabled_status (UIContext * ctx)
   }
 
   /* Update video box */
-  if (snra_client_is_enabled (ctx->client)) {
+  if (aur_client_is_enabled (ctx->client)) {
     gtk_widget_hide (ctx->video_image);
     gtk_widget_set_double_buffered (ctx->video, FALSE);
   } else {
@@ -271,7 +271,7 @@ update_enabled_status (UIContext * ctx)
 static gboolean
 update_seeker_position (UIContext * ctx)
 {
-  SnraClient *client = ctx->client;
+  AurClient *client = ctx->client;
   GstFormat format = GST_FORMAT_TIME;
   gint64 position;
 
@@ -297,9 +297,9 @@ update_seeker_position (UIContext * ctx)
 static void
 update_seeker_status (UIContext * ctx)
 {
-  SnraClient *client = ctx->client;
+  AurClient *client = ctx->client;
 
-  if (snra_client_is_playing (client)) {
+  if (aur_client_is_playing (client)) {
     if (!ctx->seeker_timeout)
       ctx->seeker_timeout = g_timeout_add (250,
           (GSourceFunc) update_seeker_position, ctx);
@@ -312,14 +312,14 @@ update_seeker_status (UIContext * ctx)
 static void
 update_paused_status (UIContext *ctx)
 {
-  SnraClient *client = ctx->client;
+  AurClient *client = ctx->client;
   
   g_signal_handlers_block_by_func (ctx->play_button, play_toggled_cb, ctx);
   gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (ctx->play_button),
-      snra_client_is_playing (client));
+      aur_client_is_playing (client));
   g_signal_handlers_unblock_by_func (ctx->play_button, play_toggled_cb, ctx);
 
-  if (snra_client_is_playing (client))
+  if (aur_client_is_playing (client))
     gtk_button_set_image (GTK_BUTTON (ctx->play_button), ctx->pause_image);
   else
     gtk_button_set_image (GTK_BUTTON (ctx->play_button), ctx->play_image);
@@ -330,16 +330,16 @@ update_paused_status (UIContext *ctx)
 static void
 update_volume_status (UIContext *ctx)
 {
-  SnraClient *client = ctx->client;
+  AurClient *client = ctx->client;
   gdouble volume;
 
   g_object_get (client, "volume", &volume, NULL);
 
   g_signal_handlers_block_by_func (ctx->master_volume,
-      snra_client_set_volume, client);
+      aur_client_set_volume, client);
   gtk_scale_button_set_value (GTK_SCALE_BUTTON (ctx->master_volume), volume);
   g_signal_handlers_unblock_by_func (ctx->master_volume,
-      snra_client_set_volume, client);
+      aur_client_set_volume, client);
 }
 
 static void
@@ -399,7 +399,7 @@ update_language_status (UIContext * ctx)
 static void
 update_media_uri (UIContext *ctx)
 {
-  SnraClient *client = ctx->client;
+  AurClient *client = ctx->client;
   gchar *uri_str, *basename, *host, *label;
   SoupURI *uri;
   GstFormat format = GST_FORMAT_TIME;
@@ -502,7 +502,7 @@ update_players_status (UIContext * ctx)
     gtk_container_remove (GTK_CONTAINER (ctx->players_expander),
         gtk_bin_get_child (GTK_BIN (ctx->players_expander)));
 
-  infos = snra_client_get_player_info (ctx->client);
+  infos = aur_client_get_player_info (ctx->client);
   if (!infos || !infos->len) {
     gtk_expander_set_expanded (GTK_EXPANDER (ctx->players_expander), FALSE);
     gtk_expander_set_label (GTK_EXPANDER (ctx->players_expander), "No player connected");
@@ -530,7 +530,7 @@ update_players_status (UIContext * ctx)
     GtkLabel *label;
     GtkAdjustment *adjustment;
     PlayerContext *player;
-    SnraPlayerInfo *info = &((SnraPlayerInfo *) infos->data)[i];
+    AurPlayerInfo *info = &((AurPlayerInfo *) infos->data)[i];
 
     builder = gtk_builder_new ();
     if (!gtk_builder_add_from_file (builder, filepath, &error)) {
@@ -635,8 +635,8 @@ main (gint argc, gchar *argv[])
 
   /* Create Aurena client */
   avahi_set_allocator (avahi_glib_allocator ());
-  ctx.client = snra_client_new (NULL, server,
-      SNRA_CLIENT_PLAYER | SNRA_CLIENT_CONTROLLER);
+  ctx.client = aur_client_new (NULL, server,
+      AUR_CLIENT_PLAYER | AUR_CLIENT_CONTROLLER);
   if (ctx.client == NULL)
     goto fail;
 
@@ -695,7 +695,7 @@ main (gint argc, gchar *argv[])
   g_signal_connect (fullscreen_button, "toggled",
       G_CALLBACK (fullscreen_toggled_cb), window);
   g_signal_connect_swapped (ctx.master_volume, "value-changed",
-      G_CALLBACK (snra_client_set_volume), ctx.client);
+      G_CALLBACK (aur_client_set_volume), ctx.client);
   g_signal_connect (ctx.play_button, "toggled", G_CALLBACK (play_toggled_cb),
       &ctx);
   g_signal_connect_swapped (ctx.next_button, "clicked",

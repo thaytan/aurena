@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -17,38 +17,25 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#ifndef __SNRA_HTTP_RESOURCE_H__
-#define __SNRA_HTTP_RESOURCE_H__
+#ifndef __AUR_JSON_H__
+#define __AUR_JSON_H__
 
 #include <gst/gst.h>
-#include <gst/net/gstnet.h>
-#include <libsoup/soup-types.h>
-
-#include <src/common/snra-types.h>
+#include <json-glib/json-glib.h>
 
 G_BEGIN_DECLS
 
-#define SNRA_TYPE_HTTP_RESOURCE (snra_http_resource_get_type ())
-
-typedef struct _SnraHttpResourceClass SnraHttpResourceClass;
-
-struct _SnraHttpResource
-{
-  GObject parent;
-
-  GFile *source_file;
-  guint use_count;
-  GMappedFile *data;
-};
-
-struct _SnraHttpResourceClass
-{
-  GObjectClass parent;
-};
-
-GType snra_http_resource_get_type(void);
-
-void snra_http_resource_new_transfer (SnraHttpResource *resource, SoupMessage *msg);
+GstStructure *aur_json_to_gst_structure (JsonNode *root);
+JsonNode *aur_json_from_gst_structure (const GstStructure *s);
+gboolean aur_json_structure_get_int (const GstStructure *structure,
+    const gchar *fieldname, gint *value);
+gboolean aur_json_structure_get_int64 (const GstStructure *structure,
+    const gchar *fieldname, gint64 *value);
+gboolean aur_json_structure_get_double (const GstStructure *structure,
+    const gchar *fieldname, gdouble *value);
+gboolean aur_json_structure_get_boolean (const GstStructure *structure,
+    const gchar *fieldname, gboolean *value);
 
 G_END_DECLS
+
 #endif

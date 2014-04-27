@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -17,41 +17,12 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#ifndef __SNRA_CONFIG_H__
-#define __SNRA_CONFIG_H__
+#ifndef __AUR_RESOURCE_H__
+#define __AUR_RESOURCE_H__
 
 #include <glib.h>
-#include <glib-object.h>
 
-#include <src/common/snra-types.h>
-
-G_BEGIN_DECLS
-
-#define SNRA_TYPE_CONFIG (snra_config_get_type ())
-
-typedef struct _SnraConfigClass SnraConfigClass;
-
-struct _SnraConfig
-{
-  GObject parent;
-
-  gchar *config_file;
-
-  int snra_port;
-  int rtsp_port;
-
-  gchar *database_location;
-  gchar *playlist_location;
-};
-
-struct _SnraConfigClass
-{
-  GObjectClass parent;
-};
-
-GType snra_config_get_type(void);
-SnraConfig *snra_config_new(const char *config_path);
-
-G_END_DECLS
+const gchar *
+aur_resource_get_mime_type (const gchar *filename);
 
 #endif

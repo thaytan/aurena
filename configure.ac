@@ -1,5 +1,5 @@
 AC_PREREQ([2.68])
-AC_INIT([aurena], [0.8], [thaytan@noraisin.net])
+AC_INIT([aurena], [0.9], [thaytan@noraisin.net])
 
 AM_INIT_AUTOMAKE([-Wno-portability 1.11 no-dist-gzip dist-bzip2 dist-xz tar-ustar])
 

@@ -1,0 +1,12 @@
+assets/
+bin/
+build.xml
+gen/
+gst-build-armeabi/
+gst-build/
+libs/
+local.properties
+obj/
+proguard-project.txt
+project.properties
+src/org/

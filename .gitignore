@@ -1,5 +1,6 @@
 aclocal.m4
 autom4te.cache/
+aux/
 config.guess
 config.h
 config.h.in
@@ -7,6 +8,7 @@ config.log
 config.status
 config.sub
 configure
+content/
 depcomp
 install-sh
 libtool
@@ -28,3 +30,5 @@ stamp-h1
 *.bz2
 *.xz
 .libs/
+*.pyc
+*~

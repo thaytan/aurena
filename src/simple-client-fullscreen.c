@@ -34,11 +34,7 @@
 
 #include <gst/gst.h>
 
-#if GST_CHECK_VERSION (0, 11, 1)
 #include <gst/video/videooverlay.h>
-#else
-#include <gst/interfaces/xoverlay.h>
-#endif
 
 #include <src/client/aur-client.h>
 
@@ -54,42 +50,12 @@ quit_clicked (G_GNUC_UNUSED gpointer instance)
   return TRUE;
 }
 
-#if ! GST_CHECK_VERSION (0, 11, 1)
-static GstBusSyncReply
-bus_sync_handler (G_GNUC_UNUSED GstBus *bus, GstMessage *message,
-    gpointer userdata)
-{
-  if (GST_MESSAGE_TYPE (message) != GST_MESSAGE_ELEMENT)
-    return GST_BUS_PASS;
-
-  if (!gst_structure_has_name (message->structure, "prepare-xwindow-id"))
-    return GST_BUS_PASS;
-
-  gst_x_overlay_set_window_handle (GST_X_OVERLAY (GST_MESSAGE_SRC (message)),
-      GPOINTER_TO_UINT (userdata));
-
-  return GST_BUS_PASS;
-}
-#endif
-
 static void
 player_created (G_GNUC_UNUSED AurClient *client, GstElement *playbin,
     GtkWidget *window)
 {
-#if  GST_CHECK_VERSION (0, 11, 1)
   gst_video_overlay_set_window_handle (GST_VIDEO_OVERLAY (playbin),
       GDK_WINDOW_XID (gtk_widget_get_window (window)));
-#else
-  GstBus *bus;
-  guintptr window_handle;
-
-  window_handle = GDK_WINDOW_XID (gtk_widget_get_window (window));
-
-  bus = gst_element_get_bus (playbin);
-  gst_bus_set_sync_handler (bus, bus_sync_handler,
-      GUINT_TO_POINTER (window_handle));
-  gst_object_unref (bus);
-#endif
 
   g_print ("Player created\n");
 }

@@ -300,12 +300,8 @@ construct_player (AurClient * client)
   GstBus *bus;
   guint flags;
 
-#if GST_CHECK_VERSION (1, 0, 0)
-  client->player = gst_element_factory_make ("playbin", NULL);
   GST_DEBUG("Constructing playbin");
-#else
-  client->player = gst_element_factory_make ("playbin2", NULL);
-#endif
+  client->player = gst_element_factory_make ("playbin", NULL);
 
   if (client->player == NULL) {
     g_warning ("Failed to construct playbin");

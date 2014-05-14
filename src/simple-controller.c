@@ -35,11 +35,7 @@
 #include <gst/gst.h>
 #include <gst/tag/tag.h>
 
-#if GST_CHECK_VERSION (0, 11, 1)
 #include <gst/video/videooverlay.h>
-#else
-#include <gst/interfaces/xoverlay.h>
-#endif
 
 #include "client/aur-client.h"
 
@@ -87,23 +83,6 @@ on_eos_msg (G_GNUC_UNUSED UIContext * ctx, G_GNUC_UNUSED GstMessage * msg)
   g_print ("EOS reached.\n");
 }
 
-#if ! GST_CHECK_VERSION (0, 11, 1)
-static GstBusSyncReply
-bus_sync_handler (G_GNUC_UNUSED GstBus *bus, GstMessage *message,
-    gpointer userdata)
-{
-  if (GST_MESSAGE_TYPE (message) != GST_MESSAGE_ELEMENT)
-    return GST_BUS_PASS;
-
-  if (!gst_structure_has_name (message->structure, "prepare-xwindow-id"))
-    return GST_BUS_PASS;
-
-  gst_x_overlay_set_window_handle (GST_X_OVERLAY (GST_MESSAGE_SRC (message)),
-      GPOINTER_TO_UINT (userdata));
-
-  return GST_BUS_PASS;
-}
-#endif
 
 static void
 player_created_cb (UIContext * ctx, GstElement * player)
@@ -115,22 +94,8 @@ player_created_cb (UIContext * ctx, GstElement * player)
       ctx);
   gst_object_unref (bus);
 
-#if  GST_CHECK_VERSION (0, 11, 1)
   gst_video_overlay_set_window_handle (GST_VIDEO_OVERLAY (player),
       GDK_WINDOW_XID (gtk_widget_get_window (ctx->video)));
-#else
-  {
-    GstBus *bus;
-    guintptr window_handle;
-
-    window_handle = GDK_WINDOW_XID (gtk_widget_get_window (ctx->video));
-
-    bus = gst_element_get_bus (player);
-    gst_bus_set_sync_handler (bus, bus_sync_handler,
-        GUINT_TO_POINTER (window_handle));
-    gst_object_unref (bus);
-  }
-#endif
 }
 
 static void
@@ -278,11 +243,7 @@ update_seeker_position (UIContext * ctx)
   if (ctx->seeker_grabbed)
     return TRUE;
 
-#if  GST_CHECK_VERSION (0, 11, 1)
   if (gst_element_query_position (client->player, GST_FORMAT_TIME, &position)) {
-#else
-  if (gst_element_query_position (client->player, &format, &position)) {
-#endif
     if (format != GST_FORMAT_TIME)
       return TRUE;
 
@@ -424,12 +385,7 @@ update_media_uri (UIContext *ctx)
   g_free (host);
   g_free (label);
 
-#if  GST_CHECK_VERSION (0, 11, 1)
   if (gst_element_query_duration (client->player, format, &duration)) {
-#else
-  if (gst_element_query_duration (client->player, &format, &duration)) {
-#endif
-
     if (format != GST_FORMAT_TIME)
       duration = 0.0;
 

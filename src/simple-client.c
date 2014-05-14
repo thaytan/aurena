@@ -50,11 +50,7 @@ print_position (gpointer user_data)
   GstFormat format = GST_FORMAT_TIME;
   gint64 pos;
 
-#if  GST_CHECK_VERSION (0, 11, 1)
   if (gst_element_query_position (player, format, &pos)) {
-#else
-  if (gst_element_query_position (player, &format, &pos)) {
-#endif
     GstClock * clock;
     GstClockTime base_time, stream_time, now;
 

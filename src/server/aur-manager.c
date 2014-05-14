@@ -558,10 +558,7 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
        * are signified by the resource ID G_MAXUINT. Note that URIs may be
        * fully qualified URIs, or absolute paths on the server (beginning with
        * '/').
-       *
-       * FIXME: Allowing arbitrary files to be loaded from anywhere in the
-       * server's file system (that aurena-server has access to) is wide open
-       * to abuse. See the note in README for a disclaimer. */
+       */
       if (id_str && !g_ascii_isdigit (id_str[0])) {
         if (!is_allowed_uri (id_str))
           break;

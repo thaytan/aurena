@@ -199,6 +199,14 @@ check_initialization_complete (CustomData * data)
 }
 
 static void
+player_created (G_GNUC_UNUSED AurClient *client, GstElement *playbin,
+    guintptr native_window)
+{
+    gst_video_overlay_set_window_handle (GST_VIDEO_OVERLAY (playbin),
+        native_window);
+}
+
+static void
 setup_client (CustomData * data)
 {
   GstBus *bus;
@@ -209,11 +217,12 @@ setup_client (CustomData * data)
   data->client = 
       aur_client_new (data->context, data->server, AUR_CLIENT_PLAYER);
 
+
   if (data->native_window) {
     GST_DEBUG
         ("Native window already received, notifying the pipeline about it.");
-    gst_video_overlay_set_window_handle (GST_VIDEO_OVERLAY (data->client->
-            player), (guintptr) data->native_window);
+    g_signal_connect (data->client, "player-created",
+	G_CALLBACK(player_created), data->native_window);
   }
 
   /* Instruct the bus to emit signals for each received message, and connect to the interesting signals */

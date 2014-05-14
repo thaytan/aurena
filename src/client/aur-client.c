@@ -1017,10 +1017,8 @@ aur_client_constructed (GObject * object)
   /* 5 second timeout before retrying with new connections */
   g_object_set (G_OBJECT (client->soup), "timeout", 5, NULL);
 
-  if (client->flags & AUR_CLIENT_PLAYER) {
+  if (client->flags & AUR_CLIENT_PLAYER)
     max_con++;
-    construct_player (client);
-  }
 
   if (client->flags & AUR_CLIENT_CONTROLLER)
     max_con++;

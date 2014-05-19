@@ -230,11 +230,12 @@ previous : function() {
   $.ajax({ url: "../control/previous" , type: 'POST'});
 },
 jumpToTrack : function () {
-  track=parseInt($("#jumptotrackid").val());
-  
-  if (!isNaN(track)) {
+  v = $("#jumptotrackid").val();
+
+  track=parseInt(v);
+  if (!isNaN(track) || v.substring(0, 4) == "http") {
     $.ajax({ url: "../control/next", type: 'POST',
-       data: { id: track } });
+       data: { id: v } });
   }
   $("#jumptotrackid").val("");
 },

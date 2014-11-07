@@ -95,7 +95,6 @@ main (int argc, char *argv[])
       "gtk-application-prefer-dark-theme", TRUE, NULL);
 
   window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-  gtk_widget_set_double_buffered (window, FALSE);
   gtk_widget_set_redraw_on_allocate (window, FALSE);
   gtk_widget_set_app_paintable (window, TRUE);
 
@@ -108,12 +107,11 @@ main (int argc, char *argv[])
       "valign", GTK_ALIGN_START,
       "expand", FALSE,
       NULL);
-  gtk_widget_set_double_buffered (eventbox, TRUE);
   gtk_widget_set_redraw_on_allocate (eventbox, TRUE);
   gtk_widget_set_app_paintable (eventbox, FALSE);
     gtk_container_add (GTK_CONTAINER (window), eventbox);
 
-  button = gtk_button_new_from_stock (GTK_STOCK_QUIT);
+  button = gtk_button_new_from_icon_name ("application-exit", GTK_ICON_SIZE_BUTTON);
   gtk_container_add (GTK_CONTAINER (eventbox), button);
   g_signal_connect (button, "clicked", G_CALLBACK (quit_clicked), NULL);
 

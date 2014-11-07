@@ -226,9 +226,7 @@ update_enabled_status (UIContext * ctx)
   /* Update video box */
   if (aur_client_is_enabled (ctx->client)) {
     gtk_widget_hide (ctx->video_image);
-    gtk_widget_set_double_buffered (ctx->video, FALSE);
   } else {
-    gtk_widget_set_double_buffered (ctx->video, TRUE);
     gtk_widget_show (ctx->video_image);
   }
 }

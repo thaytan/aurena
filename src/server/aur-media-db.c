@@ -100,7 +100,9 @@ aur_media_db_constructed (G_GNUC_UNUSED GObject * object)
 
   if (!media_db_create_tables (media_db))
     media_db->priv->errored = TRUE;
-  g_print ("media DB ready at %s\n", media_db->priv->db_file);
+  g_print ("media DB ready at %s with %d entries\n",
+      media_db->priv->db_file,
+      aur_media_db_get_file_count (media_db));
 }
 
 static void
@@ -333,7 +335,7 @@ guint
 aur_media_db_get_file_count (AurMediaDB * media_db)
 {
   sqlite3_stmt *stmt = NULL;
-  gint count = -1;
+  gint count = 0;
   sqlite3 *handle = media_db->priv->handle;
 
   if (sqlite3_prepare (handle,
@@ -346,7 +348,6 @@ aur_media_db_get_file_count (AurMediaDB * media_db)
   }
 
 done:
-  g_print ("%d media files in DB\n", count);
   return count;
 }
 

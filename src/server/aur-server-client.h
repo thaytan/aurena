@@ -54,7 +54,7 @@ struct _AurServerClient
   /* For talking to websocket clients */
   gint websocket_protocol;
 
-  SoupSocket *socket;
+  GSocket *socket;
   gchar *host;
 
   GIOChannel *io;

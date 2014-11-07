@@ -98,7 +98,7 @@ aur_server_client_finalize (GObject * object)
   }
 
   if (client->socket)
-    soup_socket_disconnect (client->socket);
+    g_socket_shutdown (client->socket, TRUE, TRUE, NULL);
 
   g_free (client->host);
 
@@ -148,7 +148,7 @@ aur_server_connection_lost (AurServerClient * client)
   }
 
   if (client->socket) {
-    soup_socket_disconnect (client->socket);
+    g_socket_shutdown (client->socket, TRUE, TRUE, NULL);
     client->socket = NULL;
   }
 
@@ -325,7 +325,7 @@ aur_server_client_wrote_headers (SoupMessage * msg, AurServerClient * client)
 
   g_print ("client %u ready for traffic\n", client->conn_id);
 
-  client->io = g_io_channel_unix_new (soup_socket_get_fd (client->socket));
+  client->io = g_io_channel_unix_new (g_socket_get_fd (client->socket));
   g_io_channel_set_encoding (client->io, NULL, NULL);
   g_io_channel_set_buffered (client->io, FALSE);
   client->io_watch = g_io_add_watch (client->io, G_IO_IN | G_IO_HUP,
@@ -479,7 +479,7 @@ aur_server_client_new (SoupServer * soup, SoupMessage * msg,
   client->type = AUR_SERVER_CLIENT_WEBSOCKET;
   client->need_body_complete = FALSE;
 
-  client->socket = soup_client_context_get_socket (context);
+  client->socket = soup_client_context_get_gsocket (context);
   client->in_bufptr = client->in_buf = g_new0 (gchar, 1024);
   client->in_bufsize = 1024;
   client->in_bufavail = 0;
@@ -506,6 +506,8 @@ aur_server_client_new (SoupServer * soup, SoupMessage * msg,
   return client;
 }
 
+/* Send a single message to the client and
+ * then close the connection */
 AurServerClient *
 aur_server_client_new_single (SoupServer * soup, SoupMessage * msg,
     G_GNUC_UNUSED SoupClientContext * context)

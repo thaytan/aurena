@@ -224,7 +224,7 @@ static void
 aur_server_constructed (GObject * object)
 {
   AurServer *server = (AurServer *) (object);
-  SoupSocket *socket;
+  //SoupSocket *socket;
   gint port;
 
   if (G_OBJECT_CLASS (aur_server_parent_class)->constructed != NULL)
@@ -232,7 +232,7 @@ aur_server_constructed (GObject * object)
 
   g_object_get (server->config, "aur-port", &port, NULL);
 
-  server->soup = soup_server_new (SOUP_SERVER_PORT, port, NULL);
+  server->soup = soup_server_new (NULL, NULL);
 
   soup_server_add_handler (server->soup, "/",
       (SoupServerCallback) server_fallback_cb,
@@ -244,6 +244,7 @@ aur_server_constructed (GObject * object)
       (SoupServerCallback) server_resource_cb,
       g_object_ref (server), g_object_unref);
 
+#if 0
   socket = soup_server_get_listener (server->soup);
   if (socket) {
     SoupAddress *addr;
@@ -252,6 +253,9 @@ aur_server_constructed (GObject * object)
         soup_address_get_name (addr), soup_address_get_port (addr));
     g_object_unref (addr);
   }
+#else
+  g_print ("Server ready on port %u\n", port);
+#endif
 }
 
 static void
@@ -293,7 +297,7 @@ aur_server_dispose (GObject * object)
 {
   AurServer *server = (AurServer *) (object);
 
-  soup_server_quit (server->soup);
+  soup_server_disconnect (server->soup);
 
   G_OBJECT_CLASS (aur_server_parent_class)->dispose (object);
 }
@@ -333,15 +337,21 @@ aur_server_get_property (GObject * object, guint prop_id,
 void
 aur_server_start (AurServer * server)
 {
-  soup_server_run_async (server->soup);
+  gint port;
+
+  g_object_get (server->config, "aur-port", &port, NULL);
+  soup_server_listen_all (server->soup, port, 0, NULL);
 }
 
 void
 aur_server_stop (AurServer * server)
 {
-  soup_server_quit (server->soup);
+  soup_server_disconnect (server->soup);
+  /* some requests may still be in progress but no new
+   * connections can happen
+  */
 }
-
+ 
 void
 aur_server_set_resource_cb (AurServer * server,
     AurHttpResource * (*callback) (AurServer * server, guint resource_id,

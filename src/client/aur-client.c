@@ -103,7 +103,7 @@ free_player_info (GArray * player_info)
     return;
 
   for (i = 0; i < player_info->len; i++) {
-    AurPlayerInfo *info = &g_array_index (player_info, AurPlayerInfo,  i);
+    AurPlayerInfo *info = &g_array_index (player_info, AurPlayerInfo, i);
     g_free (info->host);
   }
 
@@ -115,7 +115,7 @@ try_reconnect (AurClient * client)
 {
   client->timeout = 0;
 
-  g_print("In try_reconnect()\n");
+  g_print ("In try_reconnect()\n");
   if (client->server_host)
     connect_to_server (client, client->server_host, client->server_port);
   else
@@ -125,7 +125,7 @@ try_reconnect (AurClient * client)
 }
 
 static AurClientFlags
-get_flag_from_msg (SoupMessage *msg)
+get_flag_from_msg (SoupMessage * msg)
 {
   AurClientFlags flag;
   SoupURI *uri = soup_message_get_uri (msg);
@@ -147,7 +147,7 @@ conn_idle_timeout (AurClient * client)
     g_print ("Connection timed out\n");
     soup_session_cancel_message (client->soup, client->msg, 200);
   }
-  
+
   return FALSE;
 }
 
@@ -217,11 +217,11 @@ handle_player_enrol_message (AurClient * client, GstStructure * s)
   cur_time = (GstClockTime) (tmp);
 
   if (client->player == NULL)
-    construct_player(client);
+    construct_player (client);
 
   if (aur_json_structure_get_double (s, "volume-level", &new_vol)) {
     if (client->player == NULL)
-      construct_player(client);
+      construct_player (client);
 
     if (client->player) {
       //g_print ("New volume %g\n", new_vol);
@@ -300,7 +300,7 @@ construct_player (AurClient * client)
   GstBus *bus;
   guint flags;
 
-  GST_DEBUG("Constructing playbin");
+  GST_DEBUG ("Constructing playbin");
   client->player = gst_element_factory_make ("playbin", NULL);
 
   if (client->player == NULL) {
@@ -316,14 +316,15 @@ construct_player (AurClient * client)
   bus = gst_element_get_bus (GST_ELEMENT (client->player));
 
 #if 0
-  gst_bus_add_signal_watch(bus);
+  gst_bus_add_signal_watch (bus);
 #else
-  { GSource *bus_source;
-  bus_source = gst_bus_create_watch (bus);
-  g_source_set_callback (bus_source, (GSourceFunc) gst_bus_async_signal_func,
-      NULL, NULL);
-  g_source_attach (bus_source, client->context);
-  g_source_unref (bus_source);
+  {
+    GSource *bus_source;
+    bus_source = gst_bus_create_watch (bus);
+    g_source_set_callback (bus_source, (GSourceFunc) gst_bus_async_signal_func,
+        NULL, NULL);
+    g_source_attach (bus_source, client->context);
+    g_source_unref (bus_source);
   }
 #endif
 
@@ -377,8 +378,9 @@ set_media (AurClient * client)
   gst_element_set_state (client->player, GST_STATE_READY);
 
   g_print ("Setting media URI %s base_time %" GST_TIME_FORMAT " position %"
-      GST_TIME_FORMAT " paused %i\n", client->uri, GST_TIME_ARGS (client->base_time),
-      GST_TIME_ARGS (client->position), client->paused);
+      GST_TIME_FORMAT " paused %i\n", client->uri,
+      GST_TIME_ARGS (client->base_time), GST_TIME_ARGS (client->position),
+      client->paused);
   g_object_set (client->player, "uri", client->uri, NULL);
 
   gst_element_set_start_time (client->player, GST_CLOCK_TIME_NONE);
@@ -395,11 +397,12 @@ set_media (AurClient * client)
       client->position = now - client->base_time;
   }
 
-  /* If position is not 0, seek to that position */
-  if (client->position) {
+  /* If position is off by more than 0.5 sec, seek to that position
+   * (otherwise, just let the player skip) */
+  if (client->position > GST_SECOND/2) {
     /* FIXME Query duration, so we don't seek after EOS */
     if (!gst_element_seek_simple (client->player, GST_FORMAT_TIME,
-          GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, client->position)) {
+            GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, client->position)) {
       g_warning ("Initial seekd failed, player will go faster instead");
       client->position = 0;
     }
@@ -500,7 +503,7 @@ handle_player_pause_message (AurClient * client, GstStructure * s)
         GST_TIME_ARGS (client->position));
     gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PAUSED);
     if (!gst_element_seek_simple (client->player, GST_FORMAT_TIME,
-          GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, client->position)) {
+            GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, client->position)) {
       g_warning ("Pausing seek failed");
       client->position = old_position;
     }
@@ -530,7 +533,7 @@ handle_player_seek_message (AurClient * client, GstStructure * s)
         GST_TIME_ARGS (client->base_time));
 
     if (!gst_element_seek_simple (client->player, GST_FORMAT_TIME,
-          GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, client->position)) {
+            GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, client->position)) {
       g_warning ("Seeking failed, client may run faster or block.");
       client->position = old_position;
     }
@@ -644,8 +647,8 @@ handle_controller_enrol_message (AurClient * client, GstStructure * s)
 }
 
 static void
-handle_player_info (G_GNUC_UNUSED SoupSession *session, SoupMessage *msg,
-    AurClient *client)
+handle_player_info (G_GNUC_UNUSED SoupSession * session, SoupMessage * msg,
+    AurClient * client)
 {
   SoupBuffer *buffer;
 
@@ -669,7 +672,7 @@ handle_player_info (G_GNUC_UNUSED SoupSession *session, SoupMessage *msg,
       goto failed;
 
     player_info = g_array_sized_new (TRUE, TRUE,
-          sizeof (AurPlayerInfo), gst_value_array_get_size (v1));
+        sizeof (AurPlayerInfo), gst_value_array_get_size (v1));
 
     for (i = 0; i < gst_value_array_get_size (v1); i++) {
       AurPlayerInfo info;
@@ -703,7 +706,7 @@ handle_player_info (G_GNUC_UNUSED SoupSession *session, SoupMessage *msg,
 
     g_signal_emit (client, signals[SIGNAL_PLAYER_INFO_CHANGED], 0);
 
-failed:
+  failed:
     if (player_info)
       free_player_info (player_info);
     gst_structure_free (s1);
@@ -869,6 +872,10 @@ handle_received_chunk (SoupMessage * msg, SoupBuffer * chunk,
   const gchar *ptr;
   gsize length;
   AurClientFlags flag = get_flag_from_msg (msg);
+  JsonNode *root;
+  GstStructure *s;
+  GError *err = NULL;
+  gchar *json_str = NULL;
 
   if (client->was_connected & flag) {
     g_print ("Successfully connected %s to server %s:%d\n",
@@ -882,7 +889,7 @@ handle_received_chunk (SoupMessage * msg, SoupBuffer * chunk,
     g_source_remove (client->idle_timeout);
   client->idle_timeout = g_timeout_add_seconds (20,
       (GSourceFunc) conn_idle_timeout, client);
- 
+
 #if HAVE_AVAHI
   /* Successful server connection, stop avahi discovery */
   if (client->avahi_client) {
@@ -901,43 +908,57 @@ handle_received_chunk (SoupMessage * msg, SoupBuffer * chunk,
 
   /* Save remaining portion */
   ptr += 1;
-  length =(chunk->length - (ptr - chunk->data));
+  length = (chunk->length - (ptr - chunk->data));
 
   chunk = soup_message_body_flatten (msg->response_body);
 
   // Ignore null string chunks
   if (chunk->length < 2)
-	goto end;
+    goto end;
+
+  /* Workaround: Copy to a string to avoid stupid
+   * UTF-8 validation bug in json-glib 1.0.2 */
+  json_str = g_strndup (chunk->data, chunk->length);
 
 #if 0
-  {
-    gchar *tmp = g_strndup (chunk->data, chunk->length);
-    g_print ("%s\n", tmp);
-    g_free (tmp);
-  }
+  g_print ("%s\n", json_str);
 #endif
 
-  if (json_parser_load_from_data (client->json, chunk->data, chunk->length,
-          NULL)) {
-    JsonNode *root = json_parser_get_root (client->json);
-    GstStructure *s = aur_json_to_gst_structure (root);
+  if (!json_parser_load_from_data (client->json, json_str, -1,
+          &err) || err != NULL)
+    goto fail;
 
-    if (s == NULL)
-      goto end;                   /* Invalid chunk */
+  root = json_parser_get_root (client->json);
+  s = aur_json_to_gst_structure (root);
 
-    if (flag == AUR_CLIENT_PLAYER)
-      handle_player_message (client, s);
-    else
-      handle_controller_message (client, s);
+  if (s == NULL)
+    goto fail;                  /* Invalid chunk */
 
-    gst_structure_free (s);
-  }
+  if (flag == AUR_CLIENT_PLAYER)
+    handle_player_message (client, s);
+  else
+    handle_controller_message (client, s);
+
+  gst_structure_free (s);
 
 end:
+  g_free (json_str);
+
   soup_message_body_truncate (msg->response_body);
   /* Put back remaining part */
   if (length)
-    soup_message_body_append (msg->response_body, SOUP_MEMORY_COPY, ptr, length);
+    soup_message_body_append (msg->response_body, SOUP_MEMORY_COPY, ptr,
+        length);
+  return;
+
+fail:{
+    g_print ("Failed to parse message '%s'\n", json_str);
+    if (err) {
+      g_print ("Error: %s\n", err->message);
+      g_error_free (err);
+    }
+    goto end;
+  }
 }
 
 static void
@@ -953,14 +974,15 @@ connect_to_server (AurClient * client, const gchar * server, int port)
   if (client->shutting_down)
     return;
 
-  g_print("In connect_to_server(%s,%d), client->flags %u, connecting %u\n", server, port, client->flags, client->connecting);
+  g_print ("In connect_to_server(%s,%d), client->flags %u, connecting %u\n",
+      server, port, client->flags, client->connecting);
 
   if (client->flags & AUR_CLIENT_PLAYER
       && !(client->connecting & AUR_CLIENT_PLAYER)) {
     client->connecting |= AUR_CLIENT_PLAYER;
 
     uri = g_strdup_printf ("http://%s:%u/client/player_events", server, port);
-    g_print("Attemping to connect player to server %s:%d\n", server, port);
+    g_print ("Attemping to connect player to server %s:%d\n", server, port);
     msg = soup_message_new ("GET", uri);
     g_signal_connect (msg, "got-chunk", (GCallback) handle_received_chunk,
         client);
@@ -971,7 +993,7 @@ connect_to_server (AurClient * client, const gchar * server, int port)
 
   if (client->flags & AUR_CLIENT_CONTROLLER
       && !(client->connecting & AUR_CLIENT_CONTROLLER)) {
-    g_print("Attemping to connect controller to server %s:%d\n", server, port);
+    g_print ("Attemping to connect controller to server %s:%d\n", server, port);
     client->connecting |= AUR_CLIENT_CONTROLLER;
 
     uri = g_strdup_printf ("http://%s:%u/client/control_events", server, port);
@@ -1002,7 +1024,9 @@ aur_client_constructed (GObject * object)
   if (G_OBJECT_CLASS (aur_client_parent_class)->constructed != NULL)
     G_OBJECT_CLASS (aur_client_parent_class)->constructed (object);
 
-  client->soup = soup_session_async_new_with_options (SOUP_SESSION_ASYNC_CONTEXT, client->context, NULL);
+  client->soup =
+      soup_session_async_new_with_options (SOUP_SESSION_ASYNC_CONTEXT,
+      client->context, NULL);
   g_assert (client->soup);
   if (!g_strcmp0 ("1", g_getenv ("AURENA_DEBUG")))
     soup_session_add_feature (client->soup,
@@ -1049,8 +1073,8 @@ aur_client_class_init (AurClientClass * client_class)
 
   g_object_class_install_property (gobject_class, PROP_ASYNC_MAIN_CONTEXT,
       g_param_spec_boxed ("main-context", "Async Main Context",
-          "GLib Main Context to use for HTTP connections", G_TYPE_MAIN_CONTEXT,
-          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
+          "GLib Main Context to use for HTTP connections",
+          G_TYPE_MAIN_CONTEXT, G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 
   g_object_class_install_property (gobject_class, PROP_PAUSED,
       g_param_spec_boolean ("paused", "paused",
@@ -1093,21 +1117,23 @@ aur_client_class_init (AurClientClass * client_class)
           "Audio language to choose", NULL,
           G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
 
-  signals[SIGNAL_PLAYER_CREATED] = g_signal_new("player-created",
-      G_TYPE_FROM_CLASS (client_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL,
-      G_TYPE_NONE, 1, GST_TYPE_ELEMENT);
+  signals[SIGNAL_PLAYER_CREATED] = g_signal_new ("player-created",
+      G_TYPE_FROM_CLASS (client_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
+      NULL, G_TYPE_NONE, 1, GST_TYPE_ELEMENT);
 
-  signals[SIGNAL_CLIENT_VOLUME_CHANGED] = g_signal_new("client-volume-changed",
-      G_TYPE_FROM_CLASS (client_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL,
-      G_TYPE_NONE, 2, G_TYPE_UINT, G_TYPE_DOUBLE);
+  signals[SIGNAL_CLIENT_VOLUME_CHANGED] =
+      g_signal_new ("client-volume-changed", G_TYPE_FROM_CLASS (client_class),
+      G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL, G_TYPE_NONE, 2, G_TYPE_UINT,
+      G_TYPE_DOUBLE);
 
-  signals[SIGNAL_CLIENT_SETTING_CHANGED] = g_signal_new("client-setting-changed",
-      G_TYPE_FROM_CLASS (client_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL,
-      G_TYPE_NONE, 2, G_TYPE_UINT, G_TYPE_BOOLEAN);
+  signals[SIGNAL_CLIENT_SETTING_CHANGED] =
+      g_signal_new ("client-setting-changed",
+      G_TYPE_FROM_CLASS (client_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
+      NULL, G_TYPE_NONE, 2, G_TYPE_UINT, G_TYPE_BOOLEAN);
 
-  signals[SIGNAL_PLAYER_INFO_CHANGED] = g_signal_new("player-info-changed",
-      G_TYPE_FROM_CLASS (client_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL,
-      G_TYPE_NONE, 0);
+  signals[SIGNAL_PLAYER_INFO_CHANGED] = g_signal_new ("player-info-changed",
+      G_TYPE_FROM_CLASS (client_class), G_SIGNAL_RUN_LAST, 0, NULL, NULL,
+      NULL, G_TYPE_NONE, 0);
 }
 
 static void
@@ -1195,10 +1221,10 @@ aur_client_set_property (GObject * object, guint prop_id,
       client->flags = g_value_get_uint (value);
       break;
     }
-    case PROP_ASYNC_MAIN_CONTEXT: {
+    case PROP_ASYNC_MAIN_CONTEXT:{
       if (client->context)
-	g_main_context_unref(client->context);
-      client->context = (GMainContext *)(g_value_dup_boxed(value));
+        g_main_context_unref (client->context);
+      client->context = (GMainContext *) (g_value_dup_boxed (value));
       break;
     }
     default:
@@ -1218,7 +1244,7 @@ aur_client_get_property (GObject * object, guint prop_id,
       char *tmp = NULL;
       if (client->server_host)
         tmp =
-          g_strdup_printf ("%s:%u", client->server_host, client->server_port);
+            g_strdup_printf ("%s:%u", client->server_host, client->server_port);
       g_value_take_string (value, tmp);
       break;
     }
@@ -1258,8 +1284,8 @@ aur_client_get_property (GObject * object, guint prop_id,
       g_value_set_string (value, client->language);
       break;
     }
-    case PROP_ASYNC_MAIN_CONTEXT: {
-      g_value_set_boxed(value, client->context);
+    case PROP_ASYNC_MAIN_CONTEXT:{
+      g_value_set_boxed (value, client->context);
       break;
     }
 
@@ -1383,7 +1409,8 @@ search_for_server (AurClient * client)
 #endif
 
 AurClient *
-aur_client_new (GMainContext *context, const char *server_host, AurClientFlags flags)
+aur_client_new (GMainContext * context, const char *server_host,
+    AurClientFlags flags)
 {
   AurClient *client = g_object_new (AUR_TYPE_CLIENT,
       "main-context", context,
@@ -1413,10 +1440,10 @@ aur_client_is_playing (AurClient * client)
 }
 
 static void
-aur_client_submit_msg (AurClient * client, SoupMessage *msg)
+aur_client_submit_msg (AurClient * client, SoupMessage * msg)
 {
   if (client->shutting_down)
-    g_object_unref(msg);
+    g_object_unref (msg);
   else
     soup_session_queue_message (client->soup, msg, NULL, NULL);
 }
@@ -1533,8 +1560,7 @@ aur_client_get_player_enabled (AurClient * client, guint id)
 }
 
 void
-aur_client_set_player_enabled (AurClient * client, guint id,
-    gboolean enabled)
+aur_client_set_player_enabled (AurClient * client, guint id, gboolean enabled)
 {
   gchar *uri;
   gchar *id_str;
@@ -1543,7 +1569,8 @@ aur_client_set_player_enabled (AurClient * client, guint id,
   uri = g_strdup_printf ("http://%s:%u/control/setclient",
       client->connected_server, client->connected_port);
   id_str = g_strdup_printf ("%u", id);
-  soup_msg = soup_form_request_new ("POST", uri, "client_id", id_str, "enable",
+  soup_msg =
+      soup_form_request_new ("POST", uri, "client_id", id_str, "enable",
       enabled ? "1" : "0", NULL);
   aur_client_submit_msg (client, soup_msg);
 
@@ -1572,7 +1599,7 @@ aur_client_set_player_volume (AurClient * client, guint id, gdouble volume)
 }
 
 void
-aur_client_set_language (AurClient * client, const gchar *language_code)
+aur_client_set_language (AurClient * client, const gchar * language_code)
 {
   gchar *uri;
   SoupMessage *soup_msg;

@@ -208,7 +208,6 @@ aur_avahi_set_property (GObject * object, guint prop_id,
   switch (prop_id) {
     case PROP_PORT:
       avahi->priv->port = g_value_get_int (value);
-      g_print ("Port is %d\n", avahi->priv->port);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);

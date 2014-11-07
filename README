@@ -1,4 +1,6 @@
-Hi,
+Aurena is a network distributed media playback system. It provides 
+a server for media content, and clients for synchronised playback across
+all receivers, similar to some (expensive) commercial systems.
 
 To use this, just build it in the usual autoconf-ey way (configure && make)
 

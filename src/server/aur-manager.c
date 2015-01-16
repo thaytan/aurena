@@ -105,14 +105,12 @@ static void aur_manager_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void aur_manager_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
-static void aur_manager_play_resource (AurManager * manager,
-    guint resource_id);
+static void aur_manager_play_resource (AurManager * manager, guint resource_id);
 static void aur_manager_send_play (AurManager * manager,
     AurServerClient * client);
 static void aur_manager_send_pause (AurManager * manager,
     AurServerClient * client);
-static void aur_manager_adjust_volume (AurManager * manager,
-    gdouble volume);
+static void aur_manager_adjust_volume (AurManager * manager, gdouble volume);
 static void aur_manager_adjust_client_volume (AurManager * manager,
     guint client_id, gdouble volume);
 static void aur_manager_adjust_client_setting (AurManager * manager,
@@ -121,7 +119,7 @@ static GstStructure *manager_make_set_media_msg (AurManager * manager,
     guint resource_id);
 static GstStructure *manager_make_player_clients_changed_msg
     (AurManager * manager);
-static AurPlayerInfo * get_player_info_by_id (AurManager *manager,
+static AurPlayerInfo *get_player_info_by_id (AurManager * manager,
     guint client_id);
 static void aur_manager_send_seek (AurManager * manager,
     AurServerClient * client, GstClockTime position);
@@ -178,7 +176,7 @@ failed:
 #endif
 
 static GstStructure *
-manager_make_enrol_msg (AurManager * manager, AurPlayerInfo *info)
+manager_make_enrol_msg (AurManager * manager, AurPlayerInfo * info)
 {
   int clock_port;
   GstClock *clock;
@@ -192,7 +190,7 @@ manager_make_enrol_msg (AurManager * manager, AurPlayerInfo *info)
 
   g_object_get (manager->net_clock, "port", &clock_port, NULL);
 
-  if (info != NULL) /* Is a player message */
+  if (info != NULL)             /* Is a player message */
     volume *= info->volume;
 
   msg = gst_structure_new ("json",
@@ -203,7 +201,7 @@ manager_make_enrol_msg (AurManager * manager, AurPlayerInfo *info)
       "volume-level", G_TYPE_DOUBLE, volume,
       "paused", G_TYPE_BOOLEAN, manager->paused, NULL);
 
-  if (info != NULL) /* Is a player message */
+  if (info != NULL)             /* Is a player message */
     gst_structure_set (msg, "enabled", G_TYPE_BOOLEAN, info->enabled, NULL);
 
   return msg;
@@ -245,7 +243,8 @@ make_player_clients_list_msg (AurManager * manager)
 }
 
 static gint
-find_player_info_by_client (const AurPlayerInfo *info, AurServerClient *client)
+find_player_info_by_client (const AurPlayerInfo * info,
+    AurServerClient * client)
 {
   if (info->conn == client)
     return 0;

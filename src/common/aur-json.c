@@ -109,6 +109,13 @@ aur_json_value_to_node (const GValue *value)
     }
     n = json_node_new (JSON_NODE_ARRAY);
     json_node_take_array (n, arr);
+  } else if (G_VALUE_HOLDS_UINT64 (value)) {
+    gint64 tmp = (gint64)(g_value_get_uint64 (value));
+    /* Can't represent things > 2^63-1 */
+    if (tmp < 0)
+      return NULL;
+    n = json_node_new (JSON_NODE_VALUE);
+    json_node_set_int (n, tmp);
   } else {
     n = json_node_new (JSON_NODE_VALUE);
     json_node_set_value (n, value);

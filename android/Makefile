@@ -14,4 +14,4 @@ install:
 	adb install -r bin/AndroidAurena-debug.apk
 
 clean:
-	rm setup.stamp
+	rm -f setup.stamp

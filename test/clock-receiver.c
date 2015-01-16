@@ -19,7 +19,7 @@ intr_handler (G_GNUC_UNUSED gpointer user_data)
 {
   g_print("Exiting.\n");
   g_main_loop_quit(loop);
-  return FALSE;
+  return TRUE;
 }
 
 GstClockTime last_internal_time = -1, last_external_time = -1, last_rate_num = -1, last_rate_den = -1;

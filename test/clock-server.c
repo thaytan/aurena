@@ -18,7 +18,7 @@ intr_handler (G_GNUC_UNUSED gpointer user_data)
 {
   g_print("Exiting.\n");
   g_main_loop_quit(loop);
-  return FALSE;
+  return TRUE;
 }
 
 int

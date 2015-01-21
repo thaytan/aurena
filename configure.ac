@@ -64,7 +64,7 @@ if test "x$BUILD_GTKAPPS" = "xyes"; then
 fi
 
 AC_MSG_NOTICE([Checking whether to build server (sqlite >= 3.3, glib >= 2.32)])
-PKG_CHECK_MODULES(AUR_SERVER, [sqlite3 >= 3.3 glib-2.0 >= 2.32],
+PKG_CHECK_MODULES(AUR_SERVER, [sqlite3 >= 3.3 glib-2.0 >= 2.32 libsoup-2.4 > 2.48 ],
     [BUILD_AUR_SERVER=yes], [BUILD_AUR_SERVER=no])
 AM_CONDITIONAL(BUILD_AUR_SERVER, test "x$BUILD_AUR_SERVER" = "xyes")
 

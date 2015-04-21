@@ -26,12 +26,11 @@
 
 #include "aur-server-client.h"
 
-G_DEFINE_TYPE (AurServerClient, aur_server_client, G_TYPE_OBJECT);
+G_DEFINE_TYPE (AurServerClient, aur_server_client, AUR_TYPE_WEBSOCKET_PARSER);
 
 enum
 {
   CONNECTION_LOST,
-  MSG_RECEIVED,
   LAST_SIGNAL
 };
 
@@ -68,11 +67,6 @@ aur_server_client_class_init (AurServerClientClass * client_class)
       g_signal_new ("connection-lost", G_TYPE_FROM_CLASS (client_class),
       G_SIGNAL_RUN_LAST, 0, NULL, NULL,
       g_cclosure_marshal_generic, G_TYPE_NONE, 0, G_TYPE_NONE);
-
-  aur_server_client_signals[MSG_RECEIVED] =
-      g_signal_new ("message-received", G_TYPE_FROM_CLASS (client_class),
-      G_SIGNAL_RUN_LAST, 0, NULL, NULL,
-      g_cclosure_marshal_generic, G_TYPE_NONE, 2, G_TYPE_CHAR, G_TYPE_UINT64);
 }
 
 static void
@@ -102,7 +96,6 @@ aur_server_client_finalize (GObject * object)
 
   g_free (client->host);
 
-  g_free (client->in_buf);
   g_free (client->out_buf);
 
   G_OBJECT_CLASS (aur_server_client_parent_class)->finalize (object);
@@ -174,87 +167,6 @@ aur_server_client_network_event (G_GNUC_UNUSED SoupMessage * msg,
 }
 
 /* Callbacks used for websocket clients */
-static gboolean
-try_parse_websocket_fragment (AurServerClient * client)
-{
-  guint64 frag_size;
-  gchar *header, *outptr;
-  gchar *mask;
-  gchar *decoded;
-  gsize i, avail;
-
-  // g_print ("Got %u bytes to parse\n", (guint) client->in_bufavail);
-  if (client->in_bufavail < 2)
-    return FALSE;
-
-  header = outptr = client->in_bufptr;
-  avail = client->in_bufavail;
-
-  if (header[0] & 0x80)
-    g_print ("FIN flag. Payload type 0x%x\n", header[0] & 0xf);
-
-  frag_size = header[1] & 0x7f;
-  outptr += 2;
-
-  if (frag_size < 126) {
-    avail -= 2;
-  } else if (frag_size == 126) {
-    if (avail < 4)
-      return FALSE;
-    frag_size = GST_READ_UINT16_BE (outptr);
-    outptr += 2;
-    avail -= 8;
-  } else {
-    if (avail < 10)
-      return FALSE;
-    frag_size = GST_READ_UINT64_BE (outptr);
-    outptr += 8;
-    avail -= 8;
-  }
-
-  if ((header[1] & 0x80) == 0) {
-    /* FIXME: drop the connection */
-    g_print ("Received packet not masked. Skipping\n");
-    aur_server_connection_lost (client);
-    goto skip_out;
-  }
-
-  if (avail < 4 + frag_size) {
-    /* Wait for more data */
-    return FALSE;
-  }
-
-  /* Consume the 4 mask bytes */
-  mask = outptr;
-  outptr += 4;
-  avail -= 4;
-
-  decoded = g_malloc (frag_size + 1);
-  for (i = 0; i < frag_size; i++) {
-    decoded[i] = outptr[i] ^ mask[i % 4];
-  }
-  decoded[frag_size] = 0;
-
-  /* Fire a signal to get this packet processed */
-  g_signal_emit (client, aur_server_client_signals[MSG_RECEIVED], 0,
-      decoded, (guint64)(frag_size));
-
-  g_free (decoded);
-
-skip_out:
-  {
-    gsize consumed;
-
-    outptr += frag_size;
-
-    consumed = outptr - client->in_bufptr;
-
-    client->in_bufavail -= consumed;
-    client->in_bufptr = outptr;
-  }
-
-  return TRUE;
-}
 
 static gboolean
 aur_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
@@ -272,41 +184,10 @@ aur_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
   }
 
   if (condition & G_IO_IN) {
-    gsize bread = 0;
-
-    if (client->in_bufsize <= client->in_bufavail) {
-      gsize cur_offs = client->in_bufptr - client->in_buf;
-
-      client->in_bufsize *= 2;
-      g_print ("Growing io_buf to %" G_GSIZE_FORMAT " bytes\n",
-          client->in_bufsize);
-
-      client->in_buf = g_renew (gchar, client->in_buf, client->in_bufsize);
-      client->in_bufptr = client->in_buf + cur_offs;
-    }
-
-    status =
-        g_io_channel_read_chars (client->io,
-        client->in_buf + client->in_bufavail,
-        client->in_bufsize - client->in_bufavail, &bread, NULL);
-
-    if (status == G_IO_STATUS_ERROR) {
-      aur_server_connection_lost (client);
-    } else {
-      g_print ("Collected %" G_GSIZE_FORMAT " bytes to io buf\n", bread);
-      client->in_bufavail += bread;
-    }
-
-    while (client->in_bufavail > 0 && try_parse_websocket_fragment (client)) {
-    };
-
-    if (client->in_buf != client->in_bufptr) {
-      memmove (client->in_buf, client->in_bufptr, client->in_bufavail);
-      client->in_bufptr = client->in_buf;
-    }
+    status = aur_websocket_parser_read_io (AUR_WEBSOCKET_PARSER (client), client->io);
   }
 
-  if (status == G_IO_STATUS_EOF) {
+  if (status == G_IO_STATUS_EOF || status == G_IO_STATUS_ERROR) {
     // no more data
     aur_server_connection_lost (client);
     return FALSE;
@@ -480,9 +361,7 @@ aur_server_client_new (SoupServer * soup, SoupMessage * msg,
   client->need_body_complete = FALSE;
 
   client->socket = soup_client_context_get_gsocket (context);
-  client->in_bufptr = client->in_buf = g_new0 (gchar, 1024);
-  client->in_bufsize = 1024;
-  client->in_bufavail = 0;
+  /* FIXME: Steal connection on newer libsoup */
 
   accept_challenge =
       soup_message_headers_get_one (msg->request_headers, "Sec-WebSocket-Key");

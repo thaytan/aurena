@@ -25,6 +25,7 @@
 #include <libsoup/soup.h>
 
 #include <src/common/aur-types.h>
+#include <src/server/aur-websocket-parser.h>
 
 G_BEGIN_DECLS
 
@@ -41,7 +42,7 @@ enum _AurServerClientType {
 
 struct _AurServerClient
 {
-  GObject parent;
+  AurWebSocketParser parent;
 
   AurServerClientType type;
   gboolean fired_conn_lost;
@@ -59,10 +60,6 @@ struct _AurServerClient
 
   GIOChannel *io;
   guint io_watch;
-  gchar *in_buf;
-  gchar *in_bufptr;
-  gsize in_bufsize;
-  gsize in_bufavail;
 
   gchar *out_buf;
   gsize out_bufsize;
@@ -76,7 +73,7 @@ struct _AurServerClient
 
 struct _AurServerClientClass
 {
-  GObjectClass parent;
+  AurWebSocketParserClass parent;
 };
 
 GType aur_server_client_get_type(void);

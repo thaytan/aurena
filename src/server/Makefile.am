@@ -16,6 +16,9 @@ libaurena_server_la_SOURCES = \
     aur-server.c \
     aur-server.h \
     aur-server-client.c \
-    aur-server-client.h
+    aur-server-client.h \
+    aur-websocket-parser.c \
+    aur-websocket-parser.h
+
 libaurena_server_la_CPPFLAGS = -I$(top_srcdir) $(AUR_COMMON_CFLAGS) $(GST_CFLAGS) $(GST_RTSP_CFLAGS) $(EXTRA_CFLAGS)
 libaurena_server_la_LIBADD  =

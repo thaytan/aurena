@@ -25,7 +25,7 @@
 #include <libsoup/soup.h>
 
 #include <src/common/aur-types.h>
-#include <src/server/aur-websocket-parser.h>
+#include <src/common/aur-websocket-parser.h>
 
 G_BEGIN_DECLS
 

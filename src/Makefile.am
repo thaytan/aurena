@@ -10,7 +10,8 @@ if BUILD_GTKAPPS
 bin_PROGRAMS += aurena-simple-client-fullscreen aurena-simple-controller
 endif
 
-COMMON_SOURCES = common/aur-json.c common/aur-json.h common/aur-types.h
+COMMON_SOURCES = common/aur-json.c common/aur-json.h common/aur-types.h \
+  common/aur-websocket-parser.c common/aur-websocket-parser.h 
 
 aurena_server_CPPFLAGS = -I$(top_srcdir) $(AUR_COMMON_CFLAGS) $(AUR_SERVER_CFLAGS) $(GST_RTSP_CFLAGS) $(GST_CFLAGS) $(EXTRA_CFLAGS)
 aurena_server_LDADD = server/libaurena_server.la $(AUR_COMMON_LIBS) $(AUR_SERVER_LIBS) $(GST_RTSP_LIBS) $(GST_LIBS)

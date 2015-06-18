@@ -4,10 +4,13 @@ all receivers, similar to some (expensive) commercial systems.
 
 To use this, just build it in the usual autoconf-ey way (configure && make)
 
-Then, run src/aurena on one machine, and
-'src/client/simple-client' on several clients that can access the
-server machine 'server-host'. If that doesn't work (if Avahi broadasts are
-broken, pass the server-host name explicitly as a parameter to simple-client).
+Then, run src/aurena-server on one machine, and
+'src/aurena-simple-client' (or one of the other client apps in src/) on
+several clients that can access the server machine 'server-host'. The clients
+should auto-detect the server. If that doesn't work (if Avahi broadasts are
+broken) pass the server-host name explicitly as a parameter to
+aurena-simple-client.
+
 For control, hit http://server-host:5457/
 
 Notes/future ideas:

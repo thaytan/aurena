@@ -4,7 +4,16 @@ all receivers, similar to some (expensive) commercial systems.
 
 To use this, just build it in the usual autoconf-ey way (configure && make)
 
-Then, run src/aurena-server on one machine, and
+Building the clients requires GLib/GObject > 2.30, avahi-client and
+avahi-glib > 0.6.24, json-glib-1.0 and libsoup >= 2.26.1, as well as
+GStreamer 1.0 and gst-plugins-base libs. The GUI clients also require GTK+ 3.0
+
+To build the server binary, you additionally need sqlite >= 3.3, and
+a slightly newer GLib (>=2.32) and libsoup (> 2.48). You only need the server
+on one machine that will host the media files. Only a client app is needed
+on the receivers.
+
+After building, run src/aurena-server on one machine, and
 'src/aurena-simple-client' (or one of the other client apps in src/) on
 several clients that can access the server machine 'server-host'. The clients
 should auto-detect the server. If that doesn't work (if Avahi broadasts are

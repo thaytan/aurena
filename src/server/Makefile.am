@@ -18,5 +18,10 @@ libaurena_server_la_SOURCES = \
     aur-server-client.c \
     aur-server-client.h
 
+if USE_RTSP
+libaurena_server_la_SOURCES += aur-rtsp-media.c \
+    aur-rtsp-media.h
+endif
+
 libaurena_server_la_CPPFLAGS = -I$(top_srcdir) $(AUR_COMMON_CFLAGS) $(GST_CFLAGS) $(GST_RTSP_CFLAGS) $(EXTRA_CFLAGS)
 libaurena_server_la_LIBADD  =

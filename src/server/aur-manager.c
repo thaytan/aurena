@@ -40,8 +40,15 @@
 #include "aur-server.h"
 #include "aur-server-client.h"
 
+#ifdef HAVE_GST_RTSP
+#include "aur-rtsp-media.h"
+#endif
+
 /* Set to 0 to walk the playlist linearly */
 #define RANDOM_SHUFFLE 1
+
+/* FIXME: Adjust client latency as needed */
+#define CLIENT_LATENCY (GST_SECOND / 30)
 
 enum
 {
@@ -95,7 +102,17 @@ static const struct
 
 static const gint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
 
-G_DEFINE_TYPE (AurManager, aur_manager, G_TYPE_OBJECT);
+GST_DEBUG_CATEGORY_STATIC (aur_manager_debug);
+#define GST_CAT_DEFAULT aur_manager_debug
+
+static void
+init_debug ()
+{
+  GST_DEBUG_CATEGORY_INIT (aur_manager_debug, "aurena::manager", 0,
+     "Aurena Manager object debug");
+}
+
+G_DEFINE_TYPE_WITH_CODE (AurManager, aur_manager, G_TYPE_OBJECT, init_debug() );
 
 static void aur_manager_dispose (GObject * object);
 static void aur_manager_finalize (GObject * object);
@@ -168,7 +185,7 @@ create_rtsp_server (G_GNUC_UNUSED AurManager * mgr)
   /* ERRORS */
 failed:
   {
-    g_print ("failed to attach the server\n");
+    GST_ERROR_OBJECT (mgr, "failed to attach the server");
     gst_object_unref (server);
     return NULL;
   }
@@ -260,7 +277,7 @@ manager_player_client_disconnect (AurServerClient * client,
   if (item) {
     AurPlayerInfo *info = (AurPlayerInfo *)(item->data);
 
-    g_print ("Disconnecting player client %u\n", info->id);
+    GST_INFO_OBJECT (manager, "Disconnecting player client %u", info->id);
 
     g_object_unref (client);
     info->conn = NULL;
@@ -276,7 +293,7 @@ manager_ctrl_client_disconnect (AurServerClient * client,
 {
   GList *item = g_list_find (manager->ctrl_clients, client);
   if (item) {
-    g_print ("Removing control client %u\n", client->conn_id);
+    GST_INFO_OBJECT (manager, "Removing control client %u", client->conn_id);
     g_object_unref (client);
     manager->ctrl_clients = g_list_delete_link (manager->ctrl_clients, item);
   }
@@ -314,6 +331,9 @@ send_enrol_events (AurManager * manager, AurServerClient * client,
       manager_make_enrol_msg (manager, info));
 
   if (manager->current_resource) {
+    GST_DEBUG_OBJECT (manager, "Enrolling client on connection %u",
+        client->conn_id);
+
     manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL,
         manager_make_set_media_msg (manager, manager->current_resource));
   }
@@ -378,11 +398,11 @@ get_player_info_for_client (AurManager *manager, AurServerClient *client)
     info->enabled = manager->paused;
     manager->player_info = entry = g_list_prepend (manager->player_info, info);
 
-    g_print ("New player id %u\n", info->id);
+    GST_INFO_OBJECT (manager, "New player id %u", info->id);
   }
   else {
     info = (AurPlayerInfo *)(entry->data);
-    g_print ("Player id %u rejoining\n", info->id);
+    GST_INFO_OBJECT (manager, "Player id %u rejoining", info->id);
   }
 
   info->conn = client;
@@ -548,7 +568,7 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
       const gchar *id_str = find_param_str ("id", query, post_params);
       guint resource_id;
 
-      g_print ("Next ID %s\n", id_str);
+      GST_INFO_OBJECT (manager, "Next track to play is %s\n", id_str);
 
       /* Accept two forms of ID. If the ID can be parsed as an integer, use it
        * to look up a file in the media DB and enqueue that. Otherwise, treat
@@ -820,38 +840,30 @@ aur_manager_get_property (GObject * object, guint prop_id,
 
 #ifdef HAVE_GST_RTSP
 static void
-rtsp_media_prepared (GstRTSPMedia * media, G_GNUC_UNUSED AurManager * mgr)
-{
-  g_object_set (media->rtpbin, "use-pipeline-clock", TRUE, NULL);
-}
-
-static void
-new_stream_constructed_cb (G_GNUC_UNUSED GstRTSPMediaFactory * factory,
-    GstRTSPMedia * media, AurManager * mgr)
-{
-  g_print ("Media constructed: %p\n", media);
-  g_signal_connect (media, "prepared", G_CALLBACK (rtsp_media_prepared), mgr);
-}
-
-static void
 add_rtsp_uri (AurManager * manager, guint resource_id,
     const gchar * source_uri)
 {
-  GstRTSPMediaMapping *mapping;
+  GstRTSPMountPoints *mount;
   GstRTSPMediaFactoryURI *factory;
   gchar *rtsp_uri = g_strdup_printf ("/resource/%u", resource_id);
+  GstClock *clock;
 
-  mapping = gst_rtsp_server_get_media_mapping (manager->rtsp);
-  factory = gst_rtsp_media_factory_uri_new ();
+  mount = gst_rtsp_server_get_mount_points (manager->rtsp);
+  g_object_get (manager->net_clock, "clock", &clock, NULL);
+  factory = aur_rtsp_media_factory_uri_new (clock);
+
+  GST_DEBUG_OBJECT (manager, "Registering RTSP path %s for %s",
+     rtsp_uri, source_uri);
+
   /* Set up the URI, and set as shared (all viewers see the same stream) */
   gst_rtsp_media_factory_uri_set_uri (factory, source_uri);
   gst_rtsp_media_factory_set_shared (GST_RTSP_MEDIA_FACTORY (factory), TRUE);
-  g_signal_connect (factory, "media-constructed",
-      G_CALLBACK (new_stream_constructed_cb), manager);
+  gst_rtsp_media_factory_set_media_gtype (GST_RTSP_MEDIA_FACTORY (factory),
+      AUR_TYPE_RTSP_MEDIA);
   /* attach the test factory to the test url */
-  gst_rtsp_media_mapping_add_factory (mapping, rtsp_uri,
+  gst_rtsp_mount_points_add_factory (mount, rtsp_uri,
       GST_RTSP_MEDIA_FACTORY (factory));
-  g_object_unref (mapping);
+  g_object_unref (mount);
 
   g_free (rtsp_uri);
 }
@@ -905,6 +917,7 @@ aur_manager_new (const char *config_file)
   AurConfig *config;
   AurManager *manager;
   gchar *playlist_file;
+  gint i;
 
   config = aur_config_new (config_file);
   if (config == NULL)
@@ -918,14 +931,14 @@ aur_manager_new (const char *config_file)
     g_free (playlist_file);
   }
 
-  if (get_playlist_len (manager)) {
 #ifdef HAVE_GST_RTSP
+  for (i = get_playlist_len (manager); i > 0; i--) {
     char *rtsp_uri = g_strdup_printf ("file://%s",
-        (gchar *) (g_ptr_array_index (manager->playlist, 0)));
-    add_rtsp_uri (manager, 1, rtsp_uri);
+        (gchar *) (g_ptr_array_index (manager->playlist, i-1)));
+    add_rtsp_uri (manager, i, rtsp_uri);
     g_free (rtsp_uri);
-#endif
   }
+#endif
 
   aur_server_start (manager->server);
 
@@ -953,7 +966,7 @@ aur_manager_get_resource_cb (G_GNUC_UNUSED AurServer * server,
     return NULL;
 
   file_uri = g_file_get_uri (file);
-  g_print ("Creating resource %u for %s\n", resource_id, file_uri);
+  GST_DEBUG_OBJECT (manager, "Creating resource %u for %s", resource_id, file_uri);
   g_free (file_uri);
 
   ret = g_object_new (AUR_TYPE_HTTP_RESOURCE, "source-file", file, NULL);
@@ -969,6 +982,8 @@ aur_manager_play_resource (AurManager * manager, guint resource_id)
   manager->base_time = GST_CLOCK_TIME_NONE;
   manager->position = 0;
 
+  GST_DEBUG_OBJECT (manager, "Playing resource %u", resource_id);
+
   manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_ALL,
       manager_make_set_media_msg (manager, manager->current_resource));
 }
@@ -981,12 +996,13 @@ aur_manager_send_play (AurManager * manager, AurServerClient * client)
 
   /* Update base time to match length of time paused */
   g_object_get (manager->net_clock, "clock", &clock, NULL);
-  manager->base_time = gst_clock_get_time (clock) - manager->position + (GST_SECOND / 30);
+  manager->base_time = gst_clock_get_time (clock) - manager->position + CLIENT_LATENCY;
   gst_object_unref (clock);
   manager->position = 0;
 
   msg = gst_structure_new ("json",
       "msg-type", G_TYPE_STRING, "play",
+      "latency", G_TYPE_INT64, (gint64)(CLIENT_LATENCY),
       "base-time", G_TYPE_INT64, (gint64) (manager->base_time), NULL);
 
   manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL, msg);
@@ -1005,7 +1021,7 @@ aur_manager_send_pause (AurManager * manager, AurServerClient * client)
 
   /* Calculate how much of the current file we played up until now, and store */
   manager->position = now - manager->base_time + (GST_SECOND / 30);
-  g_print ("Storing position %" GST_TIME_FORMAT "\n",
+  GST_INFO_OBJECT (manager, "Pausing - storing position %" GST_TIME_FORMAT,
       GST_TIME_ARGS (manager->position));
 
   msg = gst_structure_new ("json",
@@ -1138,6 +1154,8 @@ manager_make_set_media_msg (AurManager * manager, guint resource_id)
   gchar *resource_path;
   GstStructure *msg;
   gint port;
+#if HAVE_GST_RTSP
+#endif
 
   g_object_get (manager->net_clock, "clock", &clock, NULL);
   cur_time = gst_clock_get_time (clock);
@@ -1149,12 +1167,12 @@ manager_make_set_media_msg (AurManager * manager, guint resource_id)
     // configure a base time 0.25 seconds in the future
     manager->base_time = cur_time + (GST_SECOND / 4);
     manager->position = 0;
-    g_print ("Base time now %" G_GUINT64_FORMAT "\n", manager->base_time);
+    GST_LOG_OBJECT (manager, "Base time now %" G_GUINT64_FORMAT, manager->base_time);
   }
-#if 1
-  g_object_get (manager->config, "aur-port", &port, NULL);
-#else
+#if HAVE_GST_RTSP
   g_object_get (manager->config, "rtsp-port", &port, NULL);
+#else
+  g_object_get (manager->config, "aur-port", &port, NULL);
 #endif
 
   /* Calculate position if currently playing */
@@ -1165,15 +1183,16 @@ manager_make_set_media_msg (AurManager * manager, guint resource_id)
 
   msg = gst_structure_new ("json", "msg-type", G_TYPE_STRING, "set-media",
       "resource-id", G_TYPE_INT64, (gint64) resource_id,
-#if 1
-      "resource-protocol", G_TYPE_STRING, "http",
+#if HAVE_GST_RTSP
+      "resource-protocol", G_TYPE_STRING, "rtsp",
       "resource-port", G_TYPE_INT, port,
 #else
-      "resource-protocol", G_TYPE_STRING, "rtsp",
+      "resource-protocol", G_TYPE_STRING, "http",
       "resource-port", G_TYPE_INT, port,
 #endif
       "resource-path", G_TYPE_STRING, resource_path,
       "base-time", G_TYPE_INT64, (gint64) (manager->base_time),
+      "latency", G_TYPE_INT64, (gint64)(CLIENT_LATENCY),
       "position", G_TYPE_INT64, (gint64) (position),
       "paused", G_TYPE_BOOLEAN, manager->paused,
       "language", G_TYPE_STRING, manager->language, NULL);

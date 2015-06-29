@@ -47,7 +47,17 @@
 #include "src/common/aur-json.h"
 #include "aur-client.h"
 
-G_DEFINE_TYPE (AurClient, aur_client, G_TYPE_OBJECT);
+GST_DEBUG_CATEGORY_STATIC (aur_client_debug);
+#define GST_CAT_DEFAULT aur_client_debug
+
+static void
+init_debug ()
+{
+  GST_DEBUG_CATEGORY_INIT (aur_client_debug, "aurena::client", 0,
+     "Aurena Client object debug");
+}
+
+G_DEFINE_TYPE_WITH_CODE (AurClient, aur_client, G_TYPE_OBJECT, init_debug());
 
 #if defined(ANDROID) && defined(NDK_DEBUG)
 #define g_print(...) __android_log_print(ANDROID_LOG_ERROR, "aurena", __VA_ARGS__)
@@ -272,6 +282,8 @@ handle_player_enrol_message (AurClient * client, GstStructure * s)
       gst_object_unref (client->net_clock);
     client->net_clock = gst_net_client_clock_new ("net_clock", server_ip_str,
         clock_port, cur_time);
+    gst_clock_wait_for_sync (client->net_clock, GST_CLOCK_TIME_NONE);
+
     g_free (server_ip_str);
   }
 
@@ -295,6 +307,19 @@ on_error_msg (G_GNUC_UNUSED GstBus * bus, GstMessage * msg,
 }
 
 static void
+source_created (GstElement * pipe G_GNUC_UNUSED, GstElement * source, AurClient *client)
+{
+  if (client->is_rtsp) {
+    GST_LOG_OBJECT (client, "Configuring RTSP latency %" GST_TIME_FORMAT,
+      GST_TIME_ARGS (client->latency));
+
+    g_object_set (source, "latency", client->latency / GST_MSECOND,
+        "ntp-time-source", 3, "buffer-mode", 4, "ntp-sync", TRUE, NULL);
+  }
+}
+
+
+static void
 construct_player (AurClient * client)
 {
   GstBus *bus;
@@ -312,6 +337,8 @@ construct_player (AurClient * client)
   /* Disable subtitles for now */
   flags &= ~0x00000004;
   g_object_set (client->player, "flags", flags, NULL);
+  g_signal_connect_data (client->player, "source-setup", G_CALLBACK (source_created),
+      g_object_ref (client), (GClosureNotify) g_object_unref, 0);
 
   bus = gst_element_get_bus (GST_ELEMENT (client->player));
 
@@ -383,34 +410,42 @@ set_media (AurClient * client)
       client->paused);
   g_object_set (client->player, "uri", client->uri, NULL);
 
-  gst_element_set_start_time (client->player, GST_CLOCK_TIME_NONE);
   gst_pipeline_use_clock (GST_PIPELINE (client->player), client->net_clock);
-
-  /* Do the preroll */
-  gst_element_set_state (client->player, GST_STATE_PAUSED);
-  gst_element_get_state (client->player, NULL, NULL, GST_CLOCK_TIME_NONE);
-
-  /* Compensate preroll time if playing */
-  if (!client->paused) {
-    GstClockTime now = gst_clock_get_time (client->net_clock);
-    if (now > (client->base_time + client->position))
-      client->position = now - client->base_time;
+  if (client->base_time == GST_CLOCK_TIME_NONE) {
+    GST_INFO_OBJECT (client, "Setting playback for live-synced streaming");
+    gst_element_set_start_time (client->player, 0);
+    gst_element_set_base_time (client->player, GST_CLOCK_TIME_NONE);
+    gst_pipeline_set_latency (GST_PIPELINE (client->player), client->latency + (500 * GST_MSECOND));
   }
-
-  /* If position is off by more than 0.5 sec, seek to that position
-   * (otherwise, just let the player skip) */
-  if (client->position > GST_SECOND/2) {
-    /* FIXME Query duration, so we don't seek after EOS */
-    if (!gst_element_seek_simple (client->player, GST_FORMAT_TIME,
-            GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, client->position)) {
-      g_warning ("Initial seekd failed, player will go faster instead");
-      client->position = 0;
+  else {
+    /* Do the preroll */
+    gst_element_set_state (client->player, GST_STATE_PAUSED);
+    gst_element_get_state (client->player, NULL, NULL, GST_CLOCK_TIME_NONE);
+  
+    /* Compensate preroll time if playing */
+    if (!client->paused) {
+      GstClockTime now = gst_clock_get_time (client->net_clock);
+      if (now > (client->base_time + client->position))
+        client->position = now - client->base_time;
     }
-  }
 
-  /* Set base time considering seek position after seek */
-  gst_element_set_base_time (client->player,
-      client->base_time + client->position);
+    /* If position is off by more than 0.5 sec, seek to that position
+     * (otherwise, just let the player skip) */
+    if (client->position > GST_SECOND/2) {
+      /* FIXME Query duration, so we don't seek after EOS */
+      if (!gst_element_seek_simple (client->player, GST_FORMAT_TIME,
+              GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, client->position)) {
+        g_warning ("Initial seekd failed, player will go faster instead");
+        client->position = 0;
+      }
+    }
+
+    /* Set base time considering seek position after seek */
+    gst_element_set_start_time (client->player, GST_CLOCK_TIME_NONE);
+    gst_element_set_base_time (client->player,
+        client->base_time + client->position);
+    gst_pipeline_set_latency (GST_PIPELINE (client->player), GST_CLOCK_TIME_NONE);
+  }
 
   /* Before we start playing, ensure we have selected the right audio track */
   set_language (client);
@@ -435,9 +470,18 @@ handle_player_set_media_message (AurClient * client, GstStructure * s)
   if (!aur_json_structure_get_int (s, "resource-port", &port))
     return;
 
-  if (!aur_json_structure_get_int64 (s, "base-time", &tmp))
+  client->is_rtsp = g_str_equal (protocol, "rtsp");
+  if (client->is_rtsp) {
+    client->base_time = GST_CLOCK_TIME_NONE;
+  } else {
+    if (!aur_json_structure_get_int64 (s, "base-time", &tmp))
+      return;                     /* Invalid message */
+    client->base_time = (GstClockTime) (tmp);
+  }
+
+  if (!aur_json_structure_get_int64 (s, "latency", &tmp))
     return;                     /* Invalid message */
-  client->base_time = (GstClockTime) (tmp);
+  client->latency = (GstClockTime) (tmp);
 
   if (!aur_json_structure_get_int64 (s, "position", &tmp))
     return;                     /* Invalid message */
@@ -476,8 +520,19 @@ handle_player_play_message (AurClient * client, GstStructure * s)
     g_print ("Playing base_time %" GST_TIME_FORMAT " (position %"
         GST_TIME_FORMAT ")\n", GST_TIME_ARGS (client->base_time),
         GST_TIME_ARGS (client->position));
-    gst_element_set_base_time (GST_ELEMENT (client->player),
-        client->base_time + client->position);
+
+    if (client->base_time != GST_CLOCK_TIME_NONE) {
+      gst_element_set_start_time (client->player, GST_CLOCK_TIME_NONE);
+      gst_element_set_base_time (client->player,
+          client->base_time + client->position);
+      gst_pipeline_set_latency (GST_PIPELINE (client->player), GST_CLOCK_TIME_NONE);
+    }
+    else {
+      GST_INFO_OBJECT (client, "Setting playback for live-synced streaming");
+      gst_element_set_start_time (client->player, 0);
+      gst_element_set_base_time (client->player, GST_CLOCK_TIME_NONE);
+      gst_pipeline_set_latency (GST_PIPELINE (client->player), client->latency +  50 * GST_MSECOND);
+    }
 
     gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PLAYING);
   }

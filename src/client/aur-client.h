@@ -66,7 +66,9 @@ struct _AurClient
   gboolean enabled;
   gboolean paused;
   GstClockTime base_time;
+  GstClockTime latency;
   GstClockTime position;
+  gboolean is_rtsp;
   gchar *uri;
   gchar *language;
 

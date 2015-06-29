@@ -46,9 +46,13 @@ sigint_handler (G_GNUC_UNUSED void *data)
 static gboolean
 print_position (gpointer user_data)
 {
-  GstElement * player = user_data;
+  AurClient *client = (AurClient *)user_data;
+  GstElement * player = client->player;
   GstFormat format = GST_FORMAT_TIME;
   gint64 pos;
+
+  if (!aur_client_is_playing (client))
+    goto end;
 
   if (gst_element_query_position (player, format, &pos)) {
     GstClock * clock;
@@ -105,7 +109,7 @@ player_created (G_GNUC_UNUSED AurClient *client, GstElement * player)
   GstBus *bus;
   guint timeout;
 
-  timeout = g_timeout_add_seconds (1, print_position, player);
+  timeout = g_timeout_add_seconds (1, print_position, client);
   g_object_weak_ref (G_OBJECT (player), player_disposed,
       GUINT_TO_POINTER (timeout));
 

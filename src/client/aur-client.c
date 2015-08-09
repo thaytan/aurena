@@ -521,7 +521,7 @@ handle_player_play_message (AurClient * client, GstStructure * s)
         GST_TIME_FORMAT ")\n", GST_TIME_ARGS (client->base_time),
         GST_TIME_ARGS (client->position));
 
-    if (client->base_time != GST_CLOCK_TIME_NONE) {
+    if (FALSE && client->base_time != GST_CLOCK_TIME_NONE) {
       gst_element_set_start_time (client->player, GST_CLOCK_TIME_NONE);
       gst_element_set_base_time (client->player,
           client->base_time + client->position);
@@ -529,9 +529,9 @@ handle_player_play_message (AurClient * client, GstStructure * s)
     }
     else {
       GST_INFO_OBJECT (client, "Setting playback for live-synced streaming");
-      gst_element_set_start_time (client->player, 0);
-      gst_element_set_base_time (client->player, GST_CLOCK_TIME_NONE);
-      gst_pipeline_set_latency (GST_PIPELINE (client->player), client->latency +  50 * GST_MSECOND);
+      //gst_element_set_start_time (client->player, 0);
+      //gst_element_set_base_time (client->player, GST_CLOCK_TIME_NONE);
+      //gst_pipeline_set_latency (GST_PIPELINE (client->player), client->latency +  50 * GST_MSECOND);
     }
 
     gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PLAYING);
@@ -557,11 +557,13 @@ handle_player_pause_message (AurClient * client, GstStructure * s)
     g_print ("Pausing at position %" GST_TIME_FORMAT "\n",
         GST_TIME_ARGS (client->position));
     gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PAUSED);
+#if 0
     if (!gst_element_seek_simple (client->player, GST_FORMAT_TIME,
             GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, client->position)) {
       g_warning ("Pausing seek failed");
       client->position = old_position;
     }
+#endif
   }
 
   g_object_notify (G_OBJECT (client), "paused");

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="description" content="Aurena : Aurena distributed media player">
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>Aurena</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/thaytan/aurena">View on GitHub</a>
+
+          <h1 id="project_title">Aurena</h1>
+          <h2 id="project_tagline">Aurena distributed media player</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/thaytan/aurena/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/thaytan/aurena/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <p>Aurena is a network distributed media playback system. It provides 
+a server for media content, and clients for synchronised playback across
+all receivers, similar to some (expensive) commercial systems.</p>
+
+<p>To use this, just build it in the usual autoconf-ey way (configure &amp;&amp; make)</p>
+
+<p>Building the clients requires GLib/GObject &gt; 2.30, avahi-client and
+avahi-glib &gt; 0.6.24, json-glib-1.0 and libsoup &gt;= 2.26.1, as well as
+GStreamer 1.0 and gst-plugins-base libs. The GUI clients also require GTK+ 3.0</p>
+
+<p>To build the server binary, you additionally need sqlite &gt;= 3.3, and
+a slightly newer GLib (&gt;=2.32) and libsoup (&gt; 2.48). You only need the server
+on one machine that will host the media files. Only a client app is needed
+on the receivers.</p>
+
+<p>After building, run src/aurena-server on one machine, and
+'src/aurena-simple-client' (or one of the other client apps in src/) on
+several clients that can access the server machine 'server-host'. The clients
+should auto-detect the server. If that doesn't work (if Avahi broadasts are
+broken) pass the server-host name explicitly as a parameter to
+aurena-simple-client.</p>
+
+<p>For control, hit http://server-host:5457/</p>
+
+<p>Notes/future ideas:</p>
+
+<p><em>) media library with metadata - see available songs
+*) Multiple zones, ability to move players between zones
+*</em>) pause zone when 0 players online</p>
+
+<ul>
+<li>daemon portion - http + rtsp + network clock source
+
+<ul>
+<li>avahi announcements</li>
+<li>base time distribution</li>
+<li>http = libsoup</li>
+<li>network clock source = gst</li>
+<li>rtsp = gst-rtsp-server</li>
+</ul>
+</li>
+<li>player
+
+<ul>
+<li>playbin wrapper that does rtsp or http + network clock subscription
+and follows remote volume control, pause/play etc.</li>
+</ul>
+</li>
+</ul>
+
+<h1>
+<a id="security" class="anchor" href="#security" aria-hidden="true"><span class="octicon octicon-link"></span></a>Security</h1>
+
+<p>Very little effort has been put into making the server secure. It allows
+making clients play any arbitrary http URI. No authentication is required
+for clients to connect.</p>
+
+<p>This software should only ever be run on a private network, where all software
+running on the network and its clients is trusted.</p>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">Aurena maintained by <a href="https://github.com/thaytan">thaytan</a></p>
+        <p>Published with <a href="https://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>

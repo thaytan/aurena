@@ -1,3 +1,4 @@
+SUBDIRS=mic
 noinst_PROGRAMS = clock-server clock-receiver clock-bouncer
 
 clock_server_CPPFLAGS = -I$(top_srcdir) $(GST_CFLAGS) $(AUR_COMMON_CFLAGS) $(EXTRA_CFLAGS)

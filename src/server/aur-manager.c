@@ -875,6 +875,9 @@ read_playlist_file (AurManager * manager, const char *filename)
 
   do {
     GFile *file;
+#if GST_DISABLE_GST_DEBUG
+    gchar *uri;
+#endif
 
     result = g_io_channel_read_line (io, &line, NULL, NULL, NULL);
     if (result == G_IO_STATUS_AGAIN)
@@ -888,6 +891,11 @@ read_playlist_file (AurManager * manager, const char *filename)
      * old-style playlist files, respectively. g_file_new_for_commandline_arg()
      * doesn't care. */
     file = g_file_new_for_commandline_arg (line);
+#if GST_DISABLE_GST_DEBUG
+    uri = g_file_get_uri (file);
+    GST_LOG ("Scanning file %s\n", uri);
+    g_free (uri);
+#endif
     aur_media_db_add_file (manager->media_db, file);
     g_object_unref (file);
   } while (TRUE);

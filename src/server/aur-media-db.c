@@ -367,7 +367,7 @@ aur_media_db_get_file_by_id (AurMediaDB * media_db, guint id)
           "limit 1", -1, &stmt, NULL) != SQLITE_OK)
     goto done;
 
-  if (sqlite3_bind_int64 (stmt, 1, id - 1) != SQLITE_OK)
+  if (sqlite3_bind_int64 (stmt, 1, id) != SQLITE_OK)
     goto done;
 
   if (sqlite3_step (stmt) == SQLITE_ROW) {

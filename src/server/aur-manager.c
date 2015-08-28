@@ -935,7 +935,10 @@ aur_manager_new (const char *config_file)
 #endif
   }
 
-  aur_server_start (manager->server);
+  if (!aur_server_start (manager->server)) {
+    g_object_unref (manager);
+    return NULL;
+  }
 
   return manager;
 }

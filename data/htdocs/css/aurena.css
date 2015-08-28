@@ -1,22 +1,39 @@
 body {
   background-color: #000000;
+  font-family: "Myriad Pro",Calibri,Helvetica,Arial,sans-serif;
 }
 
 #player {
   width: 640;
   background-color: #101010;
-  padding: 10px 15px;
   color: white;
   position: relative;
 }
 
-#header { font-size: 130%; display: inline; }
-#connstatus { position: absolute; right: 10px; top: 0px; }
+#header { font-size: 120%; }
+#logo { display: block; position: relative; padding: 5px 0px 0px 0px; }
+
+#connstatus { display: block;
+z-index: 10;
+margin: 0px;
+padding: 3px 10px 3px 10px;
+color: #FFF;
+background: #da532c;
+box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.5);
+border-bottom-left-radius: 2px;
+border-bottom-right-radius: 2px;
+position: absolute;
+right: 10px; top: 0px;
+}
+
 #playstate { display: inline; margin: 10px; }
 #mastervollabel, #mastervolval { display: inline; }
 #mastervol, .inline { display: inline; padding-top: 10px; margin: 10px; }
 #mastervolslider, #nowplayingdiv { display: inline-block; width: 80%; }
 #nowplayingdiv { padding-top: 15px; }
-#controls { margin: 10px; }
+#controls { margin: 10px;
+  padding: 10px 15px;
+}
+#clients, #playlist { padding-left: 10px; }
 
 #debug { display: none; }

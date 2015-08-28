@@ -53,7 +53,7 @@ struct _AurServerClass
 GType aur_server_get_type(void);
 
 void aur_server_set_resource_callback (AurServer *server, void *userdata);
-void aur_server_start (AurServer *server);
+gboolean aur_server_start (AurServer *server);
 void aur_server_stop (AurServer *server);
 void aur_server_set_resource_cb (AurServer *server, 
   AurHttpResource *(*get_resource)(AurServer *server, guint resource_id, void *cb_data), void *userdata);

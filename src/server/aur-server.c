@@ -72,18 +72,6 @@ aur_soup_message_set_redirect (SoupMessage * msg, guint status_code,
   soup_uri_free (location);
 }
 
-static void
-server_fallback_cb (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
-    G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable * query,
-    G_GNUC_UNUSED SoupClientContext * client, G_GNUC_UNUSED AurServer * server)
-{
-  if (g_str_equal (path, "/")) {
-    aur_soup_message_set_redirect (msg, SOUP_STATUS_MOVED_PERMANENTLY, "/ui/");
-  } else {
-    soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
-  }
-}
-
 static AurHttpResource *
 aur_server_get_resource (AurServer * server, guint resource_id)
 {
@@ -117,7 +105,7 @@ server_resource_cb (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
   if (resource == NULL)
     goto error;
 
-  g_print ("Hit on resource %u\n", resource_id);
+  GST_DEBUG_OBJECT (server, "Hit on resource %u\n", resource_id);
   aur_http_resource_new_transfer (resource, msg);
 
   return;
@@ -125,90 +113,95 @@ error:
   soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
 }
 
-static gchar *
+static GFile *
 get_data_filename (const gchar *basename)
 {
   const gchar * const * dirs;
   gchar *filepath = NULL;
+  GFile *file;
   gint i;
 
   dirs = g_get_system_data_dirs ();
 
+  /* Look in system paths for the file */
   for (i = 0; dirs[i] != NULL; i++) {
-    GFile *file;
-
     filepath = g_build_filename (dirs[i], "aurena", "htdocs", basename, NULL);
-    g_print ("looking for %s\n", filepath);
     file = g_file_new_for_path (filepath);
-    if (g_file_query_exists (file, NULL)) {
-      g_object_unref (file);
+    g_free (filepath);
+
+    if (g_file_query_exists (file, NULL))
       break;
-    }
 
     g_object_unref (file);
-    g_free (filepath);
-    filepath = NULL;
+    file = NULL;
   }
 
-  if (!filepath) {
-    GFile *file;
-
+  /* Check uninstalled */
+  if (file == NULL) {
     filepath = g_build_filename (g_get_current_dir (), "data", "htdocs", basename, NULL);
-    g_print ("looking for %s\n", filepath);
     file = g_file_new_for_path (filepath);
     if (!g_file_query_exists (file, NULL)) {
-      g_free (filepath);
-      filepath = NULL;
+      g_object_unref (file);
+      file = NULL;
     }
-    g_object_unref (file);
+    g_free (filepath);
   }
 
-  return filepath;
+  if (file &&
+      g_file_query_file_type (file, G_FILE_QUERY_INFO_NONE, NULL) == G_FILE_TYPE_DIRECTORY) {
+    GFile *tmp = g_file_get_child (file, "index.html");
+    g_object_unref (file);
+    file = tmp;
+  }
+
+  return file;
 }
 
 static void
-server_ui_cb (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
+server_file_cb (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
     const char *path, G_GNUC_UNUSED GHashTable * query,
     G_GNUC_UNUSED SoupClientContext * client, G_GNUC_UNUSED AurServer * server)
 {
-  const gchar *file_path;
-  gchar *filename = NULL;
+  gchar *file_path = NULL;
+  GFile *filename = NULL;
   gchar *contents;
   gsize size;
   const gchar *mime_type;
 
-  if (!g_str_has_prefix (path, "/ui"))
+  GST_LOG_OBJECT (server, "Request for path %s", path);
+
+  if (!g_str_has_prefix (path, "/"))
     goto fail;
 
-  file_path = path + 3;
-
-  if (strstr (file_path, "/.."))
-    goto fail;
-
-  if (g_str_equal (file_path, "")) {
+  if (path[1] == '\0') {
     aur_soup_message_set_redirect (msg, SOUP_STATUS_MOVED_PERMANENTLY, "/ui/");
     return;
   }
 
-  if (g_str_equal (file_path, "/"))
-    file_path = "/index.html";
-
-  filename = get_data_filename (file_path);
-
-  if (!g_file_get_contents (filename, &contents, &size, NULL))
+  filename = get_data_filename (path + 1);
+  if (filename == NULL)
     goto fail;
 
-  mime_type = aur_resource_get_mime_type (filename);
-  g_print ("Returning %s - %s\n", mime_type, filename);
+  file_path = g_file_get_path (filename);
+  if (!g_file_get_contents (file_path, &contents, &size, NULL)) {
+    g_free (file_path);
+    goto fail;
+  }
+
+  g_object_unref (filename);
+  filename = NULL;
+
+  mime_type = aur_resource_get_mime_type (file_path);
+  GST_LOG_OBJECT (server, "Returning %s - %s", mime_type, file_path);
+
+  g_free (file_path);
 
   soup_message_set_response (msg, mime_type, SOUP_MEMORY_TAKE, contents, size);
   soup_message_set_status (msg, SOUP_STATUS_OK);
 
-  g_free (filename);
   return;
 
 fail:
-  g_free (filename);
   soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
 }
 
@@ -235,10 +228,7 @@ aur_server_constructed (GObject * object)
   server->soup = soup_server_new (NULL, NULL);
 
   soup_server_add_handler (server->soup, "/",
-      (SoupServerCallback) server_fallback_cb,
-      g_object_ref (server), g_object_unref);
-  soup_server_add_handler (server->soup, "/ui",
-      (SoupServerCallback) server_ui_cb, g_object_ref (server), g_object_unref);
+      (SoupServerCallback) server_file_cb, g_object_ref (server), g_object_unref);
 
   soup_server_add_handler (server->soup, "/resource",
       (SoupServerCallback) server_resource_cb,
@@ -334,13 +324,13 @@ aur_server_get_property (GObject * object, guint prop_id,
   }
 }
 
-void
+gboolean
 aur_server_start (AurServer * server)
 {
   gint port;
 
   g_object_get (server->config, "aur-port", &port, NULL);
-  soup_server_listen_all (server->soup, port, 0, NULL);
+  return soup_server_listen_all (server->soup, port, 0, NULL);
 }
 
 void

@@ -16,7 +16,7 @@ websocket_listener : function()
 
      ws.onopen = function()
      {
-        $("#connstatus").html("Connected");
+        $("#connstatus").hide();
      };
      ws.onmessage = function (evt)
      {
@@ -28,7 +28,7 @@ websocket_listener : function()
      };
      ws.onclose = function()
      {
-        $("#connstatus").html("Disconnected");
+        $("#connstatus").html("Disconnected").show();
         aurena.ws = null;
         setTimeout(aurena.websocket_listener, 1000);
      };

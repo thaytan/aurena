@@ -10,8 +10,11 @@ body {
   position: relative;
 }
 
-#header { font-size: 120%; }
-#logo { display: block; position: relative; padding: 5px 0px 0px 0px; }
+#header {
+  font-size: 120%; background-color: #555560;
+  border-radius: 4px;
+}
+#logo { display: block; position: relative; padding: 5px 0px 10px 0px; margin: 0 auto; }
 
 #connstatus { display: block;
 z-index: 10;
@@ -31,8 +34,8 @@ right: 10px; top: 0px;
 #mastervol, .inline { display: inline; padding-top: 10px; margin: 10px; }
 #mastervolslider, #nowplayingdiv { display: inline-block; width: 80%; }
 #nowplayingdiv { padding-top: 15px; }
-#controls { margin: 10px;
-  padding: 10px 15px;
+#controls { margin: 10px auto; width: 50%;
+  padding: 10px 15px 10px 155px;
 }
 #clients, #playlist { padding-left: 10px; }
 

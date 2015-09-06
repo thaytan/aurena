@@ -32,8 +32,8 @@
 #include <json-glib/json-glib.h>
 
 #include <src/common/aur-json.h>
+#include <src/common/aur-config.h>
 
-#include "aur-config.h"
 #include "aur-http-resource.h"
 #include "aur-manager.h"
 #include "aur-media-db.h"

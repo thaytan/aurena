@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2015 Jan Schmidt <thaytan@noraisin.net>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -16,13 +16,15 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  */
-#ifndef __AUR_TYPES_H__
-#define __AUR_TYPES_H__
+#ifndef __AUR_CLIENT_TYPES_H__
+#define __AUR_CLIENT_TYPES_H__
 
 #include <glib.h>
+#include <src/common/aur-types.h>
 
 G_BEGIN_DECLS
 
+typedef struct _AurClient AurClient;
 typedef struct _AurConfig AurConfig;
 
 G_END_DECLS

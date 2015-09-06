@@ -32,7 +32,7 @@
 #include <avahi-glib/glib-watch.h>
 #endif
 
-#include "src/common/aur-types.h"
+#include <src/client/aur-client-types.h>
 
 G_BEGIN_DECLS
 

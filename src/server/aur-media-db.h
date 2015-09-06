@@ -25,7 +25,7 @@
 #include <gio/gio.h>
 #include <sqlite3.h>
 
-#include <src/common/aur-types.h>
+#include <src/server/aur-server-types.h>
 
 G_BEGIN_DECLS
 

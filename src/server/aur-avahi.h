@@ -22,7 +22,7 @@
 #include <glib.h>
 #include <glib-object.h>
 
-#include <src/common/aur-types.h>
+#include <src/server/aur-server-types.h>
 
 G_BEGIN_DECLS
 

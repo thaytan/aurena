@@ -97,6 +97,9 @@ struct _AurClient
   AvahiClient *avahi_client;
   AvahiServiceBrowser *avahi_sb;
 #endif
+
+  GstElement *record_pipe;
+  gchar *record_dest;
 };
 
 struct _AurClientClass

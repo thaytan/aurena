@@ -606,6 +606,61 @@ handle_player_language_message (AurClient * client, GstStructure * s)
 }
 
 static void
+handle_client_record_message (AurClient *client, GstStructure *s)
+{
+  gboolean enabled;
+  const gchar *dest;
+
+  if (!aur_json_structure_get_boolean (s, "enabled", &enabled))
+    return;
+
+  if (!enabled) {
+    if (client->record_pipe) {
+      gst_element_set_state (client->record_pipe, GST_STATE_PAUSED);
+      gst_object_unref (GST_OBJECT (client->record_pipe));
+      client->record_pipe = NULL;
+    }
+    return;
+  }
+
+  dest = gst_structure_get_string (s, "location");
+  if (dest == NULL || !g_str_has_prefix (dest, "rtsp://")) {
+    GST_WARNING_OBJECT (client, "Received invalid record request. Ignoring");
+    return;
+  }
+
+  if (client->record_pipe == NULL ||
+      client->record_dest == NULL || !g_str_equal (dest, client->record_dest)) {
+    GError *error = NULL;
+    GstElement *rtspsink;
+
+    g_free (client->record_dest);
+    client->record_dest = g_strdup (dest);
+
+    if (client->record_pipe == NULL) {
+      client->record_pipe =
+        gst_parse_launch ("autoaudiosrc ! audioconvert ! opusenc frame-size=10 ! rtspsink ntp-time-source=3 name=rtspsink", &error);
+      if (error != NULL) {
+        GST_ERROR_OBJECT (client, "Failed to create record pipe. Error: %s", error->message);
+        g_error_free (error);
+      }
+      gst_pipeline_use_clock (GST_PIPELINE (client->record_pipe), client->net_clock);
+    }
+    else {
+      gst_element_set_state (client->record_pipe, GST_STATE_NULL);
+    }
+    g_return_if_fail (client->record_pipe != NULL);
+
+    rtspsink = gst_bin_get_by_name (GST_BIN (client->record_pipe), "rtspsink");
+    g_return_if_fail (rtspsink != NULL);
+
+    g_object_set (rtspsink, "location", dest, NULL);
+  }
+
+  gst_element_set_state (GST_ELEMENT (client->record_pipe), GST_STATE_PLAYING);
+}
+
+static void
 handle_player_message (AurClient * client, GstStructure * s)
 {
   const gchar *msg_type;
@@ -630,6 +685,8 @@ handle_player_message (AurClient * client, GstStructure * s)
     handle_player_seek_message (client, s);
   else if (g_str_equal (msg_type, "language"))
     handle_player_language_message (client, s);
+  else if (g_str_equal (msg_type, "record"))
+    handle_client_record_message (client, s);
   else
     g_print ("Unhandled player event of type %s\n", msg_type);
 }
@@ -1166,6 +1223,7 @@ aur_client_finalize (GObject * object)
   g_free (client->connected_server);
   g_free (client->uri);
   g_free (client->language);
+  g_free (client->record_dest);
   free_player_info (client->player_info);
 
   G_OBJECT_CLASS (aur_client_parent_class)->finalize (object);
@@ -1182,6 +1240,12 @@ aur_client_dispose (GObject * object)
     soup_session_abort (client->soup);
   if (client->player)
     gst_element_set_state (client->player, GST_STATE_NULL);
+
+  if (client->record_pipe) {
+    gst_element_set_state (client->record_pipe, GST_STATE_NULL);
+    gst_object_unref (GST_OBJECT (client->record_pipe));
+    client->record_pipe = NULL;
+  }
 
   G_OBJECT_CLASS (aur_client_parent_class)->dispose (object);
 }

@@ -59,6 +59,7 @@ struct _AurPlayerInfo
 
   gdouble volume;
   gboolean enabled;
+  gboolean record_enabled;
 };
 
 typedef enum _AurControlEvent AurControlEvent;
@@ -114,7 +115,7 @@ static void aur_manager_adjust_volume (AurManager * manager, gdouble volume);
 static void aur_manager_adjust_client_volume (AurManager * manager,
     guint client_id, gdouble volume);
 static void aur_manager_adjust_client_setting (AurManager * manager,
-    guint client_id, gboolean enable);
+    guint client_id, gboolean enable, gboolean record_enable);
 static GstStructure *manager_make_set_media_msg (AurManager * manager,
     guint resource_id);
 static GstStructure *manager_make_player_clients_changed_msg
@@ -125,6 +126,8 @@ static void aur_manager_send_seek (AurManager * manager,
     AurServerClient * client, GstClockTime position);
 static void aur_manager_send_language (AurManager * manager,
     AurServerClient * client, const gchar * language);
+static GstStructure *
+manager_make_record_msg (AurManager * manager, AurPlayerInfo *info);
 
 #define SEND_MSG_TO_PLAYERS 1
 #define SEND_MSG_TO_DISABLED_PLAYERS 2
@@ -627,18 +630,22 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
     }
     case AUR_CONTROL_CLIENT_SETTING:{
       const gchar *set_str = find_param_str ("enable", query, post_params);
+      const gchar *record_set_str = find_param_str ("record_enable", query, post_params);
       const gchar *id_str = find_param_str ("client_id", query, post_params);
       guint client_id = 0;
-      gint enable = 1;
+      gint enable = 1, record_enable = 0;
 
-      if (id_str != NULL)
-        sscanf (id_str, "%u", &client_id);
+      if (id_str == NULL || !sscanf (id_str, "%u", &client_id))
+        break;
+      if (client_id < 1)
+        break;
 
-      if (set_str && sscanf (set_str, "%d", &enable)) {
-        if (client_id > 0)
-          aur_manager_adjust_client_setting (manager, client_id, enable != 0);
-      }
+      if (set_str == NULL || !sscanf (set_str, "%d", &enable))
+        break;
+      if (record_set_str == NULL || !sscanf (record_set_str, "%d", &record_enable))
+        break;
 
+      aur_manager_adjust_client_setting (manager, client_id, !!enable, !!record_enable);
       break;
     }
     case AUR_CONTROL_SEEK:{
@@ -1054,7 +1061,7 @@ aur_manager_adjust_client_volume (AurManager * manager, guint client_id,
 
 static void
 aur_manager_adjust_client_setting (AurManager * manager, guint client_id,
-    gboolean enable)
+    gboolean enable, gboolean record_enable)
 {
   GstStructure *msg = NULL;
   AurPlayerInfo *info;
@@ -1064,16 +1071,25 @@ aur_manager_adjust_client_setting (AurManager * manager, guint client_id,
     return;
 
   info->enabled = enable;
+  info->record_enabled = record_enable;
   msg = gst_structure_new ("json",
           "msg-type", G_TYPE_STRING, "client-setting",
           "client-id", G_TYPE_INT64, (gint64) client_id,
-          "enabled", G_TYPE_BOOLEAN, enable, NULL);
+          "enabled", G_TYPE_BOOLEAN, enable,
+          "record-enabled", G_TYPE_BOOLEAN, record_enable,
+          NULL);
   manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS, msg);
 
-  /* Tell the player which volume to set */
+  /* Tell the player to change setting */
   msg = gst_structure_new ("json",
            "msg-type", G_TYPE_STRING, "client-setting",
-           "enabled", G_TYPE_BOOLEAN, enable, NULL);
+           "enabled", G_TYPE_BOOLEAN, enable,
+          "record-enabled", G_TYPE_BOOLEAN, record_enable,
+           NULL);
+  manager_send_msg_to_client (manager, info->conn, 0, msg);
+
+  /* Update recording status at the client */
+  msg = manager_make_record_msg (manager, info);
   manager_send_msg_to_client (manager, info->conn, 0, msg);
 }
 
@@ -1178,17 +1194,37 @@ manager_make_set_media_msg (AurManager * manager, guint resource_id)
       "resource-id", G_TYPE_INT64, (gint64) resource_id,
 #if 1
       "resource-protocol", G_TYPE_STRING, "http",
-      "resource-port", G_TYPE_INT, port,
 #else
       "resource-protocol", G_TYPE_STRING, "rtsp",
-      "resource-port", G_TYPE_INT, port,
 #endif
+      "resource-port", G_TYPE_INT, port,
       "resource-path", G_TYPE_STRING, resource_path,
       "base-time", G_TYPE_INT64, (gint64) (manager->base_time),
       "position", G_TYPE_INT64, (gint64) (position),
       "paused", G_TYPE_BOOLEAN, manager->paused,
       "language", G_TYPE_STRING, manager->language, NULL);
 
+  g_free (resource_path);
+
+  return msg;
+}
+
+static GstStructure *
+manager_make_record_msg (AurManager * manager, AurPlayerInfo *info)
+{
+  gchar *resource_path;
+  GstStructure *msg;
+  gint port;
+
+  resource_path = g_strdup_printf ("/record");
+
+  g_object_get (manager->config, "rtsp-port", &port, NULL);
+
+  msg = gst_structure_new ("json", "msg-type", G_TYPE_STRING, "record",
+      "enabled", G_TYPE_BOOLEAN, info->record_enabled,
+      "record-port", G_TYPE_INT, port,
+      "record-path", G_TYPE_STRING, resource_path,
+      NULL);
   g_free (resource_path);
 
   return msg;

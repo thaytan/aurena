@@ -74,11 +74,13 @@ add_client_message : function f(client_id, msg) {
    c.text(c.text() + msg);
 },
 
-set_client_enable : function f(client_id, enable) {
+set_client_enable : function f(client_id, enable, record_enable) {
   if (client_id < 1)
     return;
   var s = $("#enable-" + client_id);
   s.attr('checked', enable);
+  var s = $("#record-enable-" + client_id);
+  s.attr('checked', record_enable);
 },
 
 handle_event : function handle_event(data) {
@@ -102,7 +104,8 @@ handle_event : function handle_event(data) {
       break;
     case "client-setting":
       var en = json["enabled"];
-      aurena.set_client_enable (json["client-id"], en);
+      var record_en = json["record-enabled"];
+      aurena.set_client_enable (json["client-id"], en, record_enable);
       break;
     case "client-message":
       aurena.add_client_message(json["client-id"], json["message"]);
@@ -133,15 +136,18 @@ update_player_clients : function () {
     if (aurena.sendingEnable)
       return;
     var enabled = 0;
+    var rec_enabled = 0;
 
     if ($("#enable-" + client_id).attr('checked'))
       enabled = 1;
+    if ($("#record-enable-" + client_id).attr('checked'))
+      rec_enabled = 1;
 
     aurena.sendingEnable = true;
     $.ajax({
       type: 'GET',
       url: "../control/setclient",
-      data: { client_id: client_id, enable: enabled }
+      data: { client_id: client_id, enable: enabled, record_enable: rec_enabled }
     }).complete(function() {
       aurena.sendingEnable = false;
     });
@@ -153,12 +159,14 @@ update_player_clients : function () {
      aurena.clients = clients;
      $.each(clients, function(key, val) {
        var enable_id = "enable-" + val["client-id"];
+       var record_enable_id = "record-enable-" + val["client-id"];
        var volume_id = "volume-" + val["client-id"];
        var info = '<li id="' + val["client-id"] + '">';
        info += "<input type='checkbox' id='" + enable_id + "'/>";
        info += " Client " + val["host"];
        info += " <div id='" + volume_id + "' />";
        info += " <div id='volumeval-" + val["client-id"] + "' />";
+       info += "<input type='checkbox' id='" + record_enable_id + "'/>";
        info += '</li>';
        items.push(info);
         // console.log ("Client data " + JSON.stringify(val));
@@ -169,6 +177,7 @@ update_player_clients : function () {
      $.each(clients, function(key, val) {
        var client_id = val["client-id"];
        var enable_id = "enable-" + client_id;
+       var rec_enable_id = "record-enable-" + client_id;
        var volume_id = "volume-" + client_id;
 
        $("#" + volume_id).slider({
@@ -181,6 +190,7 @@ update_player_clients : function () {
        });
        $('#volumeval-' + client_id).text(Math.round(val["volume"] * 100).toString() + '%');
        $("#" + enable_id).attr('checked', val["enabled"]).change(function(cid) { return function () { send_enable_val (cid) } }(client_id));
+       $("#" + rec_enable_id).attr('checked', val["record-enabled"]).change(function(cid) { return function () { send_enable_val (cid) } }(client_id));
      });
   });
 },

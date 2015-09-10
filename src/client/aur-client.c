@@ -609,7 +609,17 @@ static void
 handle_client_record_message (AurClient *client, GstStructure *s)
 {
   gboolean enabled;
-  const gchar *dest;
+  const gchar *path;
+  int port;
+  gchar *dest;
+
+  path = gst_structure_get_string (s, "record-path");
+
+  if (path == NULL)
+    return;                     /* Invalid message */
+
+  if (!aur_json_structure_get_int (s, "record-port", &port))
+    return;
 
   if (!aur_json_structure_get_boolean (s, "enabled", &enabled))
     return;
@@ -623,11 +633,8 @@ handle_client_record_message (AurClient *client, GstStructure *s)
     return;
   }
 
-  dest = gst_structure_get_string (s, "location");
-  if (dest == NULL || !g_str_has_prefix (dest, "rtsp://")) {
-    GST_WARNING_OBJECT (client, "Received invalid record request. Ignoring");
-    return;
-  }
+  dest = g_strdup_printf ("rtsp://%s:%u/%s",
+             client->connected_server, port, path);
 
   if (client->record_pipe == NULL ||
       client->record_dest == NULL || !g_str_equal (dest, client->record_dest)) {
@@ -655,6 +662,7 @@ handle_client_record_message (AurClient *client, GstStructure *s)
     g_return_if_fail (rtspsink != NULL);
 
     g_object_set (rtspsink, "location", dest, NULL);
+    g_print ("Setting Record pipe destination to %s\n", dest);
   }
 
   gst_element_set_state (GST_ELEMENT (client->record_pipe), GST_STATE_PLAYING);

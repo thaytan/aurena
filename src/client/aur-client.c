@@ -47,7 +47,15 @@
 #include "src/common/aur-json.h"
 #include "aur-client.h"
 
-G_DEFINE_TYPE (AurClient, aur_client, G_TYPE_OBJECT);
+GST_DEBUG_CATEGORY_STATIC (client_debug);
+#define GST_CAT_DEFAULT client_debug
+
+static void _do_init()
+{
+  GST_DEBUG_CATEGORY_INIT (client_debug, "aurena::client", 0, "Aurena Client debug");
+}
+
+G_DEFINE_TYPE_WITH_CODE (AurClient, aur_client, G_TYPE_OBJECT, _do_init());
 
 #if defined(ANDROID) && defined(NDK_DEBUG)
 #define g_print(...) __android_log_print(ANDROID_LOG_ERROR, "aurena", __VA_ARGS__)
@@ -115,7 +123,6 @@ try_reconnect (AurClient * client)
 {
   client->timeout = 0;
 
-  g_print ("In try_reconnect()\n");
   if (client->server_host)
     connect_to_server (client, client->server_host, client->server_port);
   else
@@ -266,7 +273,7 @@ handle_player_enrol_message (AurClient * client, GstStructure * s)
   }
 #endif
   if (server_ip_str) {
-    g_print ("Creating net clock at %s:%d time %" GST_TIME_FORMAT "\n",
+    GST_LOG_OBJECT (client, "Creating net clock at %s:%d time %" GST_TIME_FORMAT "\n",
         server_ip_str, clock_port, GST_TIME_ARGS (cur_time));
     if (client->net_clock)
       gst_object_unref (client->net_clock);
@@ -377,8 +384,9 @@ set_media (AurClient * client)
 
   gst_element_set_state (client->player, GST_STATE_READY);
 
-  g_print ("Setting media URI %s base_time %" GST_TIME_FORMAT " position %"
-      GST_TIME_FORMAT " paused %i\n", client->uri,
+  GST_INFO_OBJECT (client,
+      "Setting media URI %s base_time %" GST_TIME_FORMAT " position %"
+      GST_TIME_FORMAT " paused %i", client->uri,
       GST_TIME_ARGS (client->base_time), GST_TIME_ARGS (client->position),
       client->paused);
   g_object_set (client->player, "uri", client->uri, NULL);
@@ -473,8 +481,8 @@ handle_player_play_message (AurClient * client, GstStructure * s)
   client->paused = FALSE;
 
   if (client->enabled && client->player) {
-    g_print ("Playing base_time %" GST_TIME_FORMAT " (position %"
-        GST_TIME_FORMAT ")\n", GST_TIME_ARGS (client->base_time),
+    GST_DEBUG_OBJECT (client, "Playing base_time %" GST_TIME_FORMAT " (position %"
+        GST_TIME_FORMAT ")", GST_TIME_ARGS (client->base_time),
         GST_TIME_ARGS (client->position));
     gst_element_set_base_time (GST_ELEMENT (client->player),
         client->base_time + client->position);
@@ -499,7 +507,7 @@ handle_player_pause_message (AurClient * client, GstStructure * s)
   client->paused = TRUE;
 
   if (client->enabled && client->player) {
-    g_print ("Pausing at position %" GST_TIME_FORMAT "\n",
+    GST_DEBUG_OBJECT (client, "Pausing at position %" GST_TIME_FORMAT,
         GST_TIME_ARGS (client->position));
     gst_element_set_state (GST_ELEMENT (client->player), GST_STATE_PAUSED);
     if (!gst_element_seek_simple (client->player, GST_FORMAT_TIME,
@@ -528,8 +536,8 @@ handle_player_seek_message (AurClient * client, GstStructure * s)
   client->position = (GstClockTime) (tmp);
 
   if (client->enabled && client->player) {
-    g_print ("Seeking at position %" GST_TIME_FORMAT " (base_time %"
-        GST_TIME_FORMAT ")\n", GST_TIME_ARGS (client->position),
+    GST_DEBUG_OBJECT (client, "Seeking to position %" GST_TIME_FORMAT " (base_time %"
+        GST_TIME_FORMAT ")", GST_TIME_ARGS (client->position),
         GST_TIME_ARGS (client->base_time));
 
     if (!gst_element_seek_simple (client->player, GST_FORMAT_TIME,
@@ -926,8 +934,9 @@ handle_controller_message (AurClient * client, GstStructure * s)
     handle_controller_set_media_message (client, s);
   else if (g_str_equal (msg_type, "language"))
     handle_controller_language_message (client, s);
-  else
-    g_print ("Unhandled contorller event of type %s\n", msg_type);
+  else {
+    GST_WARNING_OBJECT (client, "Unhandled contorller event of type %s", msg_type);
+  }
 }
 
 static void
@@ -1047,7 +1056,7 @@ connect_to_server (AurClient * client, const gchar * server, int port)
     client->connecting |= AUR_CLIENT_PLAYER;
 
     uri = g_strdup_printf ("http://%s:%u/client/player_events", server, port);
-    g_print ("Attemping to connect player to server %s:%d\n", server, port);
+    GST_DEBUG_OBJECT (client, "Attempting to connect player to server %s:%d", server, port);
     msg = soup_message_new ("GET", uri);
     g_signal_connect (msg, "got-chunk", (GCallback) handle_received_chunk,
         client);
@@ -1058,7 +1067,8 @@ connect_to_server (AurClient * client, const gchar * server, int port)
 
   if (client->flags & AUR_CLIENT_CONTROLLER
       && !(client->connecting & AUR_CLIENT_CONTROLLER)) {
-    g_print ("Attemping to connect controller to server %s:%d\n", server, port);
+    GST_DEBUG_OBJECT (client, "Attempting to connect controller to server %s:%d",
+        server, port);
     client->connecting |= AUR_CLIENT_CONTROLLER;
 
     uri = g_strdup_printf ("http://%s:%u/client/control_events", server, port);
@@ -1431,7 +1441,7 @@ aur_avahi_client_callback (AvahiClient * s, AvahiClientState state,
   switch (state) {
     case AVAHI_CLIENT_S_RUNNING:{
       if (client->avahi_sb == NULL) {
-        g_print ("Looking for new broadcast servers\n");
+        GST_INFO ("Looking for new broadcast servers");
         client->avahi_sb = avahi_service_browser_new (s, AVAHI_IF_UNSPEC,
             AVAHI_PROTO_UNSPEC, "_aurena._tcp", NULL, 0, browse_callback,
             client);

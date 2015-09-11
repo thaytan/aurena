@@ -123,6 +123,8 @@ try_reconnect (AurClient * client)
 {
   client->timeout = 0;
 
+  GST_LOG_OBJECT (client, "Entering reconnect. server_host %s", client->server_host);
+
   if (client->server_host)
     connect_to_server (client, client->server_host, client->server_port);
   else
@@ -164,6 +166,8 @@ handle_connection_closed_cb (G_GNUC_UNUSED SoupSession * session,
 {
   AurClientFlags flag = get_flag_from_msg (msg);
 
+  GST_LOG_OBJECT (client, "lost connection -flag %d", flag);
+
   client->connecting &= ~flag;
 
   if (client->idle_timeout) {
@@ -181,18 +185,17 @@ handle_connection_closed_cb (G_GNUC_UNUSED SoupSession * session,
   }
   client->was_connected &= ~flag;
 
-  if (flag == AUR_CLIENT_PLAYER && client->player)
-    gst_element_set_state (client->player, GST_STATE_READY);
+  if (flag == AUR_CLIENT_PLAYER) {
+    if (client->player)
+      gst_element_set_state (client->player, GST_STATE_READY);
+    if (client->record_pipe)
+      gst_element_set_state (client->record_pipe, GST_STATE_READY);
+  }
 
   if (client->player_info) {
     free_player_info (client->player_info);
     client->player_info = NULL;
     g_signal_emit (client, signals[SIGNAL_PLAYER_INFO_CHANGED], 0);
-  }
-
-  if (client->timeout == 0) {
-    client->timeout =
-        g_timeout_add_seconds (1, (GSourceFunc) try_reconnect, client);
   }
 
   if (!client->was_connected) {
@@ -204,6 +207,12 @@ handle_connection_closed_cb (G_GNUC_UNUSED SoupSession * session,
     g_object_notify (G_OBJECT (client), "paused");
     g_object_notify (G_OBJECT (client), "enabled");
     g_object_notify (G_OBJECT (client), "connected-server");
+  }
+
+  if (client->timeout == 0) {
+    GST_LOG_OBJECT (client, "Scheduling reconnect attempt in 1 second");
+    client->timeout =
+        g_timeout_add_seconds (1, (GSourceFunc) try_reconnect, client);
   }
 }
 
@@ -1397,7 +1406,11 @@ avahi_resolve_callback (AvahiServiceResolver * r,
 
     case AVAHI_RESOLVER_FOUND:{
       /* FIXME: Build a list of servers and try each one in turn? */
-      connect_to_server (client, host_name, port);
+      if (client->server_host == NULL) {
+        client->server_host = g_strdup (host_name);
+        client->server_port = port;
+        connect_to_server (client, host_name, port);
+      }
     }
   }
 

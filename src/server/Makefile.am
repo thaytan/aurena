@@ -2,18 +2,23 @@ noinst_LTLIBRARIES        = libaurena_server.la
 
 libaurena_server_la_SOURCES = \
     aur-avahi.c \
-    aur-avahi.h \
     aur-http-resource.c \
-    aur-http-resource.h \
     aur-manager.c \
-    aur-manager.h \
     aur-media-db.c \
-    aur-media-db.h \
     aur-resource.c \
-    aur-resource.h \
+    aur-receiver.c \
+    aur-rtsp-play-media.c \
     aur-server.c \
+    aur-server-client.c
+
+noinst_HEADERS = \
+    aur-avahi.h \
+    aur-http-resource.h \
+    aur-manager.h \
+    aur-media-db.h \
+    aur-resource.h \
+    aur-rtsp-play-media.h \
     aur-server.h \
-    aur-server-client.c \
     aur-server-client.h \
     aur-server-types.h
 

@@ -31,23 +31,10 @@ else
   AC_MSG_ERROR([GStreamer 1.0 required])
 fi
 
-AC_ARG_WITH([rtsp], AS_HELP_STRING([--with-rtsp], [Build with the GStreamer RTSP server]), [], [with_rtsp=no])
-
-AC_MSG_CHECKING([whether for RTSP support])
-AS_IF([test "x$with_rtsp" != "xno"], [
-  AS_IF([test "x$HAVE_GST_1_0" = "xyes"], [
-    PKG_CHECK_MODULES(GST_RTSP, [gstreamer-rtsp-server-1.0], [HAVE_GST_RTSP=yes], [HAVE_GST_RTSP=no])
-  ],[
-    PKG_CHECK_MODULES(GST_RTSP, [gst-rtsp-server-0.10], [HAVE_GST_RTSP=yes], [HAVE_GST_RTSP=no])
-  ])
-  AS_IF([test "x$HAVE_GST_RTSP" = "xyes"],
-    [AC_MSG_RESULT([yes])],
-    [
-      AC_MSG_RESULT([not available])
-      AC_MSG_ERROR([Requested build with RTSP support requires gst-rtsp-server])
-    ]
-  )
-],[ AC_MSG_RESULT([disabled]) ])
+PKG_CHECK_MODULES(GST_RTSP, [gstreamer-rtsp-server-1.0], [HAVE_GST_RTSP=yes], [HAVE_GST_RTSP=no])
+if test "x$HAVE_GST_RTSP" != "xyes"; then
+  AC_MSG_ERROR([gst-rtsp-server-1.0 required])
+fi
 
 AC_MSG_NOTICE([Check for GTK+ 3.0 requirements])
 PKG_CHECK_MODULES(GTKAPPS, [gtk+-3.0], [BUILD_GTKAPPS=yes],

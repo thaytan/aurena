@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2015 Jan Schmidt <jan@centricular.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -16,24 +16,16 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  */
-#ifndef __AUR_SERVER_TYPES_H__
-#define __AUR_SERVER_TYPES_H__
+#ifndef __AUR_RTSP_PLAY_MEDIA_H__
+#define __AUR_RTSP_PLAY_MEDIA_H__
 
-#include <glib.h>
-#include <src/common/aur-types.h>
+#include <gst/gst.h>
+#include <gst/rtsp-server/rtsp-server.h>
 
-G_BEGIN_DECLS
+#include <src/server/aur-server-types.h>
 
-typedef struct _AurAvahi AurAvahi;
-typedef struct _AurClient AurClient;
-typedef struct _AurHttpResource AurHttpResource;
-typedef struct _AurManager AurManager;
-typedef struct _AurMediaDB AurMediaDB;
-typedef struct _AurReceiver AurReceiver;
-typedef struct _AurRTSPPlayMediaFactory AurRTSPPlayMediaFactory;
-typedef struct _AurServer AurServer;
-typedef struct _AurServerClient AurServerClient;
+typedef struct _AurRTSPPlayMediaFactoryClass AurRTSPPlayMediaFactoryClass;
 
-G_END_DECLS
+AurRTSPPlayMediaFactory * aur_rtsp_play_media_factory_new     (void);
 
 #endif

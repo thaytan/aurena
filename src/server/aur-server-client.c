@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2015 Jan Schmidt <jan@centricular.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -123,8 +123,6 @@ aur_server_connection_lost (AurServerClient * client)
     return;
   client->fired_conn_lost = TRUE;
 
-  g_print ("Lost connection for client %u\n", client->conn_id);
-
   if (client->io) {
     g_source_remove (client->io_watch);
     g_io_channel_shutdown (client->io, TRUE, NULL);
@@ -152,7 +150,6 @@ static void
 aur_server_client_disconnect (G_GNUC_UNUSED SoupMessage * message,
     AurServerClient * client)
 {
-  g_print ("client %u disconnect signal\n", client->conn_id);
   client->need_body_complete = FALSE;
   aur_server_connection_lost (client);
 }

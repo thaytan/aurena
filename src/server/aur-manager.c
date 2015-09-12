@@ -37,6 +37,7 @@
 #include "aur-http-resource.h"
 #include "aur-manager.h"
 #include "aur-media-db.h"
+#include "aur-rtsp-play-media.h"
 #include "aur-server.h"
 #include "aur-server-client.h"
 
@@ -152,7 +153,6 @@ create_net_clock ()
   return net_time;
 }
 
-#ifdef HAVE_GST_RTSP
 static GstRTSPServer *
 create_rtsp_server (G_GNUC_UNUSED AurManager * mgr)
 {
@@ -176,7 +176,6 @@ failed:
     return NULL;
   }
 }
-#endif
 
 static GstStructure *
 manager_make_enrol_msg (AurManager * manager, AurPlayerInfo * info)
@@ -704,9 +703,7 @@ aur_manager_constructed (GObject * object)
   if (G_OBJECT_CLASS (aur_manager_parent_class)->constructed != NULL)
     G_OBJECT_CLASS (aur_manager_parent_class)->constructed (object);
 
-#ifdef HAVE_GST_RTSP
   manager->rtsp = create_rtsp_server (manager);
-#endif
 
   g_object_get (manager->config, "aur-port", &aur_port, NULL);
 
@@ -825,44 +822,30 @@ aur_manager_get_property (GObject * object, guint prop_id,
   }
 }
 
-#ifdef HAVE_GST_RTSP
-static void
-rtsp_media_prepared (GstRTSPMedia * media, G_GNUC_UNUSED AurManager * mgr)
-{
-  g_object_set (media->rtpbin, "use-pipeline-clock", TRUE, NULL);
-}
-
-static void
-new_stream_constructed_cb (G_GNUC_UNUSED GstRTSPMediaFactory * factory,
-    GstRTSPMedia * media, AurManager * mgr)
-{
-  g_print ("Media constructed: %p\n", media);
-  g_signal_connect (media, "prepared", G_CALLBACK (rtsp_media_prepared), mgr);
-}
-
 static void
 add_rtsp_uri (AurManager * manager, guint resource_id,
     const gchar * source_uri)
 {
-  GstRTSPMediaMapping *mapping;
+  GstRTSPMountPoints *mounts;
   GstRTSPMediaFactoryURI *factory;
   gchar *rtsp_uri = g_strdup_printf ("/resource/%u", resource_id);
 
-  mapping = gst_rtsp_server_get_media_mapping (manager->rtsp);
-  factory = gst_rtsp_media_factory_uri_new ();
+  mounts = gst_rtsp_server_get_mount_points (manager->rtsp);
+
+  factory = GST_RTSP_MEDIA_FACTORY_URI (aur_rtsp_play_media_factory_new());
+
   /* Set up the URI, and set as shared (all viewers see the same stream) */
   gst_rtsp_media_factory_uri_set_uri (factory, source_uri);
   gst_rtsp_media_factory_set_shared (GST_RTSP_MEDIA_FACTORY (factory), TRUE);
-  g_signal_connect (factory, "media-constructed",
-      G_CALLBACK (new_stream_constructed_cb), manager);
-  /* attach the test factory to the test url */
-  gst_rtsp_media_mapping_add_factory (mapping, rtsp_uri,
+
+  /* attach the factory to the url */
+  gst_rtsp_mount_points_add_factory (mounts, rtsp_uri,
       GST_RTSP_MEDIA_FACTORY (factory));
-  g_object_unref (mapping);
+
+  g_object_unref (mounts);
 
   g_free (rtsp_uri);
 }
-#endif
 
 static void
 read_playlist_file (AurManager * manager, const char *filename)
@@ -934,12 +917,10 @@ aur_manager_new (const char *config_file)
   }
 
   if (get_playlist_len (manager)) {
-#ifdef HAVE_GST_RTSP
     char *rtsp_uri = g_strdup_printf ("file://%s",
         (gchar *) (g_ptr_array_index (manager->playlist, 0)));
     add_rtsp_uri (manager, 1, rtsp_uri);
     g_free (rtsp_uri);
-#endif
   }
 
   if (!aur_server_start (manager->server)) {
@@ -1214,11 +1195,11 @@ manager_make_record_msg (AurManager * manager, AurPlayerInfo *info)
 {
   gchar *resource_path;
   GstStructure *msg;
-  gint port;
+  gint port = 8555;
 
-  resource_path = g_strdup_printf ("/record");
+  resource_path = g_strdup_printf ("/test");
 
-  g_object_get (manager->config, "rtsp-port", &port, NULL);
+  //g_object_get (manager->config, "rtsp-port", &port, NULL);
 
   msg = gst_structure_new ("json", "msg-type", G_TYPE_STRING, "record",
       "enabled", G_TYPE_BOOLEAN, info->record_enabled,

@@ -24,9 +24,7 @@
 #include <gst/net/gstnet.h>
 #include <libsoup/soup-types.h>
 
-#ifdef HAVE_GST_RTSP
 #include <gst/rtsp-server/rtsp-server.h>
-#endif
 
 #include <src/server/aur-server-types.h>
 #include "aur-avahi.h"

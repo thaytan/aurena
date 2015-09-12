@@ -643,14 +643,15 @@ handle_client_record_message (AurClient *client, GstStructure *s)
 
   if (!enabled) {
     if (client->record_pipe) {
-      gst_element_set_state (client->record_pipe, GST_STATE_PAUSED);
+      GST_DEBUG_OBJECT (client, "Destroying recorder pipeline");
+      gst_element_set_state (client->record_pipe, GST_STATE_NULL);
       gst_object_unref (GST_OBJECT (client->record_pipe));
       client->record_pipe = NULL;
     }
     return;
   }
 
-  dest = g_strdup_printf ("rtsp://%s:%u/%s",
+  dest = g_strdup_printf ("rtsp://%s:%u%s",
              client->connected_server, port, path);
 
   if (client->record_pipe == NULL ||
@@ -679,7 +680,7 @@ handle_client_record_message (AurClient *client, GstStructure *s)
     g_return_if_fail (rtspsink != NULL);
 
     g_object_set (rtspsink, "location", dest, NULL);
-    g_print ("Setting Record pipe destination to %s\n", dest);
+    GST_INFO_OBJECT (client, "Setting Record pipe destination to %s", dest);
   }
 
   gst_element_set_state (GST_ELEMENT (client->record_pipe), GST_STATE_PLAYING);

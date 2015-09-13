@@ -41,9 +41,8 @@ struct _AurManager
 
   AurServer *server;
   GstNetTimeProvider *net_clock;
-#ifdef HAVE_GST_RTSP
+
   GstRTSPServer *rtsp;
-#endif
   int rtsp_port;
 
   AurAvahi *avahi;
@@ -68,6 +67,8 @@ struct _AurManager
   gdouble current_volume;
 
   guint ping_timeout;
+
+  AurReceiver *receiver;
 };
 
 struct _AurManagerClass

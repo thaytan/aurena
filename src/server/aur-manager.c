@@ -37,9 +37,13 @@
 #include "aur-http-resource.h"
 #include "aur-manager.h"
 #include "aur-media-db.h"
+#include "aur-receiver.h"
 #include "aur-rtsp-play-media.h"
 #include "aur-server.h"
 #include "aur-server-client.h"
+
+GST_DEBUG_CATEGORY_STATIC (manager_debug);
+#define GST_CAT_DEFAULT manager_debug
 
 /* Set to 0 to walk the playlist linearly */
 #define RANDOM_SHUFFLE 1
@@ -57,6 +61,8 @@ struct _AurPlayerInfo
   guint id;
   gchar *host;
   AurServerClient *conn;
+
+  gchar *record_path;
 
   gdouble volume;
   gboolean enabled;
@@ -97,7 +103,12 @@ static const struct
 
 static const gint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
 
-G_DEFINE_TYPE (AurManager, aur_manager, G_TYPE_OBJECT);
+static void _do_init()
+{
+  GST_DEBUG_CATEGORY_INIT (manager_debug, "aurena::manager", 0, "Aurena Manager debug");
+}
+
+G_DEFINE_TYPE_WITH_CODE (AurManager, aur_manager, G_TYPE_OBJECT, _do_init());
 
 static void aur_manager_dispose (GObject * object);
 static void aur_manager_finalize (GObject * object);
@@ -154,12 +165,19 @@ create_net_clock ()
 }
 
 static GstRTSPServer *
-create_rtsp_server (G_GNUC_UNUSED AurManager * mgr)
+create_rtsp_server (AurManager * mgr)
 {
   GstRTSPServer *server = NULL;
+  gchar *rtsp_service;
 
   server = gst_rtsp_server_new ();
-  gst_rtsp_server_set_service (server, "5458");
+
+  GST_DEBUG_OBJECT (mgr, "Creating RTSP server on port %d",
+    mgr->rtsp_port);
+
+  rtsp_service = g_strdup_printf ("%u", mgr->rtsp_port);
+  gst_rtsp_server_set_service (server, rtsp_service);
+  g_free (rtsp_service);
 
   /* attach the server to the default maincontext */
   if (gst_rtsp_server_attach (server, NULL) == 0)
@@ -171,7 +189,7 @@ create_rtsp_server (G_GNUC_UNUSED AurManager * mgr)
   /* ERRORS */
 failed:
   {
-    g_print ("failed to attach the server\n");
+    g_print ("failed to attach the RTSP service port\n");
     gst_object_unref (server);
     return NULL;
   }
@@ -447,6 +465,8 @@ manager_send_msg_to_client (AurManager * manager, AurServerClient * client,
   gchar *body;
   gsize len;
 
+  g_return_if_fail (msg != NULL);
+
   root = aur_json_from_gst_structure (msg);
   gst_structure_free (msg);
 
@@ -703,9 +723,11 @@ aur_manager_constructed (GObject * object)
   if (G_OBJECT_CLASS (aur_manager_parent_class)->constructed != NULL)
     G_OBJECT_CLASS (aur_manager_parent_class)->constructed (object);
 
-  manager->rtsp = create_rtsp_server (manager);
-
   g_object_get (manager->config, "aur-port", &aur_port, NULL);
+  g_object_get (manager->config, "rtsp-port", &manager->rtsp_port, NULL);
+
+  manager->rtsp = create_rtsp_server (manager);
+  manager->receiver = aur_receiver_new (manager->rtsp);
 
   manager->server = g_object_new (AUR_TYPE_SERVER,
       "config", manager->config, NULL);
@@ -747,6 +769,8 @@ free_player_info (AurPlayerInfo *info)
 {
   if (info->conn)
     g_object_unref (info->conn);
+
+  g_free (info->record_path);
   g_free (info->host);
   g_free (info);
 }
@@ -1191,22 +1215,20 @@ manager_make_set_media_msg (AurManager * manager, guint resource_id)
 }
 
 static GstStructure *
-manager_make_record_msg (AurManager * manager, AurPlayerInfo *info)
+manager_make_record_msg (AurManager * manager G_GNUC_UNUSED, AurPlayerInfo *info)
 {
-  gchar *resource_path;
   GstStructure *msg;
-  gint port = 8555;
 
-  resource_path = g_strdup_printf ("/test");
+  if (info->record_path == NULL)
+    info->record_path = aur_receiver_get_record_dest (manager->receiver, info->id);
 
-  //g_object_get (manager->config, "rtsp-port", &port, NULL);
+  g_return_val_if_fail (info->record_path != NULL, NULL);
 
   msg = gst_structure_new ("json", "msg-type", G_TYPE_STRING, "record",
       "enabled", G_TYPE_BOOLEAN, info->record_enabled,
-      "record-port", G_TYPE_INT, port,
-      "record-path", G_TYPE_STRING, resource_path,
+      "record-port", G_TYPE_INT, manager->rtsp_port,
+      "record-path", G_TYPE_STRING, info->record_path,
       NULL);
-  g_free (resource_path);
 
   return msg;
 }

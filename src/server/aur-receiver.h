@@ -38,6 +38,8 @@ typedef struct _AurReceiverClass AurReceiverClass;
 struct _AurReceiver
 {
   GObject parent;
+
+  GstRTSPServer *rtsp;
 };
 
 struct _AurReceiverClass
@@ -47,6 +49,8 @@ struct _AurReceiverClass
 
 GType aur_receiver_get_type(void);
 AurReceiver *aur_receiver_new(GstRTSPServer *rtsp);
+
+gchar *aur_receiver_get_record_dest (AurReceiver *receiver, guint client_id);
 
 G_END_DECLS
 #endif

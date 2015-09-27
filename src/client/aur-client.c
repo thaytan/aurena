@@ -686,7 +686,7 @@ handle_client_record_message (AurClient *client, GstStructure *s)
       gchar *pipe_str;
       GstElement *rtspsink;
 
-      pipe_str = g_strdup_printf ("%s ! audioconvert ! opusenc frame-size=10 ! rtspsink ntp-time-source=3 name=rtspsink", audiosrc);
+      pipe_str = g_strdup_printf ("%s buffer-time=40000 ! audioconvert ! opusenc frame-size=10 ! rtspsink ntp-time-source=3 name=rtspsink", audiosrc);
       client->record_pipe =
         gst_parse_launch (pipe_str, &error);
       g_free (pipe_str);

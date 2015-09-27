@@ -222,7 +222,9 @@ manager_make_enrol_msg (AurManager * manager, AurPlayerInfo * info)
       "paused", G_TYPE_BOOLEAN, manager->paused, NULL);
 
   if (info != NULL)             /* Is a player message */
-    gst_structure_set (msg, "enabled", G_TYPE_BOOLEAN, info->enabled, NULL);
+    gst_structure_set (msg,
+       "enabled", G_TYPE_BOOLEAN, info->enabled,
+       NULL);
 
   return msg;
 }
@@ -246,6 +248,7 @@ make_player_clients_list_msg (AurManager * manager)
       GstStructure *cur_struct = gst_structure_new ("client",
           "client-id", G_TYPE_INT64, (gint64) info->id,
           "enabled", G_TYPE_BOOLEAN, info->enabled,
+          "record-enabled", G_TYPE_BOOLEAN, info->record_enabled,
           "volume", G_TYPE_DOUBLE, info->volume,
           "host", G_TYPE_STRING, info->host,
           NULL);

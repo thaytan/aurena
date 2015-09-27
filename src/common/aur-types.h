@@ -25,6 +25,15 @@ G_BEGIN_DECLS
 
 typedef struct _AurConfig AurConfig;
 
+typedef enum _AurComponent AurComponent;
+
+enum _AurComponent {
+  AUR_COMPONENT_MANAGER     = 0x1,
+  AUR_COMPONENT_CONTROLLER  = 0x2,
+  AUR_COMPONENT_PLAYER      = 0x4,
+  AUR_COMPONENT_CAPTURE     = 0x8
+};
+
 G_END_DECLS
 
 #endif

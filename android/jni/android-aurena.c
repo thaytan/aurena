@@ -133,7 +133,10 @@ refresh_ui (CustomData * data)
   if (!GST_CLOCK_TIME_IS_VALID (data->duration)) {
     if (!gst_element_query_duration (data->client->player, fmt,
             &data->duration)) {
-      GST_WARNING ("Could not query current duration");
+      /* If we get to PLAYING we really ought to be able to query duration */
+      if (aur_client_is_playing (data->client)) {
+        GST_WARNING ("Could not query current duration");
+      }
     }
   }
 
@@ -289,6 +292,9 @@ static void
 gst_native_init (JNIEnv * env, jobject thiz)
 {
   CustomData *data = g_new0 (CustomData, 1);
+
+  gst_debug_set_threshold_from_string ("*aurena*:6", FALSE);
+
   data->duration = GST_CLOCK_TIME_NONE;
   SET_CUSTOM_DATA (env, thiz, custom_data_field_id, data);
   GST_DEBUG ("Created CustomData at %p", data);

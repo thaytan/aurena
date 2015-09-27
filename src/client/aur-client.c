@@ -623,6 +623,21 @@ handle_player_language_message (AurClient * client, GstStructure * s)
 }
 
 static void
+setup_record_rtpbin (GstElement* rtspsink G_GNUC_UNUSED,
+   GstElement* rtpbin, AurClient *client)
+{
+  GST_INFO_OBJECT (client, "Configuring new rtpbin %" GST_PTR_FORMAT, rtpbin);
+
+  if (g_object_class_find_property (G_OBJECT_GET_CLASS (rtpbin), "rtcp-sync-send-time")) {
+    g_object_set (rtpbin, "rtcp-sync-send-time", FALSE,
+        "max-rtcp-rtp-time-diff", -1, NULL);
+  }
+  else {
+    GST_WARNING_OBJECT (client, "rtpbin did not have rtcp-sync-send-time property. Outdated GStreamer.");
+  }
+}
+
+static void
 handle_client_record_message (AurClient *client, GstStructure *s)
 {
   gboolean enabled;
@@ -663,13 +678,34 @@ handle_client_record_message (AurClient *client, GstStructure *s)
     client->record_dest = g_strdup (dest);
 
     if (client->record_pipe == NULL) {
+#ifndef ANDROID
+      const gchar *audiosrc = "autoaudiosrc";
+#else
+      const gchar *audiosrc = "openslessrc preset=voice-recognition";
+#endif
+      gchar *pipe_str;
+      GstElement *rtspsink;
+
+      pipe_str = g_strdup_printf ("%s ! audioconvert ! opusenc frame-size=10 ! rtspsink ntp-time-source=3 name=rtspsink", audiosrc);
       client->record_pipe =
-        gst_parse_launch ("autoaudiosrc ! audioconvert ! opusenc frame-size=10 ! rtspsink ntp-time-source=3 name=rtspsink", &error);
+        gst_parse_launch (pipe_str, &error);
+      g_free (pipe_str);
+
       if (error != NULL) {
         GST_ERROR_OBJECT (client, "Failed to create record pipe. Error: %s", error->message);
         g_error_free (error);
+        goto fail;
       }
       gst_pipeline_use_clock (GST_PIPELINE (client->record_pipe), client->net_clock);
+
+      rtspsink = gst_bin_get_by_name (GST_BIN (client->record_pipe), "rtspsink");
+      if (rtspsink == NULL) {
+        GST_ERROR_OBJECT (client, "Failed to retrieve rtspsink element");
+        goto fail;
+      }
+      g_signal_connect (rtspsink, "new-manager", (GCallback) setup_record_rtpbin,
+        client);
+      gst_object_unref (rtspsink);
     }
     else {
       gst_element_set_state (client->record_pipe, GST_STATE_NULL);
@@ -684,6 +720,14 @@ handle_client_record_message (AurClient *client, GstStructure *s)
   }
 
   gst_element_set_state (GST_ELEMENT (client->record_pipe), GST_STATE_PLAYING);
+  return;
+
+fail:
+  if (client->record_pipe) {
+    gst_element_set_state (GST_ELEMENT (client->record_pipe), GST_STATE_NULL);
+    gst_object_unref (client->record_pipe);
+    client->record_pipe = NULL;
+  }
 }
 
 static void

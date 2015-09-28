@@ -7,6 +7,7 @@ libaurena_server_la_SOURCES = \
     aur-media-db.c \
     aur-resource.c \
     aur-receiver.c \
+    aur-receiver-ingest.c \
     aur-rtsp-play-media.c \
     aur-server.c \
     aur-server-client.c
@@ -17,6 +18,8 @@ noinst_HEADERS = \
     aur-manager.h \
     aur-media-db.h \
     aur-resource.h \
+    aur-receiver.h \
+    aur-receiver-ingest.h \
     aur-rtsp-play-media.h \
     aur-server.h \
     aur-server-client.h \

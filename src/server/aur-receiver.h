@@ -19,15 +19,9 @@
 #ifndef __AUR_RECEIVER_H__
 #define __AUR_RECEIVER_H__
 
-#include <stdio.h>
 #include <gst/gst.h>
-#include <gst/net/gstnet.h>
-#include <libsoup/soup-types.h>
-
 #include <gst/rtsp-server/rtsp-server.h>
-
 #include <src/server/aur-server-types.h>
-#include "aur-avahi.h"
 
 G_BEGIN_DECLS
 

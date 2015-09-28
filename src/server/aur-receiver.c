@@ -27,6 +27,7 @@
 #endif
 
 #include "aur-receiver.h"
+#include "aur-receiver-ingest.h"
 
 static void aur_receiver_constructed (GObject * object);
 static void aur_receiver_dispose (GObject * object);
@@ -148,7 +149,7 @@ aur_receiver_get_record_dest (AurReceiver *receiver, guint client_id)
   server = receiver->rtsp;
   mounts = gst_rtsp_server_get_mount_points (server);
 
-  factory = gst_rtsp_media_factory_new ();
+  factory = aur_receiver_ingest_factory_new ();
   gst_rtsp_media_factory_set_transport_mode (factory,
       GST_RTSP_TRANSPORT_MODE_RECORD);
   gst_rtsp_media_factory_set_launch (factory, "( decodebin name=depay0 ! queue ! audioconvert ! autoaudiosink )");

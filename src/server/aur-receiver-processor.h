@@ -27,10 +27,12 @@ G_BEGIN_DECLS
 #define AUR_TYPE_RECEIVER_PROCESSOR (aur_receiver_processor_get_type ())
 
 typedef struct _AurReceiverProcessorClass AurReceiverProcessorClass;
+typedef struct _AurReceiverProcessorChannel AurReceiverProcessorChannel;
 
 struct _AurReceiverProcessor
 {
   GObject parent;
+  AurReceiverProcessorChannel *channels[8];
 };
 
 struct _AurReceiverProcessorClass
@@ -40,6 +42,11 @@ struct _AurReceiverProcessorClass
 
 GType aur_receiver_processor_get_type(void);
 AurReceiverProcessor *aur_receiver_processor_new();
+AurReceiverProcessorChannel *aur_receiver_processor_get_channel (AurReceiverProcessor *processor);
+void aur_receiver_processor_push_sample (AurReceiverProcessor *processor,
+    AurReceiverProcessorChannel *channel, GstSample *sample);
+void aur_receiver_processor_release_channel (AurReceiverProcessor *processor, AurReceiverProcessorChannel *channel);
+
 
 G_END_DECLS
 #endif

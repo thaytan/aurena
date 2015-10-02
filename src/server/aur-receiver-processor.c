@@ -32,10 +32,16 @@
 static void aur_receiver_processor_constructed (GObject * object);
 static void aur_receiver_processor_dispose (GObject * object);
 static void aur_receiver_processor_finalize (GObject * object);
-static void aur_receiver_processor_set_property (GObject * object, guint prop_id,
-    const GValue * value, GParamSpec * pspec);
-static void aur_receiver_processor_get_property (GObject * object, guint prop_id,
-    GValue * value, GParamSpec * pspec);
+static void aur_receiver_processor_set_property (GObject * object,
+    guint prop_id, const GValue * value, GParamSpec * pspec);
+static void aur_receiver_processor_get_property (GObject * object,
+    guint prop_id, GValue * value, GParamSpec * pspec);
+
+struct _AurReceiverProcessorChannel
+{
+  gint id;
+  gboolean inuse;
+};
 
 enum
 {
@@ -59,8 +65,14 @@ aur_receiver_processor_class_init (AurReceiverProcessorClass * klass)
 }
 
 static void
-aur_receiver_processor_init (AurReceiverProcessor *receiver G_GNUC_UNUSED)
+aur_receiver_processor_init (AurReceiverProcessor * processor)
 {
+  gint i;
+
+  for (i = 0; i < 8; i++) {
+    processor->channels[i] = g_new0 (AurReceiverProcessorChannel, 1);
+    processor->channels[i]->id = i;
+  }
 }
 
 static void
@@ -73,7 +85,7 @@ aur_receiver_processor_constructed (GObject * object)
 static void
 aur_receiver_processor_dispose (GObject * object)
 {
-  AurReceiverProcessor *receiver = (AurReceiverProcessor *) (object);
+  //AurReceiverProcessor *processor = (AurReceiverProcessor *) (object);
 
   G_OBJECT_CLASS (aur_receiver_processor_parent_class)->dispose (object);
 }
@@ -81,16 +93,20 @@ aur_receiver_processor_dispose (GObject * object)
 static void
 aur_receiver_processor_finalize (GObject * object)
 {
-  //AurReceiverProcessor *receiver = (AurReceiverProcessor *) (object);
+  AurReceiverProcessor *processor = (AurReceiverProcessor *) (object);
+  gint i;
+
+  for (i = 0; i < 8; i++)
+    g_free (processor->channels[i]);
 
   G_OBJECT_CLASS (aur_receiver_processor_parent_class)->finalize (object);
 }
 
 static void
 aur_receiver_processor_set_property (GObject * object, guint prop_id,
-    const GValue * value, GParamSpec * pspec)
+    const GValue * value G_GNUC_UNUSED, GParamSpec * pspec)
 {
-  AurReceiverProcessor *receiver = (AurReceiverProcessor *) (object);
+  //AurReceiverProcessor *processor = (AurReceiverProcessor *) (object);
 
   switch (prop_id) {
     default:
@@ -101,9 +117,9 @@ aur_receiver_processor_set_property (GObject * object, guint prop_id,
 
 static void
 aur_receiver_processor_get_property (GObject * object, guint prop_id,
-    GValue * value, GParamSpec * pspec)
+    GValue * value G_GNUC_UNUSED, GParamSpec * pspec)
 {
-  AurReceiverProcessor *receiver = (AurReceiverProcessor *) (object);
+  //AurReceiverProcessor *processor = (AurReceiverProcessor *) (object);
 
   switch (prop_id) {
     default:
@@ -112,8 +128,44 @@ aur_receiver_processor_get_property (GObject * object, guint prop_id,
   }
 }
 
+AurReceiverProcessorChannel *
+aur_receiver_processor_get_channel (AurReceiverProcessor * processor)
+{
+  AurReceiverProcessorChannel *channel = NULL;
+  gint i;
+
+  for (i = 0; i < 8; i++) {
+    AurReceiverProcessorChannel *cur = processor->channels[i];
+    if (cur->inuse)
+      continue;
+    channel = cur;
+    channel->inuse = TRUE;
+    GST_DEBUG_OBJECT (processor, "Allocated new channel %d", i);
+    break;
+  }
+
+  return channel;
+}
+
+void
+aur_receiver_processor_push_sample (AurReceiverProcessor * processor,
+    AurReceiverProcessorChannel * channel, GstSample * sample)
+{
+  GST_DEBUG_OBJECT (processor, "Got sample on channel %d", channel->id);
+  gst_sample_unref (sample);
+
+}
+
+void
+aur_receiver_processor_release_channel (AurReceiverProcessor * processor,
+    AurReceiverProcessorChannel * channel)
+{
+  GST_DEBUG_OBJECT (processor, "Releasing channel %d", channel->id);
+  channel->inuse = FALSE;
+}
+
 AurReceiverProcessor *
-aur_receiver_processor_new()
+aur_receiver_processor_new ()
 {
   return g_object_new (AUR_TYPE_RECEIVER_PROCESSOR, NULL);
 }

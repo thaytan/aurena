@@ -29,6 +29,7 @@
 #include <gst/app/gstappsink.h>
 
 #include "aur-receiver-ingest.h"
+#include "aur-receiver-processor.h"
 
 GST_DEBUG_CATEGORY_STATIC (ingest_debug);
 #define GST_CAT_DEFAULT ingest_debug
@@ -120,22 +121,39 @@ typedef struct _AurAppSinkClosure
 {
   AurReceiverIngestMedia *media;
   gint chanid;
+  AurReceiverProcessorChannel *channel;
 } AurAppSinkClosure;
 
 static void
-handle_stream_eos (GstAppSink * appsink, gpointer user_data)
+handle_stream_eos (GstAppSink * appsink G_GNUC_UNUSED, gpointer user_data)
 {
   AurAppSinkClosure *info = (AurAppSinkClosure *) (user_data);
   GST_LOG_OBJECT (info->media, "EOS on client %d channel %d", info->media->id,
       info->chanid);
+
+  aur_receiver_processor_release_channel (info->media->processor,
+      info->channel);
+  info->channel = NULL;
 }
 
 static GstFlowReturn
 handle_new_sample (GstAppSink * appsink, gpointer user_data)
 {
   AurAppSinkClosure *info = (AurAppSinkClosure *) (user_data);
+  GstSample *sample;
+
   GST_LOG_OBJECT (info->media, "New sample on client %d channel %d",
       info->media->id, info->chanid);
+
+  if (info->channel == NULL)
+    return GST_FLOW_OK;         /* After EOS?? */
+
+  sample = gst_app_sink_pull_sample (appsink);
+  if (!sample)
+    return GST_FLOW_OK;
+
+  aur_receiver_processor_push_sample (info->media->processor, info->channel,
+      sample);
 
   return GST_FLOW_OK;
 }
@@ -171,6 +189,7 @@ add_output_chain (AurReceiverIngestMedia * media, gint i)
   info = g_new0 (AurAppSinkClosure, 1);
   info->media = gst_object_ref (media);
   info->chanid = i;
+  info->channel = aur_receiver_processor_get_channel (info->media->processor);
 
   gst_app_sink_set_callbacks (GST_APP_SINK_CAST (appsink),
       &sink_cb, info, (GDestroyNotify) release_closure);

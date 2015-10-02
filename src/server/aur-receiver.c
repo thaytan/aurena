@@ -18,8 +18,9 @@
  */
 
 /*
- * Aurena Receiver manages incoming audio feeds
- * mixes them and outputs the 8-channel stream for ManyEars
+ * Aurena Receiver manages ingest objects to receive
+ * streams and the processor object that mixes them and
+ * outputs the 8-channel stream for ManyEars
  */
 
 #ifdef HAVE_CONFIG_H
@@ -28,6 +29,7 @@
 
 #include "aur-receiver.h"
 #include "aur-receiver-ingest.h"
+#include "aur-receiver-processor.h"
 
 static void aur_receiver_constructed (GObject * object);
 static void aur_receiver_dispose (GObject * object);
@@ -61,12 +63,13 @@ aur_receiver_class_init (AurReceiverClass * klass)
       g_param_spec_object ("rtsp-server", "RTSP Server object",
           "RTSP server instance to use",
           GST_TYPE_RTSP_SERVER, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
-  
+
 }
 
 static void
-aur_receiver_init (AurReceiver *receiver G_GNUC_UNUSED)
+aur_receiver_init (AurReceiver * receiver)
 {
+  receiver->processor = aur_receiver_processor_new ();
 }
 
 static void
@@ -79,11 +82,16 @@ aur_receiver_constructed (GObject * object)
 static void
 aur_receiver_dispose (GObject * object)
 {
-  AurReceiver *receiver = (AurReceiver *) (object);
+  AurReceiver *receiver = AUR_RECEIVER (object);
 
   if (receiver->rtsp) {
     gst_object_unref (receiver->rtsp);
     receiver->rtsp = NULL;
+  }
+
+  if (receiver->processor) {
+    g_object_unref (G_OBJECT (receiver->processor));
+    receiver->processor = NULL;
   }
 
   G_OBJECT_CLASS (aur_receiver_parent_class)->dispose (object);
@@ -130,36 +138,48 @@ aur_receiver_get_property (GObject * object, guint prop_id,
 }
 
 AurReceiver *
-aur_receiver_new(GstRTSPServer *rtsp)
+aur_receiver_new (GstRTSPServer * rtsp)
 {
-  return g_object_new (AUR_TYPE_RECEIVER,
-             "rtsp-server", rtsp, NULL);
+  return g_object_new (AUR_TYPE_RECEIVER, "rtsp-server", rtsp, NULL);
+}
+
+static GstRTSPMediaFactory *
+lookup_by_client_id (AurReceiver * receiver, guint client_id)
+{
+  GList *cur;
+  for (cur = receiver->ingests; cur != NULL; cur = g_list_next (cur)) {
+    AurReceiverIngestFactory *factory =
+        (AurReceiverIngestFactory *) (cur->data);
+    if (factory->id == client_id)
+      return (GstRTSPMediaFactory *) factory;
+  }
+  return NULL;
 }
 
 gchar *
-aur_receiver_get_record_dest (AurReceiver *receiver, guint client_id)
+aur_receiver_get_record_dest (AurReceiver * receiver, guint client_id)
 {
-  GstRTSPServer *server;
-  GstRTSPMountPoints *mounts;
   GstRTSPMediaFactory *factory;
   gchar *mount_point;
 
   g_return_val_if_fail (receiver->rtsp != NULL, NULL);
 
-  server = receiver->rtsp;
-  mounts = gst_rtsp_server_get_mount_points (server);
-
-  factory = aur_receiver_ingest_factory_new ();
-  gst_rtsp_media_factory_set_transport_mode (factory,
-      GST_RTSP_TRANSPORT_MODE_RECORD);
-  gst_rtsp_media_factory_set_launch (factory, "( decodebin name=depay0 ! queue ! audioconvert ! autoaudiosink )");
-  gst_rtsp_media_factory_set_latency (factory, 40);
-
   mount_point = g_strdup_printf ("/record/%u", client_id);
 
-  gst_rtsp_mount_points_add_factory (mounts, mount_point, factory);
+  factory = lookup_by_client_id (receiver, client_id);
+  if (factory == NULL) {
+    GstRTSPServer *server;
+    GstRTSPMountPoints *mounts;
 
-  g_object_unref (mounts);
+    factory = aur_receiver_ingest_factory_new (client_id, receiver->processor);
+
+    receiver->ingests = g_list_prepend (receiver->ingests, factory);
+
+    server = receiver->rtsp;
+    mounts = gst_rtsp_server_get_mount_points (server);
+    gst_rtsp_mount_points_add_factory (mounts, mount_point, factory);
+    g_object_unref (mounts);
+  }
 
   return mount_point;
 }

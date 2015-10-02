@@ -26,6 +26,11 @@
 G_BEGIN_DECLS
 
 #define AUR_TYPE_RECEIVER (aur_receiver_get_type ())
+#define AUR_RECEIVER(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj),AUR_TYPE_RECEIVER, AurReceiver))
+#define AUR_RECEIVER_CLASS(klass) (G_TYPE_CHECK_CLASS_CAST((klass),AUR_TYPE_RECEIVER, AurReceiver))
+#define AUR_IS_RECEIVER(obj) (G_TYPE_CHECK_INSTANCE_TYPE((obj),AUR_TYPE_RECEIVER))
+#define AUR_IS_RECEIVER_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass),AUR_TYPE_RECEIVER))
+#define AUR_RECEIVER_CAST(obj) ((AurReceiver*)(obj))
 
 typedef struct _AurReceiverClass AurReceiverClass;
 
@@ -34,6 +39,9 @@ struct _AurReceiver
   GObject parent;
 
   GstRTSPServer *rtsp;
+  AurReceiverProcessor *processor;
+  /* Factories in the list owned by RTSP server */
+  GList *ingests;
 };
 
 struct _AurReceiverClass

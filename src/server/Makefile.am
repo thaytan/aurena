@@ -8,6 +8,7 @@ libaurena_server_la_SOURCES = \
     aur-resource.c \
     aur-receiver.c \
     aur-receiver-ingest.c \
+    aur-receiver-processor.c \
     aur-rtsp-play-media.c \
     aur-server.c \
     aur-server-client.c
@@ -20,10 +21,11 @@ noinst_HEADERS = \
     aur-resource.h \
     aur-receiver.h \
     aur-receiver-ingest.h \
+    aur-receiver-processor.h \
     aur-rtsp-play-media.h \
     aur-server.h \
     aur-server-client.h \
     aur-server-types.h
 
 libaurena_server_la_CPPFLAGS = -I$(top_srcdir) $(AUR_COMMON_CFLAGS) $(GST_CFLAGS) $(GST_RTSP_CFLAGS) $(EXTRA_CFLAGS)
-libaurena_server_la_LIBADD  =
+libaurena_server_la_LIBADD  = -lgstapp-1.0 $(GST_RTSP_LIBS)

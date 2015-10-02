@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2015 Jan Schmidt <jan@centricular.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -16,26 +16,30 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  */
-#ifndef __AUR_SERVER_TYPES_H__
-#define __AUR_SERVER_TYPES_H__
+#ifndef __AUR_RECEIVER_PROCESSOR_H__
+#define __AUR_RECEIVER_PROCESSOR_H__
 
-#include <glib.h>
-#include <src/common/aur-types.h>
+#include <gst/gst.h>
+#include <src/server/aur-server-types.h>
 
 G_BEGIN_DECLS
 
-typedef struct _AurAvahi AurAvahi;
-typedef struct _AurClient AurClient;
-typedef struct _AurHttpResource AurHttpResource;
-typedef struct _AurManager AurManager;
-typedef struct _AurMediaDB AurMediaDB;
-typedef struct _AurReceiver AurReceiver;
-typedef struct _AurReceiverIngest AurReceiverIngest;
-typedef struct _AurReceiverProcessor AurReceiverProcessor;
-typedef struct _AurRTSPPlayMediaFactory AurRTSPPlayMediaFactory;
-typedef struct _AurServer AurServer;
-typedef struct _AurServerClient AurServerClient;
+#define AUR_TYPE_RECEIVER_PROCESSOR (aur_receiver_processor_get_type ())
+
+typedef struct _AurReceiverProcessorClass AurReceiverProcessorClass;
+
+struct _AurReceiverProcessor
+{
+  GObject parent;
+};
+
+struct _AurReceiverProcessorClass
+{
+  GObjectClass parent;
+};
+
+GType aur_receiver_processor_get_type(void);
+AurReceiverProcessor *aur_receiver_processor_new();
 
 G_END_DECLS
-
 #endif

@@ -52,7 +52,7 @@ GST_DEBUG_CATEGORY_STATIC (client_debug);
 
 static void _do_init()
 {
-  GST_DEBUG_CATEGORY_INIT (client_debug, "aurena::client", 0, "Aurena Client debug");
+  GST_DEBUG_CATEGORY_INIT (client_debug, "aurena/client", 0, "Aurena Client debug");
 }
 
 G_DEFINE_TYPE_WITH_CODE (AurClient, aur_client, G_TYPE_OBJECT, _do_init());

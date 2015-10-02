@@ -105,7 +105,7 @@ static const gint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
 
 static void _do_init()
 {
-  GST_DEBUG_CATEGORY_INIT (manager_debug, "aurena::manager", 0, "Aurena Manager debug");
+  GST_DEBUG_CATEGORY_INIT (manager_debug, "aurena/manager", 0, "Aurena Manager debug");
 }
 
 G_DEFINE_TYPE_WITH_CODE (AurManager, aur_manager, G_TYPE_OBJECT, _do_init());

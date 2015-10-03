@@ -13,5 +13,7 @@ build.xml: AndroidManifest.xml
 install:
 	adb install -r bin/AndroidAurena-debug.apk
 
+debug:
+	GSTREAMER_SDK_ROOT_ANDROID=$(GSTREAMER_SDK_ROOT_ANDROID) ndk-gdb.py --project=./ --start --nowait --verbose
 clean:
 	rm -f setup.stamp

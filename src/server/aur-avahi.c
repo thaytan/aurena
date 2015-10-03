@@ -62,8 +62,8 @@ static void aur_avahi_finalize (GObject * object);
 static void create_service (AurAvahi * avahi);
 
 static void
-entry_group_callback (AVAHI_GCC_UNUSED AvahiEntryGroup * g, AvahiEntryGroupState state,
-    AVAHI_GCC_UNUSED void *userdata)
+entry_group_callback (AVAHI_GCC_UNUSED AvahiEntryGroup * g,
+    AvahiEntryGroupState state, AVAHI_GCC_UNUSED void *userdata)
 {
   AurAvahi *avahi = (AurAvahi *) (userdata);
   AurAvahiPrivate *priv = avahi->priv;
@@ -90,7 +90,7 @@ entry_group_callback (AVAHI_GCC_UNUSED AvahiEntryGroup * g, AvahiEntryGroupState
       break;
     }
     case AVAHI_ENTRY_GROUP_FAILURE:
-      g_warning("Entry group failure: %s",
+      g_warning ("Entry group failure: %s",
           avahi_strerror (avahi_client_errno (priv->client)));
       break;
     default:
@@ -118,7 +118,8 @@ create_service (AurAvahi * avahi)
     /* If the group is empty (either because it was just created, or
      * because it was reset previously, add our entries.  */
     if (avahi_entry_group_is_empty (priv->group)) {
-      g_message ("Adding service '%s' on port %d", priv->service_name, priv->port);
+      g_message ("Adding service '%s' on port %d", priv->service_name,
+          priv->port);
 
       ret =
           avahi_entry_group_add_service (priv->group, AVAHI_IF_UNSPEC,
@@ -271,10 +272,9 @@ aur_avahi_class_init (AurAvahiClass * klass)
   g_type_class_add_private (gobject_class, sizeof (AurAvahiPrivate));
 
   g_object_class_install_property (gobject_class, PROP_PORT,
-    g_param_spec_int ("aur-port", "Aurena port",
-                         "port for Aurena service",
-                         1, 65535, 5457,
-                         G_PARAM_READWRITE|G_PARAM_CONSTRUCT));
+      g_param_spec_int ("aur-port", "Aurena port",
+          "port for Aurena service",
+          1, 65535, 5457, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
 
   avahi_set_allocator (avahi_glib_allocator ());
 }

@@ -24,7 +24,7 @@
 #include "aur-resource.h"
 
 const gchar *
-aur_resource_get_mime_type (const gchar *filename)
+aur_resource_get_mime_type (const gchar * filename)
 {
   const gchar *extension;
 

@@ -181,7 +181,9 @@ aur_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
   }
 
   if (condition & G_IO_IN) {
-    status = aur_websocket_parser_read_io (AUR_WEBSOCKET_PARSER (client), client->io);
+    status =
+        aur_websocket_parser_read_io (AUR_WEBSOCKET_PARSER (client),
+        client->io);
   }
 
   if (status == G_IO_STATUS_EOF || status == G_IO_STATUS_ERROR) {
@@ -526,7 +528,7 @@ aur_server_client_send_message (AurServerClient * client,
 }
 
 const gchar *
-aur_server_client_get_host (AurServerClient *client)
+aur_server_client_get_host (AurServerClient * client)
 {
   return client->host;
 }

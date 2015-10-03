@@ -115,9 +115,9 @@ error:
 }
 
 static GFile *
-get_data_filename (const gchar *basename)
+get_data_filename (const gchar * basename)
 {
-  const gchar * const * dirs;
+  const gchar *const *dirs;
   gchar *filepath = NULL;
   GFile *file;
   gint i;
@@ -139,7 +139,9 @@ get_data_filename (const gchar *basename)
 
   /* Check uninstalled */
   if (file == NULL) {
-    filepath = g_build_filename (g_get_current_dir (), "data", "htdocs", basename, NULL);
+    filepath =
+        g_build_filename (g_get_current_dir (), "data", "htdocs", basename,
+        NULL);
     file = g_file_new_for_path (filepath);
     if (!g_file_query_exists (file, NULL)) {
       g_object_unref (file);
@@ -149,7 +151,8 @@ get_data_filename (const gchar *basename)
   }
 
   if (file &&
-      g_file_query_file_type (file, G_FILE_QUERY_INFO_NONE, NULL) == G_FILE_TYPE_DIRECTORY) {
+      g_file_query_file_type (file, G_FILE_QUERY_INFO_NONE,
+          NULL) == G_FILE_TYPE_DIRECTORY) {
     GFile *tmp = g_file_get_child (file, "index.html");
     g_object_unref (file);
     file = tmp;
@@ -229,7 +232,8 @@ aur_server_constructed (GObject * object)
   server->soup = soup_server_new (NULL, NULL);
 
   soup_server_add_handler (server->soup, "/",
-      (SoupServerCallback) server_file_cb, g_object_ref (server), g_object_unref);
+      (SoupServerCallback) server_file_cb, g_object_ref (server),
+      g_object_unref);
 
   soup_server_add_handler (server->soup, "/resource",
       (SoupServerCallback) server_resource_cb,
@@ -340,9 +344,9 @@ aur_server_stop (AurServer * server)
   soup_server_disconnect (server->soup);
   /* some requests may still be in progress but no new
    * connections can happen
-  */
+   */
 }
- 
+
 void
 aur_server_set_resource_cb (AurServer * server,
     AurHttpResource * (*callback) (AurServer * server, guint resource_id,

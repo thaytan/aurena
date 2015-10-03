@@ -44,14 +44,13 @@ static void aur_config_set_property (GObject * object, guint prop_id,
 static void aur_config_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-static void aur_config_finalize(GObject *object);
-static void aur_config_dispose(GObject *object);
+static void aur_config_finalize (GObject * object);
+static void aur_config_dispose (GObject * object);
 
 static gchar *
 get_default_db_location ()
 {
-  return
-      g_build_filename (g_get_user_data_dir (), "aurena", "aurena.db", NULL);
+  return g_build_filename (g_get_user_data_dir (), "aurena", "aurena.db", NULL);
 }
 
 static gchar *
@@ -69,17 +68,18 @@ get_default_config_location ()
 }
 
 static void
-aur_config_init (AurConfig *config)
+aur_config_init (AurConfig * config)
 {
-  config->config_file = get_default_config_location();
+  config->config_file = get_default_config_location ();
   config->aur_port = 5457;
   config->rtsp_port = 5458;
-  config->database_location = get_default_db_location();
-  config->playlist_location = get_default_playlist_location();
+  config->database_location = get_default_db_location ();
+  config->playlist_location = get_default_playlist_location ();
 }
 
 static void
-try_read_int (GKeyFile *kf, const gchar *group, const gchar *key, gint *dest)
+try_read_int (GKeyFile * kf, const gchar * group, const gchar * key,
+    gint * dest)
 {
   GError *error = NULL;
   gint tmp = g_key_file_get_integer (kf, group, key, &error);
@@ -92,8 +92,8 @@ try_read_int (GKeyFile *kf, const gchar *group, const gchar *key, gint *dest)
 }
 
 static void
-try_read_string (GKeyFile *kf, const gchar *group, const gchar *key,
-     gchar **dest)
+try_read_string (GKeyFile * kf, const gchar * group, const gchar * key,
+    gchar ** dest)
 {
   GError *error = NULL;
   gchar *tmp = g_key_file_get_string (kf, group, key, &error);
@@ -107,13 +107,12 @@ try_read_string (GKeyFile *kf, const gchar *group, const gchar *key,
 }
 
 static void
-make_abs_path (gchar **dest, gchar *rel)
+make_abs_path (gchar ** dest, gchar * rel)
 {
   if (!g_path_is_absolute (*dest)) {
     /* Make path absolute, relative to the config file */
     gchar *dir = g_path_get_dirname (rel);
-    gchar *abs_location =
-        g_build_filename (dir, *dest, NULL);
+    gchar *abs_location = g_build_filename (dir, *dest, NULL);
     g_free (dir);
     g_free (*dest);
     *dest = abs_location;
@@ -121,37 +120,37 @@ make_abs_path (gchar **dest, gchar *rel)
 }
 
 static void
-load_config (G_GNUC_UNUSED AurConfig *config)
+load_config (G_GNUC_UNUSED AurConfig * config)
 {
   /* Read in config_file and split out pieces to the vars */
-  GKeyFile *kf = g_key_file_new();
+  GKeyFile *kf = g_key_file_new ();
   if (kf == NULL)
     goto fail;
 
-  if (!g_key_file_load_from_file(kf, config->config_file,
-      G_KEY_FILE_KEEP_COMMENTS, NULL))
+  if (!g_key_file_load_from_file (kf, config->config_file,
+          G_KEY_FILE_KEEP_COMMENTS, NULL))
     goto fail;
 
-  try_read_int(kf, "server", "port", &config->aur_port);
-  try_read_int(kf, "server", "rtsp-port", &config->aur_port);
-  try_read_string(kf, "server", "database", &config->database_location);
-  try_read_string(kf, "server", "playlist", &config->playlist_location);
-  make_abs_path(&config->database_location, config->config_file);
-  make_abs_path(&config->playlist_location, config->config_file);
-  
+  try_read_int (kf, "server", "port", &config->aur_port);
+  try_read_int (kf, "server", "rtsp-port", &config->aur_port);
+  try_read_string (kf, "server", "database", &config->database_location);
+  try_read_string (kf, "server", "playlist", &config->playlist_location);
+  make_abs_path (&config->database_location, config->config_file);
+  make_abs_path (&config->playlist_location, config->config_file);
+
   g_key_file_free (kf);
   return;
 
-fail:  
+fail:
   if (kf)
     g_key_file_free (kf);
   g_warning ("Failed to read config file %s", config->config_file);
 }
 
 static void
-aur_config_constructed (GObject *object)
+aur_config_constructed (GObject * object)
 {
-  AurConfig *config = (AurConfig *)(object);
+  AurConfig *config = (AurConfig *) (object);
 
   if (G_OBJECT_CLASS (aur_config_parent_class)->constructed != NULL)
     G_OBJECT_CLASS (aur_config_parent_class)->constructed (object);
@@ -160,9 +159,9 @@ aur_config_constructed (GObject *object)
 }
 
 static void
-aur_config_class_init (AurConfigClass *config_class)
+aur_config_class_init (AurConfigClass * config_class)
 {
-  GObjectClass *gobject_class = (GObjectClass *)(config_class);
+  GObjectClass *gobject_class = (GObjectClass *) (config_class);
   gchar *location;
 
   gobject_class->constructed = aur_config_constructed;
@@ -172,44 +171,38 @@ aur_config_class_init (AurConfigClass *config_class)
   gobject_class->set_property = aur_config_set_property;
   gobject_class->get_property = aur_config_get_property;
 
-  location = get_default_config_location();
+  location = get_default_config_location ();
   g_object_class_install_property (gobject_class, PROP_CONFIG_FILE,
-    g_param_spec_string ("config-file", "configuration file",
-                         "Location of the configuration file",
-                         location, G_PARAM_READWRITE|G_PARAM_CONSTRUCT));
-  g_free(location);
+      g_param_spec_string ("config-file", "configuration file",
+          "Location of the configuration file",
+          location, G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
+  g_free (location);
 
   g_object_class_install_property (gobject_class, PROP_PORT,
-    g_param_spec_int ("aur-port", "Aurena port",
-                         "port for Aurena service",
-                         1, 65535, 5457,
-                         G_PARAM_READWRITE));
+      g_param_spec_int ("aur-port", "Aurena port",
+          "port for Aurena service", 1, 65535, 5457, G_PARAM_READWRITE));
   g_object_class_install_property (gobject_class, PROP_RTSP_PORT,
-    g_param_spec_int ("rtsp-port", "RTSP port",
-                         "port for RTSP server",
-                         1, 65535, 5458,
-                         G_PARAM_READWRITE));
+      g_param_spec_int ("rtsp-port", "RTSP port",
+          "port for RTSP server", 1, 65535, 5458, G_PARAM_READWRITE));
 
-  location = get_default_db_location();
+  location = get_default_db_location ();
   g_object_class_install_property (gobject_class, PROP_DATABASE,
-    g_param_spec_string ("database", "database",
-                         "Location of the media database file",
-                         location, G_PARAM_READWRITE));
-  g_free(location);
+      g_param_spec_string ("database", "database",
+          "Location of the media database file", location, G_PARAM_READWRITE));
+  g_free (location);
 
-  location = get_default_playlist_location();
+  location = get_default_playlist_location ();
   g_object_class_install_property (gobject_class, PROP_PLAYLIST,
-    g_param_spec_string ("playlist", "playlist",
-                         "Location of the media playlist file",
-                         location, G_PARAM_READWRITE));
-  g_free(location);
+      g_param_spec_string ("playlist", "playlist",
+          "Location of the media playlist file", location, G_PARAM_READWRITE));
+  g_free (location);
 
 }
 
 static void
-aur_config_finalize(GObject *object)
+aur_config_finalize (GObject * object)
 {
-  AurConfig *config = (AurConfig *)(object);
+  AurConfig *config = (AurConfig *) (object);
 
   g_free (config->config_file);
   g_free (config->database_location);
@@ -219,7 +212,7 @@ aur_config_finalize(GObject *object)
 }
 
 static void
-aur_config_dispose(GObject *object)
+aur_config_dispose (GObject * object)
 {
   G_OBJECT_CLASS (aur_config_parent_class)->dispose (object);
 }
@@ -228,7 +221,7 @@ static void
 aur_config_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  AurConfig *config = (AurConfig *)(object);
+  AurConfig *config = (AurConfig *) (object);
 
   switch (prop_id) {
     case PROP_CONFIG_FILE:
@@ -236,7 +229,7 @@ aur_config_set_property (GObject * object, guint prop_id,
         g_free (config->config_file);
       config->config_file = g_value_dup_string (value);
       if (config->config_file == NULL)
-        config->config_file = get_default_config_location();
+        config->config_file = get_default_config_location ();
       break;
     case PROP_PORT:
       config->aur_port = g_value_get_int (value);
@@ -249,14 +242,14 @@ aur_config_set_property (GObject * object, guint prop_id,
         g_free (config->database_location);
       config->database_location = g_value_dup_string (value);
       if (config->database_location == NULL)
-        config->database_location = get_default_db_location();
+        config->database_location = get_default_db_location ();
       break;
     case PROP_PLAYLIST:
       if (config->playlist_location)
         g_free (config->playlist_location);
       config->playlist_location = g_value_dup_string (value);
       if (config->playlist_location == NULL)
-        config->playlist_location = get_default_playlist_location();
+        config->playlist_location = get_default_playlist_location ();
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -268,7 +261,7 @@ static void
 aur_config_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  AurConfig *config = (AurConfig *)(object);
+  AurConfig *config = (AurConfig *) (object);
 
   switch (prop_id) {
     case PROP_CONFIG_FILE:
@@ -293,8 +286,8 @@ aur_config_get_property (GObject * object, guint prop_id,
 }
 
 AurConfig *
-aur_config_new (const gchar *config_file)
+aur_config_new (const gchar * config_file)
 {
-  /* FIXME: return NULL if config file loading failed? */ 
+  /* FIXME: return NULL if config file loading failed? */
   return g_object_new (AUR_TYPE_CONFIG, "config-file", config_file, NULL);
 }

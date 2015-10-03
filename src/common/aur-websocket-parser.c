@@ -61,8 +61,9 @@ aur_websocket_parser_class_init (AurWebSocketParserClass * parser_class)
 
   aur_websocket_parser_signals[MSG_RECEIVED] =
       g_signal_new ("message-received", G_TYPE_FROM_CLASS (parser_class),
-      G_SIGNAL_RUN_LAST, G_STRUCT_OFFSET (AurWebSocketParserClass, message_received), NULL, NULL,
-      g_cclosure_marshal_generic, G_TYPE_NONE, 2, G_TYPE_CHAR, G_TYPE_UINT64);
+      G_SIGNAL_RUN_LAST, G_STRUCT_OFFSET (AurWebSocketParserClass,
+          message_received), NULL, NULL, g_cclosure_marshal_generic,
+      G_TYPE_NONE, 2, G_TYPE_CHAR, G_TYPE_UINT64);
 }
 
 static void
@@ -140,8 +141,7 @@ try_parse_websocket_fragment (AurWebSocketParser * parser)
 
   /* Fire a signal to get this packet processed */
 #if 0
-  g_print ("Have websocket msg of size %" G_GUINT64_FORMAT "\n",
-      frag_size);
+  g_print ("Have websocket msg of size %" G_GUINT64_FORMAT "\n", frag_size);
 #endif
   g_signal_emit (parser, aur_websocket_parser_signals[MSG_RECEIVED], 0,
       decoded, (guint64) (frag_size));
@@ -181,8 +181,9 @@ aur_websocket_parser_read_io (AurWebSocketParser * p, GIOChannel * io)
 
   do {
     status =
-      g_io_channel_read_chars (io,
-      p->in_buf + p->in_bufavail, p->in_bufsize - p->in_bufavail, &bread, NULL);
+        g_io_channel_read_chars (io,
+        p->in_buf + p->in_bufavail, p->in_bufsize - p->in_bufavail, &bread,
+        NULL);
   } while (status == G_IO_STATUS_AGAIN);
 
   if (status != G_IO_STATUS_NORMAL)

@@ -101,8 +101,7 @@ aur_media_db_constructed (G_GNUC_UNUSED GObject * object)
   if (!media_db_create_tables (media_db))
     media_db->priv->errored = TRUE;
   g_print ("media DB ready at %s with %d entries\n",
-      media_db->priv->db_file,
-      aur_media_db_get_file_count (media_db));
+      media_db->priv->db_file, aur_media_db_get_file_count (media_db));
 }
 
 static void
@@ -301,7 +300,7 @@ done:
 }
 
 void
-aur_media_db_add_file (AurMediaDB * media_db, GFile *file)
+aur_media_db_add_file (AurMediaDB * media_db, GFile * file)
 {
   gchar *basename;
   guint64 path_id;
@@ -397,7 +396,7 @@ done:
 }
 
 void
-aur_media_db_begin_transaction (AurMediaDB *media_db)
+aur_media_db_begin_transaction (AurMediaDB * media_db)
 {
   sqlite3_stmt *stmt = NULL;
   sqlite3 *handle = media_db->priv->handle;
@@ -409,7 +408,7 @@ aur_media_db_begin_transaction (AurMediaDB *media_db)
 }
 
 void
-aur_media_db_commit_transaction (AurMediaDB *media_db)
+aur_media_db_commit_transaction (AurMediaDB * media_db)
 {
   sqlite3_stmt *stmt = NULL;
   sqlite3 *handle = media_db->priv->handle;
@@ -420,4 +419,3 @@ aur_media_db_commit_transaction (AurMediaDB *media_db)
   sqlite3_step (stmt);
 
 }
-

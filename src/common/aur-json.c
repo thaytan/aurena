@@ -27,36 +27,33 @@
 #include <src/common/aur-json.h>
 
 static void
-aur_json_array_add_to_val (JsonArray *array, guint index_,
-    JsonNode *element_node, GValue *outval);
+aur_json_array_add_to_val (JsonArray * array, guint index_,
+    JsonNode * element_node, GValue * outval);
 
 static void
-aur_json_node_into_val (JsonNode *element_node, GValue *v)
+aur_json_node_into_val (JsonNode * element_node, GValue * v)
 {
   if (JSON_NODE_HOLDS_OBJECT (element_node)) {
     GstStructure *child = aur_json_to_gst_structure (element_node);
     g_value_init (v, GST_TYPE_STRUCTURE);
     gst_value_set_structure (v, child);
-  }
-  else if (JSON_NODE_HOLDS_ARRAY (element_node)) {
+  } else if (JSON_NODE_HOLDS_ARRAY (element_node)) {
     JsonArray *arr = json_node_get_array (element_node);
     g_value_init (v, GST_TYPE_ARRAY);
     json_array_foreach_element (arr,
         (JsonArrayForeach) aur_json_array_add_to_val, v);
-  }
-  else {
+  } else {
     json_node_get_value (element_node, v);
   }
 }
 
 static void
-aur_json_array_add_to_val (G_GNUC_UNUSED JsonArray *array,
-    G_GNUC_UNUSED guint index_,
-    JsonNode *element_node, GValue *outval)
+aur_json_array_add_to_val (G_GNUC_UNUSED JsonArray * array,
+    G_GNUC_UNUSED guint index_, JsonNode * element_node, GValue * outval)
 {
   GValue v = G_VALUE_INIT;
   aur_json_node_into_val (element_node, &v);
-  gst_value_array_append_value (outval, &v); 
+  gst_value_array_append_value (outval, &v);
   g_value_unset (&v);
 }
 
@@ -89,15 +86,14 @@ aur_json_to_gst_structure (JsonNode * root)
 }
 
 static JsonNode *
-aur_json_value_to_node (const GValue *value)
+aur_json_value_to_node (const GValue * value)
 {
   JsonNode *n = NULL;
 
   if (GST_VALUE_HOLDS_STRUCTURE (value)) {
     const GstStructure *s = gst_value_get_structure (value);
     n = aur_json_from_gst_structure (s);
-  }
-  else if (GST_VALUE_HOLDS_ARRAY (value)) {
+  } else if (GST_VALUE_HOLDS_ARRAY (value)) {
     guint count = gst_value_array_get_size (value);
     guint i;
     JsonArray *arr = json_array_sized_new (count);
@@ -110,7 +106,7 @@ aur_json_value_to_node (const GValue *value)
     n = json_node_new (JSON_NODE_ARRAY);
     json_node_take_array (n, arr);
   } else if (G_VALUE_HOLDS_UINT64 (value)) {
-    gint64 tmp = (gint64)(g_value_get_uint64 (value));
+    gint64 tmp = (gint64) (g_value_get_uint64 (value));
     /* Can't represent things > 2^63-1 */
     if (tmp < 0)
       return NULL;

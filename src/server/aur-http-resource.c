@@ -133,7 +133,7 @@ aur_http_resource_close (AurHttpResource * resource)
 }
 
 static AurTransfer *
-aur_transfer_new (AurHttpResource *resource)
+aur_transfer_new (AurHttpResource * resource)
 {
   AurTransfer *transfer;
 
@@ -150,7 +150,7 @@ aur_transfer_new (AurHttpResource *resource)
 }
 
 static void
-aur_transfer_free (AurTransfer *transfer)
+aur_transfer_free (AurTransfer * transfer)
 {
   aur_http_resource_close (transfer->resource);
 
@@ -179,7 +179,8 @@ aur_http_resource_new_transfer (AurHttpResource * resource, SoupMessage * msg)
    * redirect. */
   if (!g_file_is_native (resource->source_file)) {
     gchar *resource_uri = g_file_get_uri (resource->source_file);
-    soup_message_set_redirect (msg, SOUP_STATUS_TEMPORARY_REDIRECT, resource_uri);
+    soup_message_set_redirect (msg, SOUP_STATUS_TEMPORARY_REDIRECT,
+        resource_uri);
     g_free (resource_uri);
 
     return;
@@ -195,10 +196,11 @@ aur_http_resource_new_transfer (AurHttpResource * resource, SoupMessage * msg)
   local_path = g_file_get_path (resource->source_file);
   g_assert (local_path != NULL);
 
-  buffer = soup_buffer_new_with_owner (
-      g_mapped_file_get_contents (transfer->resource->data),
-      g_mapped_file_get_length (transfer->resource->data),
-      transfer, (GDestroyNotify) aur_transfer_free);
+  buffer =
+      soup_buffer_new_with_owner (g_mapped_file_get_contents
+      (transfer->resource->data),
+      g_mapped_file_get_length (transfer->resource->data), transfer,
+      (GDestroyNotify) aur_transfer_free);
 
   soup_message_set_status (msg, SOUP_STATUS_OK);
   soup_message_headers_replace (msg->response_headers,

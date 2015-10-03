@@ -73,23 +73,24 @@ static gboolean custom_setup_rtpbin (GstRTSPMedia * media, GstElement * rtpbin);
 static void
 aur_rtsp_play_media_factory_class_init (AurRTSPPlayMediaFactoryClass * klass)
 {
-  GstRTSPMediaFactoryClass *mf_klass =
-      (GstRTSPMediaFactoryClass *) (klass);
+  GstRTSPMediaFactoryClass *mf_klass = (GstRTSPMediaFactoryClass *) (klass);
   mf_klass->create_pipeline = create_pipeline;
 }
 
 static void
-aur_rtsp_play_media_factory_init (AurRTSPPlayMediaFactory * factory G_GNUC_UNUSED)
+aur_rtsp_play_media_factory_init (AurRTSPPlayMediaFactory *
+    factory G_GNUC_UNUSED)
 {
 }
 
 static GstElement *
-create_pipeline (GstRTSPMediaFactory * factory G_GNUC_UNUSED, GstRTSPMedia * media)
+create_pipeline (GstRTSPMediaFactory * factory G_GNUC_UNUSED,
+    GstRTSPMedia * media)
 {
   GstElement *pipeline;
 
   pipeline = gst_pipeline_new ("media-pipeline");
-  gst_pipeline_use_clock (GST_PIPELINE (pipeline), gst_system_clock_obtain());
+  gst_pipeline_use_clock (GST_PIPELINE (pipeline), gst_system_clock_obtain ());
   gst_rtsp_media_take_pipeline (media, GST_PIPELINE_CAST (pipeline));
 
   return pipeline;
@@ -115,4 +116,3 @@ custom_setup_rtpbin (GstRTSPMedia * media G_GNUC_UNUSED, GstElement * rtpbin)
   g_object_set (rtpbin, "ntp-time-source", 3, NULL);
   return TRUE;
 }
-

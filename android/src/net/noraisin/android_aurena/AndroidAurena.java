@@ -42,6 +42,7 @@ public class AndroidAurena extends Activity implements SurfaceHolder.Callback {
     NsdManager.ResolveListener mResolveListener;
     NsdManager.DiscoveryListener mDiscoveryListener;
     NsdServiceInfo mService;
+    private String mLastServer;
 
     private static final String SERVICE_TYPE = "_aurena._tcp.";
     private static final String TAG = "GStreamer";
@@ -229,9 +230,14 @@ public class AndroidAurena extends Activity implements SurfaceHolder.Callback {
               mService = serviceInfo;
               String server = mService.getHost().getHostAddress() + ":" + mService.getPort();
 
-              Log.d(TAG, "Connecting to server: " + server);
-              nativePause ();
-              nativePlay (server);
+              /* Only destroy the player if the server changed, otherwise
+               * it'll reconnect itself */
+              if (mLastServer == null || !mLastServer.equals(server)) {
+                Log.d(TAG, "Connecting to server: " + server);
+                nativePause ();
+                nativePlay (server);
+                mLastServer = server;
+              }
           }
         };
     }

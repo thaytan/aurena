@@ -83,8 +83,8 @@ struct _AurClient
   GstElement *player;
   GSource *bus_source;
 
-  guint timeout;
-  guint idle_timeout;
+  GSource *recon_timeout;
+  GSource *idle_timeout;
 
   gboolean connecting;
   gboolean was_connected;

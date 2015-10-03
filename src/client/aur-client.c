@@ -104,6 +104,15 @@ static void connect_to_server (AurClient * client, const gchar * server,
     int port);
 static void construct_player (AurClient * client);
 
+static GSource *
+aur_client_new_timeout (AurClient * client, guint interval, GSourceFunc cb)
+{
+  GSource *s = g_timeout_source_new_seconds (interval);
+  g_source_set_callback (s, (GSourceFunc) cb, client, NULL);
+  g_source_attach (s, client->context);
+  return s;
+}
+
 static void
 free_player_info (GArray * player_info)
 {
@@ -123,7 +132,10 @@ free_player_info (GArray * player_info)
 static gboolean
 try_reconnect (AurClient * client)
 {
-  client->timeout = 0;
+  if (client->recon_timeout) {
+    g_source_destroy (client->recon_timeout);
+    client->recon_timeout = NULL;
+  }
 
   GST_LOG_OBJECT (client, "Entering reconnect. server_host %s",
       client->server_host);
@@ -174,8 +186,8 @@ handle_connection_closed_cb (G_GNUC_UNUSED SoupSession * session,
   client->connecting &= ~flag;
 
   if (client->idle_timeout) {
-    g_source_remove (client->idle_timeout);
-    client->idle_timeout = 0;
+    g_source_destroy (client->idle_timeout);
+    client->idle_timeout = NULL;
   }
 
   if (msg->status_code == SOUP_STATUS_CANCELLED)
@@ -212,10 +224,10 @@ handle_connection_closed_cb (G_GNUC_UNUSED SoupSession * session,
     g_object_notify (G_OBJECT (client), "connected-server");
   }
 
-  if (client->timeout == 0) {
+  if (client->recon_timeout == NULL) {
     GST_LOG_OBJECT (client, "Scheduling reconnect attempt in 1 second");
-    client->timeout =
-        g_timeout_add_seconds (1, (GSourceFunc) try_reconnect, client);
+    client->recon_timeout =
+        aur_client_new_timeout (client, 1, (GSourceFunc) try_reconnect);
   }
 }
 
@@ -1026,9 +1038,9 @@ handle_received_chunk (SoupMessage * msg, SoupBuffer * chunk,
 
   /* Set up or re-trigger 20 second idle timeout for ping messages */
   if (client->idle_timeout)
-    g_source_remove (client->idle_timeout);
-  client->idle_timeout = g_timeout_add_seconds (20,
-      (GSourceFunc) conn_idle_timeout, client);
+    g_source_destroy (client->idle_timeout);
+  client->idle_timeout =
+      aur_client_new_timeout (client, 20, (GSourceFunc) conn_idle_timeout);
 
 #if HAVE_AVAHI
   /* Successful server connection, stop avahi discovery */
@@ -1488,8 +1500,8 @@ browse_callback (AVAHI_GCC_UNUSED AvahiServiceBrowser * b,
     case AVAHI_BROWSER_FAILURE:
       /* Respawn browser on a timer? */
       avahi_service_browser_free (client->avahi_sb);
-      client->timeout = g_timeout_add_seconds (1,
-          (GSourceFunc) try_reconnect, client);
+      client->recon_timeout =
+          aur_client_new_timeout (client, 1, (GSourceFunc) try_reconnect);
       return;
 
     case AVAHI_BROWSER_NEW:{

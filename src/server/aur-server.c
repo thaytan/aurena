@@ -31,7 +31,7 @@
 #include <src/common/aur-config.h>
 
 #include "aur-server.h"
-#include "aur-server-client.h"
+#include "aur-http-client.h"
 #include "aur-resource.h"
 #include "aur-http-resource.h"
 

@@ -24,9 +24,9 @@
 #include <libsoup/soup-server.h>
 #include <string.h>
 
-#include "aur-server-client.h"
+#include "aur-http-client.h"
 
-G_DEFINE_TYPE (AurServerClient, aur_server_client, AUR_TYPE_WEBSOCKET_PARSER);
+G_DEFINE_TYPE (AurHTTPClient, aur_http_client, AUR_TYPE_WEBSOCKET_PARSER);
 
 enum
 {
@@ -34,7 +34,7 @@ enum
   LAST_SIGNAL
 };
 
-static guint aur_server_client_signals[LAST_SIGNAL] = { 0 };
+static guint aur_http_client_signals[LAST_SIGNAL] = { 0 };
 
 typedef struct _PendingMsg PendingMsg;
 
@@ -46,33 +46,33 @@ struct _PendingMsg
 
 static guint next_conn_id = 1;
 
-static void aur_server_client_finalize (GObject * object);
-static void aur_server_client_dispose (GObject * object);
+static void aur_http_client_finalize (GObject * object);
+static void aur_http_client_dispose (GObject * object);
 
 static void
-aur_server_client_init (AurServerClient * client)
+aur_http_client_init (AurHTTPClient * client)
 {
   client->conn_id = next_conn_id++;
 }
 
 static void
-aur_server_client_class_init (AurServerClientClass * client_class)
+aur_http_client_class_init (AurHTTPClientClass * client_class)
 {
   GObjectClass *gobject_class = (GObjectClass *) (client_class);
 
-  gobject_class->dispose = aur_server_client_dispose;
-  gobject_class->finalize = aur_server_client_finalize;
+  gobject_class->dispose = aur_http_client_dispose;
+  gobject_class->finalize = aur_http_client_finalize;
 
-  aur_server_client_signals[CONNECTION_LOST] =
+  aur_http_client_signals[CONNECTION_LOST] =
       g_signal_new ("connection-lost", G_TYPE_FROM_CLASS (client_class),
       G_SIGNAL_RUN_LAST, 0, NULL, NULL,
       g_cclosure_marshal_generic, G_TYPE_NONE, 0, G_TYPE_NONE);
 }
 
 static void
-aur_server_client_finalize (GObject * object)
+aur_http_client_finalize (GObject * object)
 {
-  AurServerClient *client = (AurServerClient *) (object);
+  AurHTTPClient *client = (AurHTTPClient *) (object);
 
   if (client->disco_sig) {
     g_signal_handler_disconnect (client->event_pipe, client->disco_sig);
@@ -98,13 +98,13 @@ aur_server_client_finalize (GObject * object)
 
   g_free (client->out_buf);
 
-  G_OBJECT_CLASS (aur_server_client_parent_class)->finalize (object);
+  G_OBJECT_CLASS (aur_http_client_parent_class)->finalize (object);
 }
 
 static void
-aur_server_client_dispose (GObject * object)
+aur_http_client_dispose (GObject * object)
 {
-  AurServerClient *client = (AurServerClient *) (object);
+  AurHTTPClient *client = (AurHTTPClient *) (object);
 
   if (client->io) {
     g_source_remove (client->io_watch);
@@ -113,11 +113,11 @@ aur_server_client_dispose (GObject * object)
     client->io = NULL;
   }
 
-  G_OBJECT_CLASS (aur_server_client_parent_class)->dispose (object);
+  G_OBJECT_CLASS (aur_http_client_parent_class)->dispose (object);
 }
 
 static void
-aur_server_connection_lost (AurServerClient * client)
+aur_server_connection_lost (AurHTTPClient * client)
 {
   if (client->fired_conn_lost)
     return;
@@ -130,8 +130,8 @@ aur_server_connection_lost (AurServerClient * client)
     client->io = NULL;
   }
 
-  if (client->type == AUR_SERVER_CLIENT_CHUNKED ||
-      client->type == AUR_SERVER_CLIENT_SINGLE) {
+  if (client->type == AUR_HTTP_CLIENT_CHUNKED ||
+      client->type == AUR_HTTP_CLIENT_SINGLE) {
     if (client->need_body_complete)
       soup_message_body_complete (client->event_pipe->response_body);
     client->need_body_complete = FALSE;
@@ -143,22 +143,21 @@ aur_server_connection_lost (AurServerClient * client)
     client->socket = NULL;
   }
 
-  g_signal_emit (client, aur_server_client_signals[CONNECTION_LOST], 0, NULL);
+  g_signal_emit (client, aur_http_client_signals[CONNECTION_LOST], 0, NULL);
 }
 
 static void
-aur_server_client_disconnect (G_GNUC_UNUSED SoupMessage * message,
-    AurServerClient * client)
+aur_http_client_disconnect (G_GNUC_UNUSED SoupMessage * message,
+    AurHTTPClient * client)
 {
   client->need_body_complete = FALSE;
   aur_server_connection_lost (client);
 }
 
 static void
-aur_server_client_network_event (G_GNUC_UNUSED SoupMessage * msg,
+aur_http_client_network_event (G_GNUC_UNUSED SoupMessage * msg,
     G_GNUC_UNUSED GSocketClientEvent event,
-    G_GNUC_UNUSED GIOStream * connection,
-    G_GNUC_UNUSED AurServerClient * client)
+    G_GNUC_UNUSED GIOStream * connection, G_GNUC_UNUSED AurHTTPClient * client)
 {
   g_print ("client %u network event %d\n", client->conn_id, event);
 }
@@ -166,8 +165,8 @@ aur_server_client_network_event (G_GNUC_UNUSED SoupMessage * msg,
 /* Callbacks used for websocket clients */
 
 static gboolean
-aur_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
-    GIOCondition condition, AurServerClient * client)
+aur_http_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
+    GIOCondition condition, AurHTTPClient * client)
 {
   GIOStatus status = G_IO_STATUS_NORMAL;
 #if 0
@@ -196,7 +195,7 @@ aur_server_client_io_cb (G_GNUC_UNUSED GIOChannel * source,
 }
 
 static void
-aur_server_client_wrote_headers (SoupMessage * msg, AurServerClient * client)
+aur_http_client_wrote_headers (SoupMessage * msg, AurHTTPClient * client)
 {
   GList *cur;
 
@@ -209,7 +208,7 @@ aur_server_client_wrote_headers (SoupMessage * msg, AurServerClient * client)
   g_io_channel_set_encoding (client->io, NULL, NULL);
   g_io_channel_set_buffered (client->io, FALSE);
   client->io_watch = g_io_add_watch (client->io, G_IO_IN | G_IO_HUP,
-      (GIOFunc) (aur_server_client_io_cb), client);
+      (GIOFunc) (aur_http_client_io_cb), client);
 
   /* Send any pending messages */
   while ((cur = client->pending_msgs)) {
@@ -218,7 +217,7 @@ aur_server_client_wrote_headers (SoupMessage * msg, AurServerClient * client)
 
     next = g_list_next (cur);
 
-    aur_server_client_send_message (client, msg->body, msg->len);
+    aur_http_client_send_message (client, msg->body, msg->len);
     client->pending_msgs = g_list_delete_link (client->pending_msgs, cur);
     g_free (msg->body);
     g_free (msg);
@@ -273,7 +272,7 @@ http_list_contains_value (const gchar * val, const gchar * needle)
 }
 
 static gboolean
-is_websocket_client (AurServerClient * client)
+is_websocket_client (AurHTTPClient * client)
 {
   /* Check for request headers. Example:
    * Upgrade: websocket
@@ -328,11 +327,11 @@ is_websocket_client (AurServerClient * client)
   return TRUE;
 }
 
-AurServerClient *
-aur_server_client_new (SoupServer * soup, SoupMessage * msg,
+AurHTTPClient *
+aur_http_client_new (SoupServer * soup, SoupMessage * msg,
     SoupClientContext * context)
 {
-  AurServerClient *client = g_object_new (AUR_TYPE_SERVER_CLIENT, NULL);
+  AurHTTPClient *client = g_object_new (AUR_TYPE_HTTP_CLIENT, NULL);
   const gchar *accept_challenge;
   gchar *accept_reply;
 
@@ -341,12 +340,12 @@ aur_server_client_new (SoupServer * soup, SoupMessage * msg,
   client->host = g_strdup (soup_client_context_get_host (context));
 
   client->net_event_sig = g_signal_connect (msg, "network-event",
-      G_CALLBACK (aur_server_client_network_event), client);
+      G_CALLBACK (aur_http_client_network_event), client);
   client->disco_sig = g_signal_connect (msg, "finished",
-      G_CALLBACK (aur_server_client_disconnect), client);
+      G_CALLBACK (aur_http_client_disconnect), client);
 
   if (!is_websocket_client (client)) {
-    client->type = AUR_SERVER_CLIENT_CHUNKED;
+    client->type = AUR_HTTP_CLIENT_CHUNKED;
     client->need_body_complete = TRUE;
 
     soup_message_headers_set_encoding (msg->response_headers,
@@ -356,7 +355,7 @@ aur_server_client_new (SoupServer * soup, SoupMessage * msg,
   }
 
   /* Otherwise, it's a websocket client */
-  client->type = AUR_SERVER_CLIENT_WEBSOCKET;
+  client->type = AUR_HTTP_CLIENT_WEBSOCKET;
   client->need_body_complete = FALSE;
 
   client->socket = soup_client_context_get_gsocket (context);
@@ -379,29 +378,29 @@ aur_server_client_new (SoupServer * soup, SoupMessage * msg,
   g_free (accept_reply);
 
   client->wrote_info_sig = g_signal_connect (msg, "wrote-informational",
-      G_CALLBACK (aur_server_client_wrote_headers), client);
+      G_CALLBACK (aur_http_client_wrote_headers), client);
 
   return client;
 }
 
 /* Send a single message to the client and
  * then close the connection */
-AurServerClient *
-aur_server_client_new_single (SoupServer * soup, SoupMessage * msg,
+AurHTTPClient *
+aur_http_client_new_single (SoupServer * soup, SoupMessage * msg,
     G_GNUC_UNUSED SoupClientContext * context)
 {
-  AurServerClient *client = g_object_new (AUR_TYPE_SERVER_CLIENT, NULL);
+  AurHTTPClient *client = g_object_new (AUR_TYPE_HTTP_CLIENT, NULL);
 
   client->soup = soup;
   client->event_pipe = msg;
   client->host = g_strdup (soup_client_context_get_host (context));
 
   client->net_event_sig = g_signal_connect (msg, "network-event",
-      G_CALLBACK (aur_server_client_network_event), client);
+      G_CALLBACK (aur_http_client_network_event), client);
   client->disco_sig = g_signal_connect (msg, "finished",
-      G_CALLBACK (aur_server_client_disconnect), client);
+      G_CALLBACK (aur_http_client_disconnect), client);
 
-  client->type = AUR_SERVER_CLIENT_SINGLE;
+  client->type = AUR_HTTP_CLIENT_SINGLE;
   client->need_body_complete = TRUE;
 
   soup_message_set_status (msg, SOUP_STATUS_OK);
@@ -431,7 +430,7 @@ write_to_io_channel (GIOChannel * io, const gchar * buf, gsize len)
 }
 
 static void
-write_fragment (AurServerClient * client, gchar * body, gsize len)
+write_fragment (AurHTTPClient * client, gchar * body, gsize len)
 {
   gchar header[14];
   gsize header_len, i;
@@ -489,15 +488,14 @@ done:
 }
 
 void
-aur_server_client_send_message (AurServerClient * client,
-    gchar * body, gsize len)
+aur_http_client_send_message (AurHTTPClient * client, gchar * body, gsize len)
 {
   PendingMsg *msg;
 
   if (client->fired_conn_lost)
     return;
 
-  if (client->type == AUR_SERVER_CLIENT_CHUNKED) {
+  if (client->type == AUR_HTTP_CLIENT_CHUNKED) {
     soup_message_body_append (client->event_pipe->response_body,
         SOUP_MEMORY_COPY, body, len);
     /* Add a NULL seperator, enable HTTP stack that abstract HTTP chunk. */
@@ -506,7 +504,7 @@ aur_server_client_send_message (AurServerClient * client,
     soup_server_unpause_message (client->soup, client->event_pipe);
     return;
   }
-  if (client->type == AUR_SERVER_CLIENT_SINGLE) {
+  if (client->type == AUR_HTTP_CLIENT_SINGLE) {
     soup_message_set_response (client->event_pipe,
         "application/json", SOUP_MEMORY_COPY, body, len);
     aur_server_connection_lost (client);
@@ -528,7 +526,7 @@ aur_server_client_send_message (AurServerClient * client,
 }
 
 const gchar *
-aur_server_client_get_host (AurServerClient * client)
+aur_http_client_get_host (AurHTTPClient * client)
 {
   return client->host;
 }

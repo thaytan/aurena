@@ -32,3 +32,4 @@ stamp-h1
 .libs/
 *.pyc
 *~
+test/

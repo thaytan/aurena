@@ -35,6 +35,8 @@ enum _AurComponentRole {
   AUR_COMPONENT_ROLE_CAPTURE     = 0x8
 };
 
+#define AUR_COMPONENT_ROLE_ALL (0xffff)
+
 /* Interface type structure */
 struct _AurComponentInterface
 {

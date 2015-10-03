@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2012-2015 Jan Schmidt <jan@centricular.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -34,7 +34,7 @@ typedef struct _AurReceiverIngest AurReceiverIngest;
 typedef struct _AurReceiverProcessor AurReceiverProcessor;
 typedef struct _AurRTSPPlayMediaFactory AurRTSPPlayMediaFactory;
 typedef struct _AurServer AurServer;
-typedef struct _AurServerClient AurServerClient;
+typedef struct _AurHTTPClient AurHTTPClient;
 
 G_END_DECLS
 

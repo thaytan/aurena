@@ -17,8 +17,8 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#ifndef __AUR_SERVER_CLIENT_H__
-#define __AUR_SERVER_CLIENT_H__
+#ifndef __AUR_HTTP_CLIENT_H__
+#define __AUR_HTTP_CLIENT_H__
 
 #include <gst/gst.h>
 #include <gst/net/gstnet.h>
@@ -29,22 +29,22 @@
 
 G_BEGIN_DECLS
 
-#define AUR_TYPE_SERVER_CLIENT (aur_server_client_get_type ())
+#define AUR_TYPE_HTTP_CLIENT (aur_http_client_get_type ())
 
-typedef struct _AurServerClientClass AurServerClientClass;
-typedef enum _AurServerClientType AurServerClientType;
+typedef struct _AurHTTPClientClass AurHTTPClientClass;
+typedef enum _AurHTTPClientType AurHTTPClientType;
 
-enum _AurServerClientType {
-  AUR_SERVER_CLIENT_CHUNKED,
-  AUR_SERVER_CLIENT_WEBSOCKET,
-  AUR_SERVER_CLIENT_SINGLE
+enum _AurHTTPClientType {
+  AUR_HTTP_CLIENT_CHUNKED,
+  AUR_HTTP_CLIENT_WEBSOCKET,
+  AUR_HTTP_CLIENT_SINGLE
 };
 
-struct _AurServerClient
+struct _AurHTTPClient
 {
   AurWebSocketParser parent;
 
-  AurServerClientType type;
+  AurHTTPClientType type;
   gboolean fired_conn_lost;
   gboolean need_body_complete;
 
@@ -71,22 +71,22 @@ struct _AurServerClient
   gulong wrote_info_sig;
 };
 
-struct _AurServerClientClass
+struct _AurHTTPClientClass
 {
   AurWebSocketParserClass parent;
 };
 
-GType aur_server_client_get_type(void);
+GType aur_http_client_get_type(void);
 
-AurServerClient *aur_server_client_new (SoupServer *soup,
+AurHTTPClient *aur_http_client_new (SoupServer *soup,
     SoupMessage *msg, SoupClientContext *context);
-AurServerClient *aur_server_client_new_single (SoupServer * soup,
+AurHTTPClient *aur_http_client_new_single (SoupServer * soup,
     SoupMessage * msg, SoupClientContext * context);
 
-void aur_server_client_send_message (AurServerClient *client,
+void aur_http_client_send_message (AurHTTPClient *client,
   gchar *body, gsize len);
 
-const gchar *aur_server_client_get_host (AurServerClient *client);
+const gchar *aur_http_client_get_host (AurHTTPClient *client);
 
 G_END_DECLS
 

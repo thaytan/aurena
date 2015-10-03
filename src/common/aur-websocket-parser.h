@@ -26,18 +26,20 @@
 
 G_BEGIN_DECLS
 
-#define AUR_TYPE_WEBSOCKET_PARSER (aur_websocket_parser_get_type ())
+GType aur_websocket_parser_get_type(void);
+
+typedef struct _AurWebSocketParser AurWebSocketParser;
+typedef struct _AurWebSocketParserClass AurWebSocketParserClass;
+typedef enum _AurWebSocketParserResult AurWebSocketParserResult;
+
+#define AUR_TYPE_WEBSOCKET_PARSER (aur_websocket_parser_get_type())
 #define AUR_WEBSOCKET_PARSER(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj),AUR_TYPE_WEBSOCKET_PARSER, AurWebSocketParser))
 #define AUR_WEBSOCKET_PARSER_CLASS(klass) (G_TYPE_CHECK_CLASS_CAST((klass),AUR_TYPE_WEBSOCKET_PARSER, AurWebSocketParser))
 #define AUR_IS_WEBSOCKET_PARSER(obj) (G_TYPE_CHECK_INSTANCE_TYPE((obj),AUR_TYPE_WEBSOCKET_PARSER))
 #define AUR_IS_WEBSOCKET_PARSER_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass),AUR_TYPE_WEBSOCKET_PARSER))
 #define AUR_WEBSOCKET_PARSER_CAST(obj) ((AurWebSocketParser*)(obj))
 
-GType aur_websocket_parser_get_type(void);
-
-typedef struct _AurWebSocketParser AurWebSocketParser;
-typedef struct _AurWebSocketParserClass AurWebSocketParserClass;
-typedef enum _AurWebSocketParserResult AurWebSocketParserResult;
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(AurWebSocketParser, g_object_unref);
 
 enum _AurWebSocketParserResult {
   AUR_WEBSOCKET_PARSER_OK,

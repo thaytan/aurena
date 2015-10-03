@@ -50,12 +50,14 @@
 GST_DEBUG_CATEGORY_STATIC (client_debug);
 #define GST_CAT_DEFAULT client_debug
 
-static void _do_init()
+static void
+_do_init ()
 {
-  GST_DEBUG_CATEGORY_INIT (client_debug, "aurena/client", 0, "Aurena Client debug");
+  GST_DEBUG_CATEGORY_INIT (client_debug, "aurena/client", 0,
+      "Aurena Client debug");
 }
 
-G_DEFINE_TYPE_WITH_CODE (AurClient, aur_client, G_TYPE_OBJECT, _do_init());
+G_DEFINE_TYPE_WITH_CODE (AurClient, aur_client, G_TYPE_OBJECT, _do_init ());
 
 #if defined(ANDROID) && defined(NDK_DEBUG)
 #define g_print(...) __android_log_print(ANDROID_LOG_ERROR, "aurena", __VA_ARGS__)
@@ -123,7 +125,8 @@ try_reconnect (AurClient * client)
 {
   client->timeout = 0;
 
-  GST_LOG_OBJECT (client, "Entering reconnect. server_host %s", client->server_host);
+  GST_LOG_OBJECT (client, "Entering reconnect. server_host %s",
+      client->server_host);
 
   if (client->server_host)
     connect_to_server (client, client->server_host, client->server_port);
@@ -282,7 +285,8 @@ handle_player_enrol_message (AurClient * client, GstStructure * s)
   }
 #endif
   if (server_ip_str) {
-    GST_LOG_OBJECT (client, "Creating net clock at %s:%d time %" GST_TIME_FORMAT "\n",
+    GST_LOG_OBJECT (client,
+        "Creating net clock at %s:%d time %" GST_TIME_FORMAT "\n",
         server_ip_str, clock_port, GST_TIME_ARGS (cur_time));
     if (client->net_clock)
       gst_object_unref (client->net_clock);
@@ -416,7 +420,7 @@ set_media (AurClient * client)
 
   /* If position is off by more than 0.5 sec, seek to that position
    * (otherwise, just let the player skip) */
-  if (client->position > GST_SECOND/2) {
+  if (client->position > GST_SECOND / 2) {
     /* FIXME Query duration, so we don't seek after EOS */
     if (!gst_element_seek_simple (client->player, GST_FORMAT_TIME,
             GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, client->position)) {
@@ -490,8 +494,9 @@ handle_player_play_message (AurClient * client, GstStructure * s)
   client->paused = FALSE;
 
   if (client->enabled && client->player) {
-    GST_DEBUG_OBJECT (client, "Playing base_time %" GST_TIME_FORMAT " (position %"
-        GST_TIME_FORMAT ")", GST_TIME_ARGS (client->base_time),
+    GST_DEBUG_OBJECT (client,
+        "Playing base_time %" GST_TIME_FORMAT " (position %" GST_TIME_FORMAT
+        ")", GST_TIME_ARGS (client->base_time),
         GST_TIME_ARGS (client->position));
     gst_element_set_base_time (GST_ELEMENT (client->player),
         client->base_time + client->position);
@@ -545,8 +550,9 @@ handle_player_seek_message (AurClient * client, GstStructure * s)
   client->position = (GstClockTime) (tmp);
 
   if (client->enabled && client->player) {
-    GST_DEBUG_OBJECT (client, "Seeking to position %" GST_TIME_FORMAT " (base_time %"
-        GST_TIME_FORMAT ")", GST_TIME_ARGS (client->position),
+    GST_DEBUG_OBJECT (client,
+        "Seeking to position %" GST_TIME_FORMAT " (base_time %" GST_TIME_FORMAT
+        ")", GST_TIME_ARGS (client->position),
         GST_TIME_ARGS (client->base_time));
 
     if (!gst_element_seek_simple (client->player, GST_FORMAT_TIME,
@@ -623,22 +629,23 @@ handle_player_language_message (AurClient * client, GstStructure * s)
 }
 
 static void
-setup_record_rtpbin (GstElement* rtspsink G_GNUC_UNUSED,
-   GstElement* rtpbin, AurClient *client)
+setup_record_rtpbin (GstElement * rtspsink G_GNUC_UNUSED,
+    GstElement * rtpbin, AurClient * client)
 {
   GST_INFO_OBJECT (client, "Configuring new rtpbin %" GST_PTR_FORMAT, rtpbin);
 
-  if (g_object_class_find_property (G_OBJECT_GET_CLASS (rtpbin), "rtcp-sync-send-time")) {
+  if (g_object_class_find_property (G_OBJECT_GET_CLASS (rtpbin),
+          "rtcp-sync-send-time")) {
     g_object_set (rtpbin, "rtcp-sync-send-time", FALSE,
         "max-rtcp-rtp-time-diff", -1, NULL);
-  }
-  else {
-    GST_WARNING_OBJECT (client, "rtpbin did not have rtcp-sync-send-time property. Outdated GStreamer.");
+  } else {
+    GST_WARNING_OBJECT (client,
+        "rtpbin did not have rtcp-sync-send-time property. Outdated GStreamer.");
   }
 }
 
 static void
-handle_client_record_message (AurClient *client, GstStructure *s)
+handle_client_record_message (AurClient * client, GstStructure * s)
 {
   gboolean enabled;
   const gchar *path;
@@ -667,7 +674,7 @@ handle_client_record_message (AurClient *client, GstStructure *s)
   }
 
   dest = g_strdup_printf ("rtsp://%s:%u%s",
-             client->connected_server, port, path);
+      client->connected_server, port, path);
 
   if (client->record_pipe == NULL ||
       client->record_dest == NULL || !g_str_equal (dest, client->record_dest)) {
@@ -686,28 +693,32 @@ handle_client_record_message (AurClient *client, GstStructure *s)
       gchar *pipe_str;
       GstElement *rtspsink;
 
-      pipe_str = g_strdup_printf ("%s buffer-time=60000 ! audioconvert ! opusenc frame-size=10 ! rtspsink ntp-time-source=3 name=rtspsink", audiosrc);
-      client->record_pipe =
-        gst_parse_launch (pipe_str, &error);
+      pipe_str =
+          g_strdup_printf
+          ("%s buffer-time=60000 ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,rate=48000 ! opusenc frame-size=10 ! rtspsink ntp-time-source=3 name=rtspsink",
+          audiosrc);
+      client->record_pipe = gst_parse_launch (pipe_str, &error);
       g_free (pipe_str);
 
       if (error != NULL) {
-        GST_ERROR_OBJECT (client, "Failed to create record pipe. Error: %s", error->message);
+        GST_ERROR_OBJECT (client, "Failed to create record pipe. Error: %s",
+            error->message);
         g_error_free (error);
         goto fail;
       }
-      gst_pipeline_use_clock (GST_PIPELINE (client->record_pipe), client->net_clock);
+      gst_pipeline_use_clock (GST_PIPELINE (client->record_pipe),
+          client->net_clock);
 
-      rtspsink = gst_bin_get_by_name (GST_BIN (client->record_pipe), "rtspsink");
+      rtspsink =
+          gst_bin_get_by_name (GST_BIN (client->record_pipe), "rtspsink");
       if (rtspsink == NULL) {
         GST_ERROR_OBJECT (client, "Failed to retrieve rtspsink element");
         goto fail;
       }
-      g_signal_connect (rtspsink, "new-manager", (GCallback) setup_record_rtpbin,
-        client);
+      g_signal_connect (rtspsink, "new-manager",
+          (GCallback) setup_record_rtpbin, client);
       gst_object_unref (rtspsink);
-    }
-    else {
+    } else {
       gst_element_set_state (client->record_pipe, GST_STATE_NULL);
     }
     g_return_if_fail (client->record_pipe != NULL);
@@ -989,7 +1000,8 @@ handle_controller_message (AurClient * client, GstStructure * s)
   else if (g_str_equal (msg_type, "language"))
     handle_controller_language_message (client, s);
   else {
-    GST_WARNING_OBJECT (client, "Unhandled contorller event of type %s", msg_type);
+    GST_WARNING_OBJECT (client, "Unhandled contorller event of type %s",
+        msg_type);
   }
 }
 
@@ -1110,7 +1122,8 @@ connect_to_server (AurClient * client, const gchar * server, int port)
     client->connecting |= AUR_CLIENT_PLAYER;
 
     uri = g_strdup_printf ("http://%s:%u/client/player_events", server, port);
-    GST_DEBUG_OBJECT (client, "Attempting to connect player to server %s:%d", server, port);
+    GST_DEBUG_OBJECT (client, "Attempting to connect player to server %s:%d",
+        server, port);
     msg = soup_message_new ("GET", uri);
     g_signal_connect (msg, "got-chunk", (GCallback) handle_received_chunk,
         client);
@@ -1121,8 +1134,8 @@ connect_to_server (AurClient * client, const gchar * server, int port)
 
   if (client->flags & AUR_CLIENT_CONTROLLER
       && !(client->connecting & AUR_CLIENT_CONTROLLER)) {
-    GST_DEBUG_OBJECT (client, "Attempting to connect controller to server %s:%d",
-        server, port);
+    GST_DEBUG_OBJECT (client,
+        "Attempting to connect controller to server %s:%d", server, port);
     client->connecting |= AUR_CLIENT_CONTROLLER;
 
     uri = g_strdup_printf ("http://%s:%u/client/control_events", server, port);

@@ -82,6 +82,7 @@ aur_receiver_ingest_factory_dispose (GObject * object)
     g_object_unref (factory->processor);
     factory->processor = NULL;
   }
+  G_OBJECT_CLASS (aur_receiver_ingest_factory_parent_class)->dispose (object);
 }
 
 static void
@@ -104,6 +105,7 @@ link_to_output (AurReceiverIngestMedia * media, gint i, GstPad * pad)
   GST_DEBUG_OBJECT (media, "Linked srcpad %" GST_PTR_FORMAT " to appsink", pad);
 
   gst_object_unref (sinkpad);
+  gst_object_unref (appsink);
 }
 
 static void
@@ -121,6 +123,7 @@ typedef struct _AurAppSinkClosure
 {
   AurReceiverIngestMedia *media;
   gint chanid;
+  AurReceiverProcessor *processor;
   AurReceiverProcessorChannel *channel;
 } AurAppSinkClosure;
 
@@ -141,6 +144,9 @@ handle_new_sample (GstAppSink * appsink, gpointer user_data)
 {
   AurAppSinkClosure *info = (AurAppSinkClosure *) (user_data);
   GstSample *sample;
+  GstSegment *seg;
+  GstBuffer *buf;
+  GstClockTime base_time, play_time;
 
   GST_LOG_OBJECT (info->media, "New sample on client %d channel %d",
       info->media->id, info->chanid);
@@ -152,8 +158,17 @@ handle_new_sample (GstAppSink * appsink, gpointer user_data)
   if (!sample)
     return GST_FLOW_OK;
 
+  base_time = gst_element_get_base_time (GST_ELEMENT (appsink));
+
+  buf = gst_sample_get_buffer (sample);
+  seg = gst_sample_get_segment (sample);
+
+  play_time =
+      base_time + gst_segment_to_running_time (seg, GST_FORMAT_TIME,
+      GST_BUFFER_PTS (buf));
+
   aur_receiver_processor_push_sample (info->media->processor, info->channel,
-      sample);
+      sample, play_time);
 
   return GST_FLOW_OK;
 }
@@ -161,7 +176,14 @@ handle_new_sample (GstAppSink * appsink, gpointer user_data)
 static void
 release_closure (AurAppSinkClosure * info)
 {
-  gst_object_unref (info->media);
+  if (info->processor) {
+    if (info->channel) {
+      aur_receiver_processor_release_channel (info->processor, info->channel);
+      info->channel = NULL;
+    }
+    gst_object_unref (info->processor);
+    info->processor = NULL;
+  }
   g_free (info);
 }
 
@@ -187,9 +209,10 @@ add_output_chain (AurReceiverIngestMedia * media, gint i)
       "async", FALSE, "sync", FALSE, "emit-signals", FALSE, NULL);
 
   info = g_new0 (AurAppSinkClosure, 1);
-  info->media = gst_object_ref (media);
+  info->media = media;
   info->chanid = i;
-  info->channel = aur_receiver_processor_get_channel (info->media->processor);
+  info->processor = gst_object_ref (info->media->processor);
+  info->channel = aur_receiver_processor_get_channel (info->processor);
 
   gst_app_sink_set_callbacks (GST_APP_SINK_CAST (appsink),
       &sink_cb, info, (GDestroyNotify) release_closure);
@@ -300,7 +323,7 @@ construct_media (GstRTSPMediaFactory * mf, const GstRTSPUrl * url)
   gst_rtsp_media_take_pipeline (rtspmedia, GST_PIPELINE_CAST (pipeline));
 
   media = AUR_RECEIVER_INGEST_MEDIA (rtspmedia);
-  media->bin = gst_object_ref (element);
+  media->bin = GST_BIN (element);
   media->id = factory->id;
   media->processor = g_object_ref (factory->processor);
 
@@ -365,8 +388,9 @@ aur_receiver_ingest_media_class_init (AurReceiverIngestMediaClass * media_klass)
 }
 
 static void
-aur_receiver_ingest_media_init (AurReceiverIngestMedia * media G_GNUC_UNUSED)
+aur_receiver_ingest_media_init (AurReceiverIngestMedia * media)
 {
+  gst_rtsp_media_set_reusable (GST_RTSP_MEDIA (media), FALSE);
 }
 
 static void
@@ -374,15 +398,16 @@ aur_receiver_ingest_media_dispose (GObject * object)
 {
   AurReceiverIngestMedia *media = AUR_RECEIVER_INGEST_MEDIA (object);
 
-  if (media->bin) {
-    gst_object_unref (media->bin);
-    media->bin = NULL;
-  }
+  GST_DEBUG_OBJECT (object, "Disposing media");
+
+  media->bin = NULL;
 
   if (media->processor) {
     g_object_unref (media->processor);
     media->processor = NULL;
   }
+
+  G_OBJECT_CLASS (aur_receiver_ingest_media_parent_class)->dispose (object);
 }
 
 static gboolean

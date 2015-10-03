@@ -32,7 +32,12 @@ typedef struct _AurReceiverProcessorChannel AurReceiverProcessorChannel;
 struct _AurReceiverProcessor
 {
   GObject parent;
+
   AurReceiverProcessorChannel *channels[8];
+  gint n_inuse;
+  GstElement *pipeline;
+  GstElement *filesink;
+  GstState state;
 };
 
 struct _AurReceiverProcessorClass
@@ -44,7 +49,8 @@ GType aur_receiver_processor_get_type(void);
 AurReceiverProcessor *aur_receiver_processor_new();
 AurReceiverProcessorChannel *aur_receiver_processor_get_channel (AurReceiverProcessor *processor);
 void aur_receiver_processor_push_sample (AurReceiverProcessor *processor,
-    AurReceiverProcessorChannel *channel, GstSample *sample);
+    AurReceiverProcessorChannel *channel, GstSample *sample, GstClockTime play_time);
+
 void aur_receiver_processor_release_channel (AurReceiverProcessor *processor, AurReceiverProcessorChannel *channel);
 
 

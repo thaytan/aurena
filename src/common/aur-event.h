@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2012-2014 Jan Schmidt <thaytan@noraisin.net>
+ * Copyright (C) 2015 Jan Schmidt <jan@centricular.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -16,26 +16,37 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  */
-#ifndef __AUR_TYPES_H__
-#define __AUR_TYPES_H__
+#ifndef __AUR_EVENT_H__
+#define __AUR_EVENT_H__
 
 #include <glib.h>
+#include <glib-object.h>
+#include <gst/gst.h>
+#include <common/aur-types.h>
+#include <common/aur-json.h>
+
 
 G_BEGIN_DECLS
 
-typedef struct _AurConfig AurConfig;
+G_DECLARE_FINAL_TYPE(AurEvent, aur_event, AUR, EVENT, GObject);
 
-typedef struct _AurEvent AurEvent;
+#define AUR_TYPE_EVENT (aur_event_get_type ())
 
-typedef enum _AurComponentRole AurComponentRole;
+struct _AurEvent
+{
+  GObject parent;
 
-/* Opaque pointer for AurComponent implementations */
-typedef struct _AurComponent AurComponent;
-/* Interface type structure */
-typedef struct _AurComponentInterface AurComponentInterface;
+  GstStructure *fields;
+};
 
-/* Object for server/client event passing to components */
-typedef struct _AurComponentLink AurComponentLink;
+struct _AurEventClass
+{
+  GObjectClass parent;
+};
+
+AurEvent *aur_event_new (GstStructure *fields);
+const gchar *aur_event_get_name (AurEvent *event);
+JsonNode *aur_event_to_json (const AurEvent *event);
 
 G_END_DECLS
 

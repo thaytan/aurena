@@ -33,6 +33,7 @@
 
 #include <src/common/aur-json.h>
 #include <src/common/aur-config.h>
+#include <src/common/aur-event.h>
 
 #include "aur-http-resource.h"
 #include "aur-manager.h"
@@ -103,12 +104,14 @@ static const struct
 
 static const gint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
 
-static void _do_init()
+static void
+_do_init ()
 {
-  GST_DEBUG_CATEGORY_INIT (manager_debug, "aurena/manager", 0, "Aurena Manager debug");
+  GST_DEBUG_CATEGORY_INIT (manager_debug, "aurena/manager", 0,
+      "Aurena Manager debug");
 }
 
-G_DEFINE_TYPE_WITH_CODE (AurManager, aur_manager, G_TYPE_OBJECT, _do_init());
+G_DEFINE_TYPE_WITH_CODE (AurManager, aur_manager, G_TYPE_OBJECT, _do_init ());
 
 static void aur_manager_dispose (GObject * object);
 static void aur_manager_finalize (GObject * object);
@@ -128,9 +131,9 @@ static void aur_manager_adjust_client_volume (AurManager * manager,
     guint client_id, gdouble volume);
 static void aur_manager_adjust_client_setting (AurManager * manager,
     guint client_id, gboolean enable, gboolean record_enable);
-static GstStructure *manager_make_set_media_msg (AurManager * manager,
+static AurEvent *manager_make_set_media_event (AurManager * manager,
     guint resource_id);
-static GstStructure *manager_make_player_clients_changed_msg
+static AurEvent *manager_make_player_clients_changed_event
     (AurManager * manager);
 static AurPlayerInfo *get_player_info_by_id (AurManager * manager,
     guint client_id);
@@ -138,8 +141,8 @@ static void aur_manager_send_seek (AurManager * manager,
     AurServerClient * client, GstClockTime position);
 static void aur_manager_send_language (AurManager * manager,
     AurServerClient * client, const gchar * language);
-static GstStructure *
-manager_make_record_msg (AurManager * manager, AurPlayerInfo *info);
+static AurEvent *manager_make_record_event (AurManager * manager,
+    AurPlayerInfo * info);
 
 #define SEND_MSG_TO_PLAYERS 1
 #define SEND_MSG_TO_DISABLED_PLAYERS 2
@@ -148,8 +151,8 @@ manager_make_record_msg (AurManager * manager, AurPlayerInfo *info);
 #define SEND_MSG_TO_ALL (SEND_MSG_TO_PLAYERS|SEND_MSG_TO_CONTROLLERS)
 
 static void
-manager_send_msg_to_client (AurManager * manager, AurServerClient * client,
-    gint send_to_mask, GstStructure * msg);
+manager_send_event_to_client (AurManager * manager, AurServerClient * client,
+    gint send_to_mask, AurEvent * event);
 
 static GstNetTimeProvider *
 create_net_clock ()
@@ -172,8 +175,7 @@ create_rtsp_server (AurManager * mgr)
 
   server = gst_rtsp_server_new ();
 
-  GST_DEBUG_OBJECT (mgr, "Creating RTSP server on port %d",
-    mgr->rtsp_port);
+  GST_DEBUG_OBJECT (mgr, "Creating RTSP server on port %d", mgr->rtsp_port);
 
   rtsp_service = g_strdup_printf ("%u", mgr->rtsp_port);
   gst_rtsp_server_set_service (server, rtsp_service);
@@ -195,8 +197,8 @@ failed:
   }
 }
 
-static GstStructure *
-manager_make_enrol_msg (AurManager * manager, AurPlayerInfo * info)
+static AurEvent *
+manager_make_enrol_event (AurManager * manager, AurPlayerInfo * info)
 {
   int clock_port;
   GstClock *clock;
@@ -222,15 +224,13 @@ manager_make_enrol_msg (AurManager * manager, AurPlayerInfo * info)
       "paused", G_TYPE_BOOLEAN, manager->paused, NULL);
 
   if (info != NULL)             /* Is a player message */
-    gst_structure_set (msg,
-       "enabled", G_TYPE_BOOLEAN, info->enabled,
-       NULL);
+    gst_structure_set (msg, "enabled", G_TYPE_BOOLEAN, info->enabled, NULL);
 
-  return msg;
+  return aur_event_new (msg);
 }
 
-static GstStructure *
-make_player_clients_list_msg (AurManager * manager)
+static AurEvent *
+make_player_clients_list_event (AurManager * manager)
 {
   GstStructure *msg;
   GValue p = G_VALUE_INIT;
@@ -262,7 +262,7 @@ make_player_clients_list_msg (AurManager * manager)
   }
   gst_structure_take_value (msg, "player-clients", &p);
 
-  return msg;
+  return aur_event_new (msg);
 }
 
 static gint
@@ -279,23 +279,23 @@ static void
 manager_player_client_disconnect (AurServerClient * client,
     AurManager * manager)
 {
-  GList *item = g_list_find_custom (manager->player_info, client, (GCompareFunc)(find_player_info_by_client));
+  GList *item = g_list_find_custom (manager->player_info, client,
+      (GCompareFunc) (find_player_info_by_client));
   if (item) {
-    AurPlayerInfo *info = (AurPlayerInfo *)(item->data);
+    AurPlayerInfo *info = (AurPlayerInfo *) (item->data);
 
     g_print ("Disconnecting player client %u\n", info->id);
 
     g_object_unref (client);
     info->conn = NULL;
 
-    manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS,
-        manager_make_player_clients_changed_msg (manager));
+    manager_send_event_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS,
+        manager_make_player_clients_changed_event (manager));
   }
 }
 
 static void
-manager_ctrl_client_disconnect (AurServerClient * client,
-    AurManager * manager)
+manager_ctrl_client_disconnect (AurServerClient * client, AurManager * manager)
 {
   GList *item = g_list_find (manager->ctrl_clients, client);
   if (item) {
@@ -313,45 +313,46 @@ manager_status_client_disconnect (AurServerClient * client,
 }
 
 static gboolean
-handle_ping_timeout (AurManager *manager)
+handle_ping_timeout (AurManager * manager)
 {
-  GstStructure *msg;
+  AurEvent *event;
 
   if (manager->ping_timeout == 0)
     return FALSE;
 
   /* Send a ping to each client */
-  msg = gst_structure_new ("json",
-      "msg-type", G_TYPE_STRING, "ping", NULL);
-  manager_send_msg_to_client (manager, NULL,
-     SEND_MSG_TO_ALL, msg);
+  event = aur_event_new (gst_structure_new ("json",
+          "msg-type", G_TYPE_STRING, "ping", NULL));
+
+  manager_send_event_to_client (manager, NULL, SEND_MSG_TO_ALL, event);
 
   return TRUE;
 }
 
 static void
 send_enrol_events (AurManager * manager, AurServerClient * client,
-    AurPlayerInfo *info)
+    AurPlayerInfo * info)
 {
-  manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL,
-      manager_make_enrol_msg (manager, info));
+  manager_send_event_to_client (manager, client, SEND_MSG_TO_ALL,
+      manager_make_enrol_event (manager, info));
 
   if (manager->current_resource) {
-    manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL,
-        manager_make_set_media_msg (manager, manager->current_resource));
+    manager_send_event_to_client (manager, client, SEND_MSG_TO_ALL,
+        manager_make_set_media_event (manager, manager->current_resource));
   }
   if (info == NULL) {
-    manager_send_msg_to_client (manager, client, SEND_MSG_TO_CONTROLLERS,
-        manager_make_player_clients_changed_msg (manager));
+    manager_send_event_to_client (manager, client, SEND_MSG_TO_CONTROLLERS,
+        manager_make_player_clients_changed_event (manager));
   }
 
   if (manager->ping_timeout == 0) {
-    manager->ping_timeout = g_timeout_add_seconds (2,  (GSourceFunc) handle_ping_timeout, manager);
+    manager->ping_timeout =
+        g_timeout_add_seconds (2, (GSourceFunc) handle_ping_timeout, manager);
   }
 }
 
 static gint
-find_unlinked_player_info_by_host (const AurPlayerInfo *p, const gchar *host)
+find_unlinked_player_info_by_host (const AurPlayerInfo * p, const gchar * host)
 {
   if (p->conn == NULL && g_str_equal (p->host, host))
     return 0;
@@ -359,30 +360,32 @@ find_unlinked_player_info_by_host (const AurPlayerInfo *p, const gchar *host)
 }
 
 static gint
-find_player_info_by_client_id (const AurPlayerInfo *p, const gpointer cid_ptr)
+find_player_info_by_client_id (const AurPlayerInfo * p, const gpointer cid_ptr)
 {
-  const guint client_id = GPOINTER_TO_INT(cid_ptr);
+  const guint client_id = GPOINTER_TO_INT (cid_ptr);
   if (p->id == client_id)
     return 0;
   return -1;
 }
 
 static AurPlayerInfo *
-get_player_info_by_id (AurManager *manager, guint client_id)
+get_player_info_by_id (AurManager * manager, guint client_id)
 {
   GList *entry;
   AurPlayerInfo *info = NULL;
 
   /* See if there's a player instance that matches */
-  entry = g_list_find_custom (manager->player_info, GINT_TO_POINTER (client_id), (GCompareFunc) find_player_info_by_client_id);
+  entry =
+      g_list_find_custom (manager->player_info, GINT_TO_POINTER (client_id),
+      (GCompareFunc) find_player_info_by_client_id);
   if (entry)
-    info = (AurPlayerInfo *)(entry->data);
+    info = (AurPlayerInfo *) (entry->data);
 
   return info;
 }
 
 static AurPlayerInfo *
-get_player_info_for_client (AurManager *manager, AurServerClient *client)
+get_player_info_for_client (AurManager * manager, AurServerClient * client)
 {
   GList *entry;
   AurPlayerInfo *info = NULL;
@@ -390,7 +393,9 @@ get_player_info_for_client (AurManager *manager, AurServerClient *client)
 
   /* See if there's a disconnected player instance that matches */
   host = aur_server_client_get_host (client);
-  entry = g_list_find_custom (manager->player_info, host, (GCompareFunc) find_unlinked_player_info_by_host);
+  entry =
+      g_list_find_custom (manager->player_info, host,
+      (GCompareFunc) find_unlinked_player_info_by_host);
   if (entry == NULL) {
     info = g_new0 (AurPlayerInfo, 1);
     /* Init the player info */
@@ -402,9 +407,8 @@ get_player_info_for_client (AurManager *manager, AurServerClient *client)
     manager->player_info = entry = g_list_prepend (manager->player_info, info);
 
     g_print ("New player id %u\n", info->id);
-  }
-  else {
-    info = (AurPlayerInfo *)(entry->data);
+  } else {
+    info = (AurPlayerInfo *) (entry->data);
     g_print ("Player id %u rejoining\n", info->id);
   }
 
@@ -416,7 +420,7 @@ get_player_info_for_client (AurManager *manager, AurServerClient *client)
 static void
 manager_client_cb (SoupServer * soup, SoupMessage * msg,
     G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable * query,
-    G_GNUC_UNUSED SoupClientContext *ctx, AurManager * manager)
+    G_GNUC_UNUSED SoupClientContext * ctx, AurManager * manager)
 {
   AurServerClient *client_conn = NULL;
   gchar **parts = g_strsplit (path, "/", 3);
@@ -437,8 +441,8 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
     info = get_player_info_for_client (manager, client_conn);
 
     send_enrol_events (manager, client_conn, info);
-    manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS,
-        manager_make_player_clients_changed_msg (manager));
+    manager_send_event_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS,
+        manager_make_player_clients_changed_event (manager));
   } else if (g_str_equal (parts[2], "control_events")) {
     client_conn = aur_server_client_new (soup, msg, ctx);
     g_signal_connect (client_conn, "connection-lost",
@@ -449,8 +453,8 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
     client_conn = aur_server_client_new_single (soup, msg, ctx);
     g_signal_connect (client_conn, "connection-lost",
         G_CALLBACK (manager_status_client_disconnect), manager);
-    manager_send_msg_to_client (manager, client_conn, 0,
-        make_player_clients_list_msg (manager));
+    manager_send_event_to_client (manager, client_conn, 0,
+        make_player_clients_list_event (manager));
   } else {
     soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
   }
@@ -460,18 +464,18 @@ done:
 }
 
 static void
-manager_send_msg_to_client (AurManager * manager, AurServerClient * client,
-    gint send_to_mask, GstStructure * msg)
+manager_send_event_to_client (AurManager * manager, AurServerClient * client,
+    gint send_to_mask, AurEvent * event)
 {
   JsonGenerator *gen;
   JsonNode *root;
   gchar *body;
   gsize len;
 
-  g_return_if_fail (msg != NULL);
+  g_return_if_fail (event != NULL);
 
-  root = aur_json_from_gst_structure (msg);
-  gst_structure_free (msg);
+  root = aur_event_to_json (event);
+  g_object_unref (event);
 
   gen = json_generator_new ();
 
@@ -537,7 +541,7 @@ find_param_str (const gchar * param_name, GHashTable * query_params,
 }
 
 static gboolean
-is_allowed_uri (const gchar *uri)
+is_allowed_uri (const gchar * uri)
 {
   /* Allow only http requests for now */
   if (g_str_has_prefix (uri, "http://"))
@@ -596,10 +600,11 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
         /* No or invalid resource id: skip to next track */
 #if RANDOM_SHUFFLE
         resource_id =
-          (guint) g_random_int_range (0, get_playlist_len (manager)) + 1;
+            (guint) g_random_int_range (0, get_playlist_len (manager)) + 1;
 #else
         resource_id =
-          (guint) (manager->current_resource % get_playlist_len (manager)) + 1;
+            (guint) (manager->current_resource % get_playlist_len (manager)) +
+            1;
 #endif
       } else {
         resource_id = CLAMP (resource_id, 1, get_playlist_len (manager));
@@ -652,7 +657,8 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
     }
     case AUR_CONTROL_CLIENT_SETTING:{
       const gchar *set_str = find_param_str ("enable", query, post_params);
-      const gchar *record_set_str = find_param_str ("record_enable", query, post_params);
+      const gchar *record_set_str =
+          find_param_str ("record_enable", query, post_params);
       const gchar *id_str = find_param_str ("client_id", query, post_params);
       guint client_id = 0;
       gint enable = 1, record_enable = 0;
@@ -664,10 +670,12 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
 
       if (set_str == NULL || !sscanf (set_str, "%d", &enable))
         break;
-      if (record_set_str == NULL || !sscanf (record_set_str, "%d", &record_enable))
+      if (record_set_str == NULL
+          || !sscanf (record_set_str, "%d", &record_enable))
         break;
 
-      aur_manager_adjust_client_setting (manager, client_id, !!enable, !!record_enable);
+      aur_manager_adjust_client_setting (manager, client_id, ! !enable,
+          ! !record_enable);
       break;
     }
     case AUR_CONTROL_SEEK:{
@@ -768,7 +776,7 @@ aur_manager_class_init (AurManagerClass * manager_class)
 }
 
 static void
-free_player_info (AurPlayerInfo *info)
+free_player_info (AurPlayerInfo * info)
 {
   if (info->conn)
     g_object_unref (info->conn);
@@ -850,8 +858,7 @@ aur_manager_get_property (GObject * object, guint prop_id,
 }
 
 static void
-add_rtsp_uri (AurManager * manager, guint resource_id,
-    const gchar * source_uri)
+add_rtsp_uri (AurManager * manager, guint resource_id, const gchar * source_uri)
 {
   GstRTSPMountPoints *mounts;
   GstRTSPMediaFactoryURI *factory;
@@ -859,7 +866,7 @@ add_rtsp_uri (AurManager * manager, guint resource_id,
 
   mounts = gst_rtsp_server_get_mount_points (manager->rtsp);
 
-  factory = GST_RTSP_MEDIA_FACTORY_URI (aur_rtsp_play_media_factory_new());
+  factory = GST_RTSP_MEDIA_FACTORY_URI (aur_rtsp_play_media_factory_new ());
 
   /* Set up the URI, and set as shared (all viewers see the same stream) */
   gst_rtsp_media_factory_uri_set_uri (factory, source_uri);
@@ -918,7 +925,8 @@ read_playlist_file (AurManager * manager, const char *filename)
   } while (TRUE);
   aur_media_db_commit_transaction (manager->media_db);
 
-  g_print ("Finished scanning playlist. Read %u entries\n", manager->playlist->len);
+  g_print ("Finished scanning playlist. Read %u entries\n",
+      manager->playlist->len);
 
   g_io_channel_unref (io);
 }
@@ -995,27 +1003,28 @@ aur_manager_play_resource (AurManager * manager, guint resource_id)
   manager->base_time = GST_CLOCK_TIME_NONE;
   manager->position = 0;
 
-  manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_ALL,
-      manager_make_set_media_msg (manager, manager->current_resource));
+  manager_send_event_to_client (manager, NULL, SEND_MSG_TO_ALL,
+      manager_make_set_media_event (manager, manager->current_resource));
 }
 
 static void
 aur_manager_send_play (AurManager * manager, AurServerClient * client)
 {
   GstClock *clock;
-  GstStructure *msg;
+  AurEvent *event;
 
   /* Update base time to match length of time paused */
   g_object_get (manager->net_clock, "clock", &clock, NULL);
-  manager->base_time = gst_clock_get_time (clock) - manager->position + (GST_SECOND / 30);
+  manager->base_time =
+      gst_clock_get_time (clock) - manager->position + (GST_SECOND / 30);
   gst_object_unref (clock);
   manager->position = 0;
 
-  msg = gst_structure_new ("json",
-      "msg-type", G_TYPE_STRING, "play",
-      "base-time", G_TYPE_INT64, (gint64) (manager->base_time), NULL);
+  event = aur_event_new (gst_structure_new ("json",
+          "msg-type", G_TYPE_STRING, "play",
+          "base-time", G_TYPE_INT64, (gint64) (manager->base_time), NULL));
 
-  manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL, msg);
+  manager_send_event_to_client (manager, client, SEND_MSG_TO_ALL, event);
 }
 
 static void
@@ -1023,7 +1032,7 @@ aur_manager_send_pause (AurManager * manager, AurServerClient * client)
 {
   GstClock *clock;
   GstClockTime now;
-  GstStructure *msg;
+  AurEvent *event;
 
   g_object_get (manager->net_clock, "clock", &clock, NULL);
   now = gst_clock_get_time (clock);
@@ -1034,19 +1043,18 @@ aur_manager_send_pause (AurManager * manager, AurServerClient * client)
   g_print ("Storing position %" GST_TIME_FORMAT "\n",
       GST_TIME_ARGS (manager->position));
 
-  msg = gst_structure_new ("json",
-      "msg-type", G_TYPE_STRING, "pause",
-      "position", G_TYPE_INT64, (gint64) manager->position,
-      NULL);
+  event = aur_event_new (gst_structure_new ("json",
+          "msg-type", G_TYPE_STRING, "pause",
+          "position", G_TYPE_INT64, (gint64) manager->position, NULL));
 
-  manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL, msg);
+  manager_send_event_to_client (manager, client, SEND_MSG_TO_ALL, event);
 }
 
 static void
 aur_manager_adjust_client_volume (AurManager * manager, guint client_id,
     gdouble volume)
 {
-  GstStructure *msg = NULL;
+  AurEvent *event = NULL;
   AurPlayerInfo *info;
 
   info = get_player_info_by_id (manager, client_id);
@@ -1054,24 +1062,24 @@ aur_manager_adjust_client_volume (AurManager * manager, guint client_id,
     return;
 
   info->volume = volume;
-  msg = gst_structure_new ("json",
+  event = aur_event_new (gst_structure_new ("json",
           "msg-type", G_TYPE_STRING, "client-volume",
           "client-id", G_TYPE_INT64, (gint64) client_id,
-          "level", G_TYPE_DOUBLE, volume, NULL);
-  manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS, msg);
+          "level", G_TYPE_DOUBLE, volume, NULL));
+  manager_send_event_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS, event);
 
   /* Tell the player which volume to set */
-  msg = gst_structure_new ("json",
-           "msg-type", G_TYPE_STRING, "volume",
-           "level", G_TYPE_DOUBLE, volume * manager->current_volume, NULL);
-  manager_send_msg_to_client (manager, info->conn, 0, msg);
+  event = aur_event_new (gst_structure_new ("json",
+          "msg-type", G_TYPE_STRING, "volume",
+          "level", G_TYPE_DOUBLE, volume * manager->current_volume, NULL));
+  manager_send_event_to_client (manager, info->conn, 0, event);
 }
 
 static void
 aur_manager_adjust_client_setting (AurManager * manager, guint client_id,
     gboolean enable, gboolean record_enable)
 {
-  GstStructure *msg = NULL;
+  AurEvent *event = NULL;
   AurPlayerInfo *info;
 
   info = get_player_info_by_id (manager, client_id);
@@ -1080,46 +1088,44 @@ aur_manager_adjust_client_setting (AurManager * manager, guint client_id,
 
   info->enabled = enable;
   info->record_enabled = record_enable;
-  msg = gst_structure_new ("json",
+  event = aur_event_new (gst_structure_new ("json",
           "msg-type", G_TYPE_STRING, "client-setting",
           "client-id", G_TYPE_INT64, (gint64) client_id,
           "enabled", G_TYPE_BOOLEAN, enable,
-          "record-enabled", G_TYPE_BOOLEAN, record_enable,
-          NULL);
-  manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS, msg);
+          "record-enabled", G_TYPE_BOOLEAN, record_enable, NULL));
+  manager_send_event_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS, event);
 
   /* Tell the player to change setting */
-  msg = gst_structure_new ("json",
-           "msg-type", G_TYPE_STRING, "client-setting",
-           "enabled", G_TYPE_BOOLEAN, enable,
-          "record-enabled", G_TYPE_BOOLEAN, record_enable,
-           NULL);
-  manager_send_msg_to_client (manager, info->conn, 0, msg);
+  event = aur_event_new (gst_structure_new ("json",
+          "msg-type", G_TYPE_STRING, "client-setting",
+          "enabled", G_TYPE_BOOLEAN, enable,
+          "record-enabled", G_TYPE_BOOLEAN, record_enable, NULL));
+  manager_send_event_to_client (manager, info->conn, 0, event);
 
   /* Update recording status at the client */
-  msg = manager_make_record_msg (manager, info);
-  manager_send_msg_to_client (manager, info->conn, 0, msg);
+  event = manager_make_record_event (manager, info);
+  manager_send_event_to_client (manager, info->conn, 0, event);
 }
 
 static void
 aur_manager_adjust_volume (AurManager * manager, gdouble volume)
 {
-  GstStructure *msg = NULL;
+  AurEvent *event = NULL;
   GList *cur;
 
   manager->current_volume = volume;
-  msg = gst_structure_new ("json",
-      "msg-type", G_TYPE_STRING, "volume",
-      "level", G_TYPE_DOUBLE, volume, NULL);
-  manager_send_msg_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS, msg);
+  event = aur_event_new (gst_structure_new ("json",
+          "msg-type", G_TYPE_STRING, "volume",
+          "level", G_TYPE_DOUBLE, volume, NULL));
+  manager_send_event_to_client (manager, NULL, SEND_MSG_TO_CONTROLLERS, event);
 
   /* Send a volume adjustment to each player */
   for (cur = manager->player_info; cur != NULL; cur = cur->next) {
-    AurPlayerInfo *info = (AurPlayerInfo *)(cur->data);
-    msg = gst_structure_new ("json",
-           "msg-type", G_TYPE_STRING, "volume",
-           "level", G_TYPE_DOUBLE, info->volume * volume, NULL);
-    manager_send_msg_to_client (manager, info->conn, 0, msg);
+    AurPlayerInfo *info = (AurPlayerInfo *) (cur->data);
+    event = aur_event_new (gst_structure_new ("json",
+            "msg-type", G_TYPE_STRING, "volume",
+            "level", G_TYPE_DOUBLE, info->volume * volume, NULL));
+    manager_send_event_to_client (manager, info->conn, 0, event);
   }
 }
 
@@ -1129,7 +1135,7 @@ aur_manager_send_seek (AurManager * manager, AurServerClient * client,
 {
   GstClock *clock;
   GstClockTime now;
-  GstStructure *msg;
+  AurEvent *event = NULL;
 
   g_object_get (manager->net_clock, "clock", &clock, NULL);
   now = gst_clock_get_time (clock);
@@ -1139,34 +1145,32 @@ aur_manager_send_seek (AurManager * manager, AurServerClient * client,
   if (manager->paused)
     manager->position = position;
 
-  msg = gst_structure_new ("json",
-      "msg-type", G_TYPE_STRING, "seek",
-      "base-time", G_TYPE_INT64, (gint64) manager->base_time,
-      "position", G_TYPE_INT64, (gint64) position,
-      NULL);
+  event = aur_event_new (gst_structure_new ("json",
+          "msg-type", G_TYPE_STRING, "seek",
+          "base-time", G_TYPE_INT64, (gint64) manager->base_time,
+          "position", G_TYPE_INT64, (gint64) position, NULL));
 
-  manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL, msg);
+  manager_send_event_to_client (manager, client, SEND_MSG_TO_ALL, event);
 }
 
 static void
 aur_manager_send_language (AurManager * manager, AurServerClient * client,
     const gchar * language)
 {
-  GstStructure *msg;
+  AurEvent *event = NULL;
 
   g_free (manager->language);
   manager->language = g_strdup (language ? language : "en");
 
-  msg = gst_structure_new ("json",
-      "msg-type", G_TYPE_STRING, "language",
-      "language", G_TYPE_STRING, manager->language,
-      NULL);
+  event = aur_event_new (gst_structure_new ("json",
+          "msg-type", G_TYPE_STRING, "language",
+          "language", G_TYPE_STRING, manager->language, NULL));
 
-  manager_send_msg_to_client (manager, client, SEND_MSG_TO_ALL, msg);
+  manager_send_event_to_client (manager, client, SEND_MSG_TO_ALL, event);
 }
 
-static GstStructure *
-manager_make_set_media_msg (AurManager * manager, guint resource_id)
+static AurEvent *
+manager_make_set_media_event (AurManager * manager, guint resource_id)
 {
   GstClock *clock;
   GstClockTime cur_time, position;
@@ -1214,33 +1218,35 @@ manager_make_set_media_msg (AurManager * manager, guint resource_id)
 
   g_free (resource_path);
 
-  return msg;
+  return aur_event_new (msg);
 }
 
-static GstStructure *
-manager_make_record_msg (AurManager * manager G_GNUC_UNUSED, AurPlayerInfo *info)
+static AurEvent *
+manager_make_record_event (AurManager * manager G_GNUC_UNUSED,
+    AurPlayerInfo * info)
 {
   GstStructure *msg;
 
   if (info->record_path == NULL)
-    info->record_path = aur_receiver_get_record_dest (manager->receiver, info->id);
+    info->record_path =
+        aur_receiver_get_record_dest (manager->receiver, info->id);
 
   g_return_val_if_fail (info->record_path != NULL, NULL);
 
   msg = gst_structure_new ("json", "msg-type", G_TYPE_STRING, "record",
       "enabled", G_TYPE_BOOLEAN, info->record_enabled,
       "record-port", G_TYPE_INT, manager->rtsp_port,
-      "record-path", G_TYPE_STRING, info->record_path,
-      NULL);
+      "record-path", G_TYPE_STRING, info->record_path, NULL);
 
-  return msg;
+  return aur_event_new (msg);
 }
 
-static GstStructure *
-manager_make_player_clients_changed_msg (G_GNUC_UNUSED AurManager * manager)
+static AurEvent *
+manager_make_player_clients_changed_event (G_GNUC_UNUSED AurManager * manager)
 {
   GstStructure *msg;
   msg = gst_structure_new ("json",
       "msg-type", G_TYPE_STRING, "player-clients-changed", NULL);
-  return msg;
+
+  return aur_event_new (msg);
 }

@@ -62,10 +62,14 @@ aur_event_finalize (GObject * object)
 const gchar *
 aur_event_get_name (const AurEvent * event)
 {
+  const gchar *name;
   g_return_val_if_fail (AUR_IS_EVENT (event), NULL);
   g_return_val_if_fail (event->fields, NULL);
 
-  return gst_structure_get_string (event->fields, "msg-type");
+  name = gst_structure_get_string (event->fields, "msg-type");
+  g_return_val_if_fail (name != NULL, NULL);
+
+  return name;
 }
 
 AurEvent *

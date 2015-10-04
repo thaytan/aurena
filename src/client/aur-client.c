@@ -1719,7 +1719,7 @@ aur_client_set_player_enabled (AurClient * client, guint id, gboolean enabled)
   id_str = g_strdup_printf ("%u", id);
   soup_msg =
       soup_form_request_new ("POST", uri, "client_id", id_str, "enable",
-      enabled ? "1" : "0", NULL);
+      enabled ? "1" : "0", "record_enable", "0", NULL);
   aur_client_submit_msg (client, soup_msg);
 
   g_free (id_str);

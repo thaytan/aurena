@@ -416,14 +416,14 @@ get_client_proxy_for_client (AurManager * manager, AurHTTPClient * client,
 static AurComponentRole
 role_str_to_roles (const gchar * roles_str)
 {
-  GValue out = G_VALUE_INIT;
   AurComponentRole roles = 0;
 
-  g_value_init (&out, AUR_TYPE_COMPONENT_ROLE);
-  if (gst_value_deserialize (&out, roles_str))
-    roles = g_value_get_flags (&out);
-
-  g_value_reset (&out);
+  if (strstr (roles_str, "player"))
+    roles |= AUR_COMPONENT_ROLE_PLAYER;
+  if (strstr (roles_str, "controller"))
+    roles |= AUR_COMPONENT_ROLE_CONTROLLER;
+  if (strstr (roles_str, "capture"))
+    roles |= AUR_COMPONENT_ROLE_CAPTURE;
 
   return roles;
 }
@@ -482,7 +482,7 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
     client_conn = aur_http_client_new_single (soup, msg, ctx);
     g_signal_connect (client_conn, "connection-lost",
         G_CALLBACK (manager_status_client_disconnect), manager);
-    manager_send_event_to_client (manager, client_conn, 0,
+    manager_send_event_to_client (manager, client_conn, AUR_COMPONENT_ROLE_CONTROLLER,
         make_player_clients_list_event (manager));
   } else {
     soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
@@ -1080,7 +1080,7 @@ aur_manager_adjust_client_volume (AurManager * manager, guint client_id,
   event = aur_event_new (gst_structure_new ("json",
           "msg-type", G_TYPE_STRING, "volume",
           "level", G_TYPE_DOUBLE, volume * manager->current_volume, NULL));
-  manager_send_event_to_client (manager, proxy->conn, 0, event);
+  manager_send_event_to_client (manager, proxy->conn, AUR_COMPONENT_ROLE_PLAYER, event);
 }
 
 static void
@@ -1110,11 +1110,11 @@ aur_manager_adjust_client_setting (AurManager * manager, guint client_id,
           "msg-type", G_TYPE_STRING, "client-setting",
           "enabled", G_TYPE_BOOLEAN, enable,
           "record-enabled", G_TYPE_BOOLEAN, record_enable, NULL));
-  manager_send_event_to_client (manager, proxy->conn, 0, event);
+  manager_send_event_to_client (manager, proxy->conn, AUR_COMPONENT_ROLE_PLAYER, event);
 
   /* Update recording status at the client */
   event = manager_make_record_event (manager, proxy);
-  manager_send_event_to_client (manager, proxy->conn, 0, event);
+  manager_send_event_to_client (manager, proxy->conn, AUR_COMPONENT_ROLE_CAPTURE, event);
 }
 
 static void
@@ -1138,7 +1138,7 @@ aur_manager_adjust_volume (AurManager * manager, gdouble volume)
       event = aur_event_new (gst_structure_new ("json",
               "msg-type", G_TYPE_STRING, "volume",
               "level", G_TYPE_DOUBLE, proxy->volume * volume, NULL));
-      manager_send_event_to_client (manager, proxy->conn, 0, event);
+      manager_send_event_to_client (manager, proxy->conn, AUR_COMPONENT_ROLE_PLAYER, event);
     }
   }
 }

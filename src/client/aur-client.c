@@ -50,6 +50,8 @@
 GST_DEBUG_CATEGORY_STATIC (client_debug);
 #define GST_CAT_DEFAULT client_debug
 
+#define AUR_CLIENT_DEFAULT_ROLES (AUR_CLIENT_PLAYER|AUR_CLIENT_CAPTURE)
+
 static void
 _do_init ()
 {
@@ -67,7 +69,7 @@ enum
 {
   PROP_0,
   PROP_SERVER_HOST,
-  PROP_FLAGS,
+  PROP_ROLES,
   PROP_PAUSED,
   PROP_BASE_TIME,
   PROP_POSITION,
@@ -148,20 +150,6 @@ try_reconnect (AurClient * client)
   return FALSE;
 }
 
-static AurClientFlags
-get_flag_from_msg (SoupMessage * msg)
-{
-  AurClientFlags flag;
-  SoupURI *uri = soup_message_get_uri (msg);
-
-  if (g_str_equal (soup_uri_get_path (uri), "/client/control_events"))
-    flag = AUR_CLIENT_CONTROLLER;
-  else
-    flag = AUR_CLIENT_PLAYER;
-
-  return flag;
-}
-
 static gboolean
 conn_idle_timeout (AurClient * client)
 {
@@ -179,11 +167,9 @@ static void
 handle_connection_closed_cb (G_GNUC_UNUSED SoupSession * session,
     SoupMessage * msg, AurClient * client)
 {
-  AurClientFlags flag = get_flag_from_msg (msg);
+  GST_LOG_OBJECT (client, "lost connection");
 
-  GST_LOG_OBJECT (client, "lost connection -flag %d", flag);
-
-  client->connecting &= ~flag;
+  client->connecting = FALSE;
 
   if (client->idle_timeout) {
     g_source_destroy (client->idle_timeout);
@@ -193,19 +179,10 @@ handle_connection_closed_cb (G_GNUC_UNUSED SoupSession * session,
   if (msg->status_code == SOUP_STATUS_CANCELLED)
     return;
 
-  if (client->was_connected & flag) {
-    g_print ("%s disconnected from server. Reason %s status %d\n",
-        flag == AUR_CLIENT_PLAYER ? "Player" : "Controller",
-        msg->reason_phrase, msg->status_code);
-  }
-  client->was_connected &= ~flag;
-
-  if (flag == AUR_CLIENT_PLAYER) {
-    if (client->player)
-      gst_element_set_state (client->player, GST_STATE_READY);
-    if (client->record_pipe)
-      gst_element_set_state (client->record_pipe, GST_STATE_READY);
-  }
+  if (client->player)
+    gst_element_set_state (client->player, GST_STATE_READY);
+  if (client->record_pipe)
+    gst_element_set_state (client->record_pipe, GST_STATE_READY);
 
   if (client->player_info) {
     free_player_info (client->player_info);
@@ -222,6 +199,12 @@ handle_connection_closed_cb (G_GNUC_UNUSED SoupSession * session,
     g_object_notify (G_OBJECT (client), "paused");
     g_object_notify (G_OBJECT (client), "enabled");
     g_object_notify (G_OBJECT (client), "connected-server");
+  }
+
+  if (client->was_connected) {
+    g_print ("Disconnected from server. Reason %s status %d\n",
+        msg->reason_phrase, msg->status_code);
+    client->was_connected = FALSE;
   }
 
   if (client->recon_timeout == NULL) {
@@ -790,7 +773,7 @@ handle_controller_enrol_message (AurClient * client, GstStructure * s)
   if (aur_json_structure_get_double (s, "volume-level", &client->volume))
     g_object_notify (G_OBJECT (client), "volume");
 
-  if (!(client->flags & AUR_CLIENT_PLAYER)) {
+  if (!(client->roles & AUR_CLIENT_PLAYER)) {
     if (aur_json_structure_get_boolean (s, "paused", &client->paused))
       g_object_notify (G_OBJECT (client), "paused");
   }
@@ -884,7 +867,7 @@ refresh_clients_array (AurClient * client)
 static void
 handle_controller_set_media_message (AurClient * client, GstStructure * s)
 {
-  if (!(client->flags & AUR_CLIENT_PLAYER))
+  if (!(client->roles & AUR_CLIENT_PLAYER))
     handle_player_set_media_message (client, s);
 
 }
@@ -892,21 +875,21 @@ handle_controller_set_media_message (AurClient * client, GstStructure * s)
 static void
 handle_controller_play_message (AurClient * client, GstStructure * s)
 {
-  if (!(client->flags & AUR_CLIENT_PLAYER))
+  if (!(client->roles & AUR_CLIENT_PLAYER))
     handle_player_play_message (client, s);
 }
 
 static void
 handle_controller_pause_message (AurClient * client, GstStructure * s)
 {
-  if (!(client->flags & AUR_CLIENT_PLAYER))
+  if (!(client->roles & AUR_CLIENT_PLAYER))
     handle_player_pause_message (client, s);
 }
 
 static void
 handle_controller_seek_message (AurClient * client, GstStructure * s)
 {
-  if (!(client->flags & AUR_CLIENT_PLAYER))
+  if (!(client->roles & AUR_CLIENT_PLAYER))
     handle_player_seek_message (client, s);
 }
 
@@ -978,7 +961,7 @@ handle_controller_client_setting_message (AurClient * client, GstStructure * s)
 static void
 handle_controller_language_message (AurClient * client, GstStructure * s)
 {
-  if (!(client->flags & AUR_CLIENT_PLAYER))
+  if (!(client->roles & AUR_CLIENT_PLAYER))
     handle_player_language_message (client, s);
 }
 
@@ -1023,17 +1006,21 @@ handle_received_chunk (SoupMessage * msg, SoupBuffer * chunk,
 {
   const gchar *ptr;
   gsize length;
-  AurClientFlags flag = get_flag_from_msg (msg);
   JsonNode *root;
   GstStructure *s;
   GError *err = NULL;
   gchar *json_str = NULL;
+  gint msg_targets;
 
-  if (client->was_connected & flag) {
-    g_print ("Successfully connected %s to server %s:%d\n",
-        flag == AUR_CLIENT_PLAYER ? "player" : "controller",
+  if (client->connecting) {
+    client->connecting = FALSE;
+    g_object_notify (G_OBJECT (client), "connected-server");
+  }
+
+  if (client->was_connected) {
+    g_print ("Successfully connected to server %s:%d\n",
         client->connected_server, client->connected_port);
-    client->was_connected |= flag;
+    client->was_connected = TRUE;
   }
 
   /* Set up or re-trigger 20 second idle timeout for ping messages */
@@ -1072,10 +1059,6 @@ handle_received_chunk (SoupMessage * msg, SoupBuffer * chunk,
    * UTF-8 validation bug in json-glib 1.0.2 */
   json_str = g_strndup (chunk->data, chunk->length);
 
-#if 0
-  g_print ("%s\n", json_str);
-#endif
-
   if (!json_parser_load_from_data (client->json, json_str, -1,
           &err) || err != NULL)
     goto fail;
@@ -1086,9 +1069,13 @@ handle_received_chunk (SoupMessage * msg, SoupBuffer * chunk,
   if (s == NULL)
     goto fail;                  /* Invalid chunk */
 
-  if (flag == AUR_CLIENT_PLAYER)
+  aur_json_structure_get_int (s, "msg-targets", &msg_targets);
+  if (msg_targets == 0)
+    GST_WARNING_OBJECT (client, "Message with no target: %s", json_str);
+
+  if (msg_targets & client->roles & AUR_CLIENT_PLAYER)
     handle_player_message (client, s);
-  else
+  if (msg_targets & client->roles & AUR_CLIENT_CONTROLLER)
     handle_controller_message (client, s);
 
   gst_structure_free (s);
@@ -1126,16 +1113,26 @@ connect_to_server (AurClient * client, const gchar * server, int port)
   if (client->shutting_down)
     return;
 
-  g_print ("In connect_to_server(%s,%d), client->flags %u, connecting %u\n",
-      server, port, client->flags, client->connecting);
+  g_print ("In connect_to_server(%s,%d), client->roles %u, connecting %u\n",
+      server, port, client->roles, client->connecting);
 
-  if (client->flags & AUR_CLIENT_PLAYER
-      && !(client->connecting & AUR_CLIENT_PLAYER)) {
-    client->connecting |= AUR_CLIENT_PLAYER;
+  if (!client->connecting) {
+    GValue roles = G_VALUE_INIT;
+    gchar *roles_str;
 
-    uri = g_strdup_printf ("http://%s:%u/client/player_events", server, port);
-    GST_DEBUG_OBJECT (client, "Attempting to connect player to server %s:%d",
-        server, port);
+    client->connecting = TRUE;
+    g_value_init (&roles, AUR_TYPE_COMPONENT_ROLE);
+    g_value_set_flags (&roles, client->roles);
+
+    roles_str = gst_value_serialize (&roles);
+    g_value_reset (&roles);
+
+    uri =
+        g_strdup_printf ("http://%s:%u/client/events?roles=%s", server, port,
+        roles_str);
+    g_free (roles_str);
+    GST_DEBUG_OBJECT (client, "Attempting to connect to server at %s", uri);
+
     msg = soup_message_new ("GET", uri);
     g_signal_connect (msg, "got-chunk", (GCallback) handle_received_chunk,
         client);
@@ -1143,28 +1140,12 @@ connect_to_server (AurClient * client, const gchar * server, int port)
         (SoupSessionCallback) handle_connection_closed_cb, client);
     g_free (uri);
   }
-
-  if (client->flags & AUR_CLIENT_CONTROLLER
-      && !(client->connecting & AUR_CLIENT_CONTROLLER)) {
-    GST_DEBUG_OBJECT (client,
-        "Attempting to connect controller to server %s:%d", server, port);
-    client->connecting |= AUR_CLIENT_CONTROLLER;
-
-    uri = g_strdup_printf ("http://%s:%u/client/control_events", server, port);
-    msg = soup_message_new ("GET", uri);
-    g_signal_connect (msg, "got-chunk", (GCallback) handle_received_chunk,
-        client);
-    soup_session_queue_message (client->soup, msg,
-        (SoupSessionCallback) handle_connection_closed_cb, client);
-    g_free (uri);
-  }
-
-  g_object_notify (G_OBJECT (client), "connected-server");
 }
 
 static void
 aur_client_init (AurClient * client)
 {
+  client->roles = AUR_CLIENT_DEFAULT_ROLES;
   client->server_port = 5457;
   client->paused = TRUE;
 }
@@ -1191,10 +1172,10 @@ aur_client_constructed (GObject * object)
   /* 5 second timeout before retrying with new connections */
   g_object_set (G_OBJECT (client->soup), "timeout", 5, NULL);
 
-  if (client->flags & AUR_CLIENT_PLAYER)
+  if (client->roles & AUR_CLIENT_PLAYER)
     max_con++;
 
-  if (client->flags & AUR_CLIENT_CONTROLLER)
+  if (client->roles & AUR_CLIENT_CONTROLLER)
     max_con++;
 
   g_object_set (client->soup, "max-conns-per-host", max_con, NULL);
@@ -1219,9 +1200,9 @@ aur_client_class_init (AurClientClass * client_class)
           "Aurena Server hostname or IP", NULL,
           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
 
-  g_object_class_install_property (gobject_class, PROP_FLAGS,
-      g_param_spec_uint ("flags", "Client Flags",
-          "Aurena Client flags to enable player and controller mode", 0,
+  g_object_class_install_property (gobject_class, PROP_ROLES,
+      g_param_spec_uint ("roles", "Client Roles",
+          "Aurena Client roles - to enable player and controller mode", 0,
           G_MAXUINT, 0,
           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
 
@@ -1378,8 +1359,10 @@ aur_client_set_property (GObject * object, guint prop_id,
         split_server_host (client);
       break;
     }
-    case PROP_FLAGS:{
-      client->flags = g_value_get_uint (value);
+    case PROP_ROLES:{
+      AurClientRoles roles = g_value_get_uint (value);
+      if (roles != 0)
+        client->roles = roles;
       break;
     }
     case PROP_ASYNC_MAIN_CONTEXT:{
@@ -1409,8 +1392,8 @@ aur_client_get_property (GObject * object, guint prop_id,
       g_value_take_string (value, tmp);
       break;
     }
-    case PROP_FLAGS:{
-      g_value_set_uint (value, client->flags);
+    case PROP_ROLES:{
+      g_value_set_uint (value, client->roles);
       break;
     }
     case PROP_PAUSED:{
@@ -1575,12 +1558,12 @@ search_for_server (AurClient * client)
 
 AurClient *
 aur_client_new (GMainContext * context, const char *server_host,
-    AurClientFlags flags)
+    AurClientRoles roles)
 {
   AurClient *client = g_object_new (AUR_TYPE_CLIENT,
       "main-context", context,
       "server-host", server_host,
-      "flags", flags,
+      "roles", roles,
       NULL);
 
   return client;

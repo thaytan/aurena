@@ -104,10 +104,10 @@ GType
 aur_component_role_get_type (void)
 {
   static const GFlagsValue values[] = {
-    {C_FLAGS (AUR_COMPONENT_ROLE_MANAGER), "Server manager object", "manager"},
-    {C_FLAGS (AUR_COMPONENT_ROLE_CONTROLLER), "Control client", "controller"},
-    {C_FLAGS (AUR_COMPONENT_ROLE_PLAYER), "Playback client", "player"},
-    {C_FLAGS (AUR_COMPONENT_ROLE_CAPTURE), "Capture client", "capture"},
+    {C_FLAGS (AUR_COMPONENT_ROLE_MANAGER), "manager", "Server manager object"},
+    {C_FLAGS (AUR_COMPONENT_ROLE_CONTROLLER), "controller", "Control client"},
+    {C_FLAGS (AUR_COMPONENT_ROLE_PLAYER), "player", "Playback client"},
+    {C_FLAGS (AUR_COMPONENT_ROLE_CAPTURE), "capture", "Capture client"},
     {0, NULL, NULL}
   };
   static volatile GType id = 0;
@@ -121,4 +121,23 @@ aur_component_role_get_type (void)
   }
 
   return id;
+}
+
+
+AurComponentRole
+aur_component_roles_from_string (const gchar * roles_str)
+{
+  GValue out = G_VALUE_INIT;
+  AurComponentRole roles = 0;
+
+  if (roles_str == NULL)
+    return roles;
+
+  g_value_init (&out, AUR_TYPE_COMPONENT_ROLE);
+  if (gst_value_deserialize (&out, roles_str))
+    roles = g_value_get_flags (&out);
+
+  g_value_reset (&out);
+
+  return roles;
 }

@@ -55,6 +55,8 @@ gboolean aur_component_has_role (AurComponent *component, AurComponentRole targe
 void aur_component_receive_event (AurComponent *component, AurEvent *event);
 void aur_component_send_event (AurComponent *component, AurComponentRole target_roles, AurEvent *event);
 
+AurComponentRole aur_component_roles_from_string (const gchar *roles_str);
+
 G_END_DECLS
 
 #endif

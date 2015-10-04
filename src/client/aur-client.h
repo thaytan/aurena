@@ -32,7 +32,8 @@
 #include <avahi-glib/glib-watch.h>
 #endif
 
-#include <src/client/aur-client-types.h>
+#include <common/aur-component.h>
+#include <client/aur-client-types.h>
 
 G_BEGIN_DECLS
 
@@ -51,15 +52,16 @@ typedef struct
 typedef enum
 {
     AUR_CLIENT_NONE = 0,
-    AUR_CLIENT_PLAYER = (1 << 0),
-    AUR_CLIENT_CONTROLLER = (1 << 1),
-} AurClientFlags;
+    AUR_CLIENT_CONTROLLER = AUR_COMPONENT_ROLE_CONTROLLER,
+    AUR_CLIENT_PLAYER = AUR_COMPONENT_ROLE_PLAYER,
+    AUR_CLIENT_CAPTURE = AUR_COMPONENT_ROLE_CAPTURE
+} AurClientRoles;
 
 struct _AurClient
 {
   GObject parent;
 
-  AurClientFlags flags;
+  AurClientRoles roles;
   gdouble volume;
   GArray *player_info;
 
@@ -108,7 +110,7 @@ struct _AurClientClass
 };
 
 GType aur_client_get_type(void);
-AurClient *aur_client_new(GMainContext * context, const gchar *server, AurClientFlags flags);
+AurClient *aur_client_new(GMainContext * context, const gchar *server, AurClientRoles roles);
 
 gboolean aur_client_is_connected (AurClient * client);
 gboolean aur_client_is_enabled (AurClient * client);

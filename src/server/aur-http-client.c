@@ -132,10 +132,11 @@ aur_server_connection_lost (AurHTTPClient * client)
 
   if (client->type == AUR_HTTP_CLIENT_CHUNKED ||
       client->type == AUR_HTTP_CLIENT_SINGLE) {
-    if (client->need_body_complete)
+    if (client->need_body_complete) {
       soup_message_body_complete (client->event_pipe->response_body);
-    client->need_body_complete = FALSE;
-    soup_server_unpause_message (client->soup, client->event_pipe);
+      client->need_body_complete = FALSE;
+      soup_server_unpause_message (client->soup, client->event_pipe);
+    }
   }
 
   if (client->socket) {

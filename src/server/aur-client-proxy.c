@@ -21,9 +21,9 @@
 #include "config.h"
 #endif
 
-#include <src/common/aur-event.h>
-#include <src/common/aur-component.h>
-#include <src/server/aur-client-proxy.h>
+#include <common/aur-event.h>
+#include <common/aur-component.h>
+#include <server/aur-client-proxy.h>
 
 G_DEFINE_TYPE (AurClientProxy, aur_client_proxy, G_TYPE_OBJECT);
 

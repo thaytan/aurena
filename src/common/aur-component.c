@@ -97,3 +97,28 @@ aur_component_send_event (AurComponent * component,
 
   g_object_unref (G_OBJECT (event));
 }
+
+#define C_FLAGS(v) ((guint) v)
+
+GType
+aur_component_role_get_type (void)
+{
+  static const GFlagsValue values[] = {
+    {C_FLAGS (AUR_COMPONENT_ROLE_MANAGER), "Server manager object", "manager"},
+    {C_FLAGS (AUR_COMPONENT_ROLE_CONTROLLER), "Control client", "controller"},
+    {C_FLAGS (AUR_COMPONENT_ROLE_PLAYER), "Playback client", "player"},
+    {C_FLAGS (AUR_COMPONENT_ROLE_CAPTURE), "Capture client", "capture"},
+    {0, NULL, NULL}
+  };
+  static volatile GType id = 0;
+
+  if (g_once_init_enter ((gsize *) & id)) {
+    GType _id;
+
+    _id = g_flags_register_static ("AurComponentRole", values);
+
+    g_once_init_leave ((gsize *) & id, _id);
+  }
+
+  return id;
+}

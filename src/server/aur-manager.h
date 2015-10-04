@@ -26,7 +26,7 @@
 
 #include <gst/rtsp-server/rtsp-server.h>
 
-#include <src/server/aur-server-types.h>
+#include <server/aur-server-types.h>
 #include "aur-avahi.h"
 
 G_BEGIN_DECLS

@@ -24,7 +24,7 @@
 #include <gst/gst.h>
 #include <common/aur-types.h>
 #include <common/aur-json.h>
-
+#include <common/aur-component.h>
 
 G_BEGIN_DECLS
 
@@ -45,8 +45,8 @@ struct _AurEventClass
 };
 
 AurEvent *aur_event_new (GstStructure *fields);
-const gchar *aur_event_get_name (AurEvent *event);
-JsonNode *aur_event_to_json (const AurEvent *event);
+const gchar *aur_event_get_name (const AurEvent *event);
+JsonNode *aur_event_to_json_msg (const AurEvent *event, AurComponentRole targets);
 
 G_END_DECLS
 

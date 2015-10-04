@@ -24,7 +24,7 @@
 #include <gst/gst.h>
 #include <json-glib/json-glib.h>
 
-#include <src/common/aur-json.h>
+#include <common/aur-json.h>
 
 static void
 aur_json_array_add_to_val (JsonArray * array, guint index_,
@@ -110,6 +110,10 @@ aur_json_value_to_node (const GValue * value)
     /* Can't represent things > 2^63-1 */
     if (tmp < 0)
       return NULL;
+    n = json_node_new (JSON_NODE_VALUE);
+    json_node_set_int (n, tmp);
+  } else if (G_VALUE_HOLDS_UINT (value)) {
+    gint64 tmp = (gint64) (g_value_get_uint (value));
     n = json_node_new (JSON_NODE_VALUE);
     json_node_set_int (n, tmp);
   } else {

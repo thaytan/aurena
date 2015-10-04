@@ -68,6 +68,7 @@ AC_SUBST([EXTRA_CFLAGS])
 AC_CONFIG_FILES([
   Makefile
   src/Makefile
+  src/common/Makefile
   src/client/Makefile
   src/server/Makefile
   data/Makefile

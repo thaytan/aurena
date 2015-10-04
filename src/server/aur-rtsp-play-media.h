@@ -22,7 +22,7 @@
 #include <gst/gst.h>
 #include <gst/rtsp-server/rtsp-server.h>
 
-#include <src/server/aur-server-types.h>
+#include <server/aur-server-types.h>
 
 typedef struct _AurRTSPPlayMediaFactoryClass AurRTSPPlayMediaFactoryClass;
 

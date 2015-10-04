@@ -29,5 +29,5 @@ noinst_HEADERS = \
     aur-server.h \
     aur-server-types.h
 
-libaurena_server_la_CPPFLAGS = -I$(top_srcdir) $(AUR_COMMON_CFLAGS) $(GST_CFLAGS) $(GST_RTSP_CFLAGS) $(EXTRA_CFLAGS)
+libaurena_server_la_CPPFLAGS = -I$(top_srcdir)/src $(AUR_COMMON_CFLAGS) $(GST_CFLAGS) $(GST_RTSP_CFLAGS) $(EXTRA_CFLAGS)
 libaurena_server_la_LIBADD  = -lgstapp-1.0 -lgstaudio-1.0 $(GST_RTSP_LIBS)

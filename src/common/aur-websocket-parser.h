@@ -22,7 +22,7 @@
 
 #include <gst/gst.h>
 
-#include <src/common/aur-types.h>
+#include <common/aur-types.h>
 
 G_BEGIN_DECLS
 

@@ -25,6 +25,7 @@
 G_BEGIN_DECLS
 
 typedef struct _AurClient AurClient;
+typedef struct _AurPlayer AurPlayer;
 typedef struct _AurConfig AurConfig;
 
 G_END_DECLS

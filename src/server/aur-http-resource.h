@@ -24,7 +24,7 @@
 #include <gst/net/gstnet.h>
 #include <libsoup/soup-types.h>
 
-#include <src/server/aur-server-types.h>
+#include <server/aur-server-types.h>
 
 G_BEGIN_DECLS
 

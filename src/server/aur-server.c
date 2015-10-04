@@ -28,7 +28,7 @@
 #include <libsoup/soup-socket.h>
 #include <libsoup/soup-address.h>
 
-#include <src/common/aur-config.h>
+#include <common/aur-config.h>
 
 #include "aur-server.h"
 #include "aur-http-client.h"

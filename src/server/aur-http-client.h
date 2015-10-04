@@ -24,8 +24,8 @@
 #include <gst/net/gstnet.h>
 #include <libsoup/soup.h>
 
-#include <src/server/aur-server-types.h>
-#include <src/common/aur-websocket-parser.h>
+#include <server/aur-server-types.h>
+#include <common/aur-websocket-parser.h>
 
 G_BEGIN_DECLS
 

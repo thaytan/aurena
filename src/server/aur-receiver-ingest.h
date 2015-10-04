@@ -24,7 +24,7 @@
 #include <gst/net/gstnet.h>
 
 #include <gst/rtsp-server/rtsp-server.h>
-#include <src/server/aur-server-types.h>
+#include <server/aur-server-types.h>
 
 G_BEGIN_DECLS
 

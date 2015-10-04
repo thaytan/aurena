@@ -20,7 +20,7 @@
 #define __AUR_RECEIVER_PROCESSOR_H__
 
 #include <gst/gst.h>
-#include <src/server/aur-server-types.h>
+#include <server/aur-server-types.h>
 
 G_BEGIN_DECLS
 

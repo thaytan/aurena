@@ -25,17 +25,20 @@
 
 G_BEGIN_DECLS
 
+#define AUR_TYPE_COMPONENT_ROLE (aur_component_role_get_type())
 #define AUR_TYPE_COMPONENT (aur_component_get_type ())
 G_DECLARE_INTERFACE (AurComponent, aur_component, AUR, COMPONENT, GObject)
 
 enum _AurComponentRole {
-  AUR_COMPONENT_ROLE_MANAGER     = 0x1,
-  AUR_COMPONENT_ROLE_CONTROLLER  = 0x2,
-  AUR_COMPONENT_ROLE_PLAYER      = 0x4,
-  AUR_COMPONENT_ROLE_CAPTURE     = 0x8
+  AUR_COMPONENT_ROLE_MANAGER     = (1 << 0),
+  AUR_COMPONENT_ROLE_CONTROLLER  = (1 << 1),
+  AUR_COMPONENT_ROLE_PLAYER      = (1 << 2),
+  AUR_COMPONENT_ROLE_CAPTURE     = (1 << 3)
 };
 
 #define AUR_COMPONENT_ROLE_ALL (0xffff)
+
+GType aur_component_role_get_type (void);
 
 /* Interface type structure */
 struct _AurComponentInterface

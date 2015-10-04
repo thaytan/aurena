@@ -33,10 +33,10 @@
 
 #include <json-glib/json-glib.h>
 
-#include <src/common/aur-json.h>
-#include <src/common/aur-config.h>
-#include <src/common/aur-event.h>
-#include <src/common/aur-component.h>
+#include <common/aur-json.h>
+#include <common/aur-config.h>
+#include <common/aur-event.h>
+#include <common/aur-component.h>
 
 #include "aur-http-resource.h"
 #include "aur-manager.h"
@@ -416,13 +416,14 @@ get_client_proxy_for_client (AurManager * manager, AurHTTPClient * client,
 static AurComponentRole
 role_str_to_roles (const gchar * roles_str)
 {
+  GValue out = G_VALUE_INIT;
   AurComponentRole roles = 0;
-  if (strstr (roles_str, "player"))
-    roles |= AUR_COMPONENT_ROLE_PLAYER;
-  if (strstr (roles_str, "controller"))
-    roles |= AUR_COMPONENT_ROLE_CONTROLLER;
-  if (strstr (roles_str, "capture"))
-    roles |= AUR_COMPONENT_ROLE_CAPTURE;
+
+  g_value_init (&out, AUR_TYPE_COMPONENT_ROLE);
+  if (gst_value_deserialize (&out, roles_str))
+    roles = g_value_get_flags (&out);
+
+  g_value_reset (&out);
 
   return roles;
 }
@@ -502,7 +503,7 @@ manager_send_event_to_client (AurManager * manager, AurHTTPClient * client,
 
   g_return_if_fail (event != NULL);
 
-  root = aur_event_to_json (event);
+  root = aur_event_to_json_msg (event, targets);
   g_object_unref (event);
 
   gen = json_generator_new ();

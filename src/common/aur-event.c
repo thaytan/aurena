@@ -22,6 +22,7 @@
 #endif
 
 #include "aur-event.h"
+#include "aur-component.h"
 
 GST_DEBUG_CATEGORY_STATIC (debug_cat);
 #define GST_CAT_DEFAULT debug_cat
@@ -59,7 +60,7 @@ aur_event_finalize (GObject * object)
 }
 
 const gchar *
-aur_event_get_name (AurEvent * event)
+aur_event_get_name (const AurEvent * event)
 {
   g_return_val_if_fail (AUR_IS_EVENT (event), NULL);
   g_return_val_if_fail (event->fields, NULL);
@@ -81,10 +82,23 @@ aur_event_new (GstStructure * fields)
 }
 
 JsonNode *
-aur_event_to_json (const AurEvent * event)
+aur_event_to_json_msg (const AurEvent * event, AurComponentRole targets)
 {
+  GstStructure *msg;
+  JsonNode *fields;
+
   g_return_val_if_fail (AUR_IS_EVENT (event), NULL);
   g_return_val_if_fail (event->fields, NULL);
 
-  return aur_json_from_gst_structure (event->fields);
+  msg = gst_structure_copy (event->fields);
+
+  gst_structure_set (msg,
+            "msg-type", G_TYPE_STRING, aur_event_get_name (event),
+            "msg-targets", G_TYPE_UINT, (guint) targets,
+            NULL);
+
+  fields = aur_json_from_gst_structure (msg);
+
+  gst_structure_free (msg);
+  return fields;
 }

@@ -57,9 +57,7 @@ struct _AurManager
   gchar *language;
 
   guint next_player_id;
-  GList *player_info;
-
-  GList *ctrl_clients;
+  GList *clients;
 
   GstClockTime base_time;
   GstClockTime position;

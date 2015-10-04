@@ -29,6 +29,8 @@
 #include "config.h"
 #endif
 
+#include <string.h>
+
 #include <json-glib/json-glib.h>
 
 #include <src/common/aur-json.h>
@@ -43,6 +45,7 @@
 #include "aur-rtsp-play-media.h"
 #include "aur-server.h"
 #include "aur-http-client.h"
+#include "aur-client-proxy.h"
 
 GST_DEBUG_CATEGORY_STATIC (manager_debug);
 #define GST_CAT_DEFAULT manager_debug
@@ -55,20 +58,6 @@ enum
   PROP_0,
   PROP_CONFIG,
   PROP_LAST
-};
-
-typedef struct _AurPlayerInfo AurPlayerInfo;
-struct _AurPlayerInfo
-{
-  guint id;
-  gchar *host;
-  AurHTTPClient *conn;
-
-  gchar *record_path;
-
-  gdouble volume;
-  gboolean enabled;
-  gboolean record_enabled;
 };
 
 typedef enum _AurControlEvent AurControlEvent;
@@ -136,14 +125,14 @@ static AurEvent *manager_make_set_media_event (AurManager * manager,
     guint resource_id);
 static AurEvent *manager_make_player_clients_changed_event
     (AurManager * manager);
-static AurPlayerInfo *get_player_info_by_id (AurManager * manager,
-    guint client_id);
+static AurClientProxy *get_client_proxy_by_id (AurManager * manager,
+    guint client_id, AurComponentRole roles);
 static void aur_manager_send_seek (AurManager * manager,
     AurHTTPClient * client, GstClockTime position);
 static void aur_manager_send_language (AurManager * manager,
     AurHTTPClient * client, const gchar * language);
 static AurEvent *manager_make_record_event (AurManager * manager,
-    AurPlayerInfo * info);
+    AurClientProxy * proxy);
 
 static void
 manager_send_event_to_client (AurManager * manager, AurHTTPClient * client,
@@ -193,7 +182,7 @@ failed:
 }
 
 static AurEvent *
-manager_make_enrol_event (AurManager * manager, AurPlayerInfo * info)
+manager_make_enrol_event (AurManager * manager, AurClientProxy * proxy)
 {
   int clock_port;
   GstClock *clock;
@@ -207,8 +196,8 @@ manager_make_enrol_event (AurManager * manager, AurPlayerInfo * info)
 
   g_object_get (manager->net_clock, "port", &clock_port, NULL);
 
-  if (info != NULL)             /* Is a player message */
-    volume *= info->volume;
+  if (proxy != NULL)            /* Is a player message */
+    volume *= proxy->volume;
 
   msg = gst_structure_new ("json",
       "msg-type", G_TYPE_STRING, "enrol",
@@ -218,8 +207,8 @@ manager_make_enrol_event (AurManager * manager, AurPlayerInfo * info)
       "volume-level", G_TYPE_DOUBLE, volume,
       "paused", G_TYPE_BOOLEAN, manager->paused, NULL);
 
-  if (info != NULL)             /* Is a player message */
-    gst_structure_set (msg, "enabled", G_TYPE_BOOLEAN, info->enabled, NULL);
+  if (proxy != NULL)            /* Is a player message */
+    gst_structure_set (msg, "enabled", G_TYPE_BOOLEAN, proxy->enabled, NULL);
 
   return aur_event_new (msg);
 }
@@ -236,16 +225,20 @@ make_player_clients_list_event (AurManager * manager)
   msg = gst_structure_new ("json",
       "msg-type", G_TYPE_STRING, "player-clients", NULL);
 
-  for (cur = manager->player_info; cur != NULL; cur = g_list_next (cur)) {
-    AurPlayerInfo *info = (AurPlayerInfo *) (cur->data);
-    if (info->conn != NULL) {
+  for (cur = manager->clients; cur != NULL; cur = g_list_next (cur)) {
+    AurClientProxy *proxy = AUR_CLIENT_PROXY (cur->data);
+
+    if ((proxy->roles & AUR_COMPONENT_ROLE_PLAYER) == 0)
+      continue;
+
+    if (proxy->conn != NULL) {
       GValue tmp = G_VALUE_INIT;
       GstStructure *cur_struct = gst_structure_new ("client",
-          "client-id", G_TYPE_INT64, (gint64) info->id,
-          "enabled", G_TYPE_BOOLEAN, info->enabled,
-          "record-enabled", G_TYPE_BOOLEAN, info->record_enabled,
-          "volume", G_TYPE_DOUBLE, info->volume,
-          "host", G_TYPE_STRING, info->host,
+          "client-id", G_TYPE_INT64, (gint64) proxy->id,
+          "enabled", G_TYPE_BOOLEAN, proxy->enabled,
+          "record-enabled", G_TYPE_BOOLEAN, proxy->record_enabled,
+          "volume", G_TYPE_DOUBLE, proxy->volume,
+          "host", G_TYPE_STRING, proxy->host,
           NULL);
 
       g_value_init (&tmp, GST_TYPE_STRUCTURE);
@@ -261,42 +254,30 @@ make_player_clients_list_event (AurManager * manager)
 }
 
 static gint
-find_player_info_by_client (const AurPlayerInfo * info,
+find_client_proxy_by_client (const AurClientProxy * proxy,
     AurHTTPClient * client)
 {
-  if (info->conn == client)
+  if (proxy->conn == client)
     return 0;
 
   return -1;
 }
 
 static void
-manager_player_client_disconnect (AurHTTPClient * client,
-    AurManager * manager)
+manager_client_disconnect (AurHTTPClient * client, AurManager * manager)
 {
-  GList *item = g_list_find_custom (manager->player_info, client,
-      (GCompareFunc) (find_player_info_by_client));
+  GList *item = g_list_find_custom (manager->clients, client,
+      (GCompareFunc) (find_client_proxy_by_client));
   if (item) {
-    AurPlayerInfo *info = (AurPlayerInfo *) (item->data);
+    AurClientProxy *proxy = (AurClientProxy *) (item->data);
 
-    g_print ("Disconnecting player client %u\n", info->id);
+    g_print ("Disconnecting client %u (roles 0x%x)\n", proxy->id, proxy->roles);
 
     g_object_unref (client);
-    info->conn = NULL;
+    proxy->conn = NULL;
 
     manager_send_event_to_client (manager, NULL, AUR_COMPONENT_ROLE_CONTROLLER,
         manager_make_player_clients_changed_event (manager));
-  }
-}
-
-static void
-manager_ctrl_client_disconnect (AurHTTPClient * client, AurManager * manager)
-{
-  GList *item = g_list_find (manager->ctrl_clients, client);
-  if (item) {
-    g_print ("Removing control client %u\n", client->conn_id);
-    g_object_unref (client);
-    manager->ctrl_clients = g_list_delete_link (manager->ctrl_clients, item);
   }
 }
 
@@ -319,25 +300,25 @@ handle_ping_timeout (AurManager * manager)
   event = aur_event_new (gst_structure_new ("json",
           "msg-type", G_TYPE_STRING, "ping", NULL));
 
-  manager_send_event_to_client (manager, NULL,
-      AUR_COMPONENT_ROLE_ALL, event);
+  manager_send_event_to_client (manager, NULL, AUR_COMPONENT_ROLE_ALL, event);
 
   return TRUE;
 }
 
 static void
 send_enrol_events (AurManager * manager, AurHTTPClient * client,
-    AurPlayerInfo * info)
+    AurClientProxy * proxy)
 {
-  manager_send_event_to_client (manager, client, 
-      AUR_COMPONENT_ROLE_ALL, manager_make_enrol_event (manager, info));
+  manager_send_event_to_client (manager, client,
+      AUR_COMPONENT_ROLE_ALL, manager_make_enrol_event (manager, proxy));
 
   if (manager->current_resource) {
     manager_send_event_to_client (manager, client, AUR_COMPONENT_ROLE_ALL,
         manager_make_set_media_event (manager, manager->current_resource));
   }
-  if (info == NULL) {
-    manager_send_event_to_client (manager, client, AUR_COMPONENT_ROLE_CONTROLLER,
+  if (proxy == NULL) {
+    manager_send_event_to_client (manager, client,
+        AUR_COMPONENT_ROLE_CONTROLLER,
         manager_make_player_clients_changed_event (manager));
   }
 
@@ -347,76 +328,126 @@ send_enrol_events (AurManager * manager, AurHTTPClient * client,
   }
 }
 
-static gint
-find_unlinked_player_info_by_host (const AurPlayerInfo * p, const gchar * host)
+struct AurClientProxyFindClosure
 {
-  if (p->conn == NULL && g_str_equal (p->host, host))
+  AurComponentRole roles;
+  guint client_id;
+  const gchar *host;
+};
+
+/* Match roles exactly for unlinked client search ... */
+static gint
+find_unlinked_client_by_host (const AurClientProxy * p,
+    struct AurClientProxyFindClosure *c)
+{
+  if (p->conn == NULL && c->roles == p->roles && g_str_equal (p->host, c->host))
     return 0;
   return -1;
 }
 
 static gint
-find_player_info_by_client_id (const AurPlayerInfo * p, const gpointer cid_ptr)
+find_client_proxy_by_client_id (const AurClientProxy * p,
+    struct AurClientProxyFindClosure *c)
 {
-  const guint client_id = GPOINTER_TO_INT (cid_ptr);
-  if (p->id == client_id)
+  if (p->id == c->client_id && (p->roles & c->roles))
     return 0;
   return -1;
 }
 
-static AurPlayerInfo *
-get_player_info_by_id (AurManager * manager, guint client_id)
+static AurClientProxy *
+get_client_proxy_by_id (AurManager * manager,
+    guint client_id, AurComponentRole roles)
 {
   GList *entry;
-  AurPlayerInfo *info = NULL;
+  AurClientProxy *proxy = NULL;
+  struct AurClientProxyFindClosure c;
 
   /* See if there's a player instance that matches */
-  entry =
-      g_list_find_custom (manager->player_info, GINT_TO_POINTER (client_id),
-      (GCompareFunc) find_player_info_by_client_id);
-  if (entry)
-    info = (AurPlayerInfo *) (entry->data);
+  c.roles = roles;
+  c.client_id = client_id;
 
-  return info;
+  entry =
+      g_list_find_custom (manager->clients, &c,
+      (GCompareFunc) find_client_proxy_by_client_id);
+  if (entry)
+    proxy = (AurClientProxy *) (entry->data);
+
+  return proxy;
 }
 
-static AurPlayerInfo *
-get_player_info_for_client (AurManager * manager, AurHTTPClient * client)
+static AurClientProxy *
+get_client_proxy_for_client (AurManager * manager, AurHTTPClient * client,
+    AurComponentRole roles)
 {
   GList *entry;
-  AurPlayerInfo *info = NULL;
+  AurClientProxy *proxy = NULL;
   const gchar *host;
+  struct AurClientProxyFindClosure c;
 
   /* See if there's a disconnected player instance that matches */
   host = aur_http_client_get_host (client);
+  c.host = host;
+  c.roles = roles;
   entry =
-      g_list_find_custom (manager->player_info, host,
-      (GCompareFunc) find_unlinked_player_info_by_host);
+      g_list_find_custom (manager->clients, &c,
+      (GCompareFunc) find_unlinked_client_by_host);
   if (entry == NULL) {
-    info = g_new0 (AurPlayerInfo, 1);
-    /* Init the player info */
-    info->host = g_strdup (host);
-    info->id = manager->next_player_id++;
-    info->volume = 1.0;
+    proxy = g_object_new (AUR_TYPE_CLIENT_PROXY, NULL);
+    /* Init the client proxy */
+    proxy->roles = roles;
+    proxy->host = g_strdup (host);
+    proxy->id = manager->next_player_id++;
+    proxy->volume = 1.0;
     /* FIXME: Disable new clients if playing, otherwise enable */
-    info->enabled = manager->paused;
-    manager->player_info = entry = g_list_prepend (manager->player_info, info);
+    proxy->enabled = manager->paused;
+    manager->clients = entry = g_list_prepend (manager->clients, proxy);
 
-    g_print ("New player id %u\n", info->id);
+    g_print ("New client id %u (roles %x)\n", proxy->id, proxy->roles);
   } else {
-    info = (AurPlayerInfo *) (entry->data);
-    g_print ("Player id %u rejoining\n", info->id);
+    proxy = (AurClientProxy *) (entry->data);
+    g_print ("Client id %u rejoining (roles %x)\n", proxy->id, proxy->roles);
   }
 
-  info->conn = client;
+  proxy->conn = client;
 
-  return info;
+  return proxy;
+}
+
+static AurComponentRole
+role_str_to_roles (const gchar * roles_str)
+{
+  AurComponentRole roles = 0;
+  if (strstr (roles_str, "player"))
+    roles |= AUR_COMPONENT_ROLE_PLAYER;
+  if (strstr (roles_str, "controller"))
+    roles |= AUR_COMPONENT_ROLE_CONTROLLER;
+  if (strstr (roles_str, "capture"))
+    roles |= AUR_COMPONENT_ROLE_CAPTURE;
+
+  return roles;
+}
+
+static void
+enrol_events_subscriber (AurManager * manager, SoupServer * soup,
+    SoupMessage * msg, SoupClientContext * ctx, AurComponentRole roles)
+{
+  AurHTTPClient *client_conn = NULL;
+  AurClientProxy *proxy;
+  client_conn = aur_http_client_new (soup, msg, ctx);
+  g_signal_connect (client_conn, "connection-lost",
+      G_CALLBACK (manager_client_disconnect), manager);
+  proxy = get_client_proxy_for_client (manager, client_conn, roles);
+  send_enrol_events (manager, client_conn, proxy);
+
+  manager_send_event_to_client (manager, NULL,
+      AUR_COMPONENT_ROLE_CONTROLLER,
+      manager_make_player_clients_changed_event (manager));
 }
 
 static void
 manager_client_cb (SoupServer * soup, SoupMessage * msg,
-    G_GNUC_UNUSED const char *path, G_GNUC_UNUSED GHashTable * query,
-    G_GNUC_UNUSED SoupClientContext * ctx, AurManager * manager)
+    const char *path, GHashTable * query,
+    SoupClientContext * ctx, AurManager * manager)
 {
   AurHTTPClient *client_conn = NULL;
   gchar **parts = g_strsplit (path, "/", 3);
@@ -427,25 +458,25 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
     goto done;                  /* Invalid request */
   }
 
-  if (g_str_equal (parts[2], "player_events")) {
-    AurPlayerInfo *info;
+  if (g_str_equal (parts[2], "events")) {
+    const gchar *roles_str;
+    AurComponentRole roles;
 
-    client_conn = aur_http_client_new (soup, msg, ctx);
-    g_signal_connect (client_conn, "connection-lost",
-        G_CALLBACK (manager_player_client_disconnect), manager);
-
-    info = get_player_info_for_client (manager, client_conn);
-
-    send_enrol_events (manager, client_conn, info);
-    manager_send_event_to_client (manager, NULL,
-        AUR_COMPONENT_ROLE_CONTROLLER,
-        manager_make_player_clients_changed_event (manager));
+    if (query == NULL ||
+        ((roles_str = g_hash_table_lookup (query, "roles")) == NULL) ||
+        ((roles = role_str_to_roles (roles_str)) == 0)) {
+      soup_message_set_status (msg, SOUP_STATUS_BAD_REQUEST);
+      goto done;                /* Invalid request */
+    }
+    enrol_events_subscriber (manager, soup, msg, ctx, roles);
+#if 1                           /* Backwards compat */
+  } else if (g_str_equal (parts[2], "player_events")) {
+    enrol_events_subscriber (manager, soup, msg, ctx,
+        AUR_COMPONENT_ROLE_PLAYER);
   } else if (g_str_equal (parts[2], "control_events")) {
-    client_conn = aur_http_client_new (soup, msg, ctx);
-    g_signal_connect (client_conn, "connection-lost",
-        G_CALLBACK (manager_ctrl_client_disconnect), manager);
-    manager->ctrl_clients = g_list_prepend (manager->ctrl_clients, client_conn);
-    send_enrol_events (manager, client_conn, NULL);
+    enrol_events_subscriber (manager, soup, msg, ctx,
+        AUR_COMPONENT_ROLE_CONTROLLER);
+#endif
   } else if (g_str_equal (parts[2], "player_info")) {
     client_conn = aur_http_client_new_single (soup, msg, ctx);
     g_signal_connect (client_conn, "connection-lost",
@@ -488,18 +519,10 @@ manager_send_event_to_client (AurManager * manager, AurHTTPClient * client,
   } else {
     /* client == NULL - send to all clients */
     GList *cur;
-    if (targets & AUR_COMPONENT_ROLE_PLAYER) {
-      for (cur = manager->player_info; cur != NULL; cur = g_list_next (cur)) {
-        AurPlayerInfo *info = (AurPlayerInfo *) (cur->data);
-        if (info->conn)
-          aur_http_client_send_message (info->conn, body, len);
-      }
-    }
-    if (targets & AUR_COMPONENT_ROLE_CONTROLLER) {
-      for (cur = manager->ctrl_clients; cur != NULL; cur = g_list_next (cur)) {
-        client = (AurHTTPClient *) (cur->data);
-        aur_http_client_send_message (client, body, len);
-      }
+    for (cur = manager->clients; cur != NULL; cur = g_list_next (cur)) {
+      AurClientProxy *proxy = (AurClientProxy *) (cur->data);
+      if (proxy->conn && (targets & proxy->roles))
+        aur_http_client_send_message (proxy->conn, body, len);
     }
   }
   g_free (body);
@@ -773,28 +796,13 @@ aur_manager_class_init (AurManagerClass * manager_class)
 }
 
 static void
-free_player_info (AurPlayerInfo * info)
-{
-  if (info->conn)
-    g_object_unref (info->conn);
-
-  g_free (info->record_path);
-  g_free (info->host);
-  g_free (info);
-}
-
-static void
 aur_manager_dispose (GObject * object)
 {
   AurManager *manager = (AurManager *) (object);
 
-  g_list_foreach (manager->ctrl_clients, (GFunc) g_object_unref, NULL);
-  g_list_free (manager->ctrl_clients);
-  manager->ctrl_clients = NULL;
-
-  g_list_foreach (manager->player_info, (GFunc) free_player_info, NULL);
-  g_list_free (manager->player_info);
-  manager->player_info = NULL;
+  g_list_foreach (manager->clients, (GFunc) g_object_unref, NULL);
+  g_list_free (manager->clients);
+  manager->clients = NULL;
 
   if (manager->ping_timeout) {
     g_source_remove (manager->ping_timeout);
@@ -1052,24 +1060,26 @@ aur_manager_adjust_client_volume (AurManager * manager, guint client_id,
     gdouble volume)
 {
   AurEvent *event = NULL;
-  AurPlayerInfo *info;
+  AurClientProxy *proxy;
 
-  info = get_player_info_by_id (manager, client_id);
-  if (info == NULL)
+  proxy =
+      get_client_proxy_by_id (manager, client_id, AUR_COMPONENT_ROLE_PLAYER);
+  if (proxy == NULL)
     return;
+  proxy->volume = volume;
 
-  info->volume = volume;
   event = aur_event_new (gst_structure_new ("json",
           "msg-type", G_TYPE_STRING, "client-volume",
           "client-id", G_TYPE_INT64, (gint64) client_id,
           "level", G_TYPE_DOUBLE, volume, NULL));
-  manager_send_event_to_client (manager, NULL, AUR_COMPONENT_ROLE_CONTROLLER, event);
+  manager_send_event_to_client (manager, NULL, AUR_COMPONENT_ROLE_CONTROLLER,
+      event);
 
   /* Tell the player which volume to set */
   event = aur_event_new (gst_structure_new ("json",
           "msg-type", G_TYPE_STRING, "volume",
           "level", G_TYPE_DOUBLE, volume * manager->current_volume, NULL));
-  manager_send_event_to_client (manager, info->conn, 0, event);
+  manager_send_event_to_client (manager, proxy->conn, 0, event);
 }
 
 static void
@@ -1077,31 +1087,33 @@ aur_manager_adjust_client_setting (AurManager * manager, guint client_id,
     gboolean enable, gboolean record_enable)
 {
   AurEvent *event = NULL;
-  AurPlayerInfo *info;
+  AurClientProxy *proxy;
 
-  info = get_player_info_by_id (manager, client_id);
-  if (info == NULL)
+  proxy =
+      get_client_proxy_by_id (manager, client_id, AUR_COMPONENT_ROLE_PLAYER);
+  if (proxy == NULL)
     return;
 
-  info->enabled = enable;
-  info->record_enabled = record_enable;
+  proxy->enabled = enable;
+  proxy->record_enabled = record_enable;
   event = aur_event_new (gst_structure_new ("json",
           "msg-type", G_TYPE_STRING, "client-setting",
           "client-id", G_TYPE_INT64, (gint64) client_id,
           "enabled", G_TYPE_BOOLEAN, enable,
           "record-enabled", G_TYPE_BOOLEAN, record_enable, NULL));
-  manager_send_event_to_client (manager, NULL, AUR_COMPONENT_ROLE_CONTROLLER, event);
+  manager_send_event_to_client (manager, NULL, AUR_COMPONENT_ROLE_CONTROLLER,
+      event);
 
   /* Tell the player to change setting */
   event = aur_event_new (gst_structure_new ("json",
           "msg-type", G_TYPE_STRING, "client-setting",
           "enabled", G_TYPE_BOOLEAN, enable,
           "record-enabled", G_TYPE_BOOLEAN, record_enable, NULL));
-  manager_send_event_to_client (manager, info->conn, 0, event);
+  manager_send_event_to_client (manager, proxy->conn, 0, event);
 
   /* Update recording status at the client */
-  event = manager_make_record_event (manager, info);
-  manager_send_event_to_client (manager, info->conn, 0, event);
+  event = manager_make_record_event (manager, proxy);
+  manager_send_event_to_client (manager, proxy->conn, 0, event);
 }
 
 static void
@@ -1114,15 +1126,19 @@ aur_manager_adjust_volume (AurManager * manager, gdouble volume)
   event = aur_event_new (gst_structure_new ("json",
           "msg-type", G_TYPE_STRING, "volume",
           "level", G_TYPE_DOUBLE, volume, NULL));
-  manager_send_event_to_client (manager, NULL, AUR_COMPONENT_ROLE_CONTROLLER, event);
+  manager_send_event_to_client (manager, NULL, AUR_COMPONENT_ROLE_CONTROLLER,
+      event);
 
   /* Send a volume adjustment to each player */
-  for (cur = manager->player_info; cur != NULL; cur = cur->next) {
-    AurPlayerInfo *info = (AurPlayerInfo *) (cur->data);
-    event = aur_event_new (gst_structure_new ("json",
-            "msg-type", G_TYPE_STRING, "volume",
-            "level", G_TYPE_DOUBLE, info->volume * volume, NULL));
-    manager_send_event_to_client (manager, info->conn, 0, event);
+  for (cur = manager->clients; cur != NULL; cur = cur->next) {
+    AurClientProxy *proxy = (AurClientProxy *) (cur->data);
+
+    if (proxy->roles & AUR_COMPONENT_ROLE_PLAYER) {
+      event = aur_event_new (gst_structure_new ("json",
+              "msg-type", G_TYPE_STRING, "volume",
+              "level", G_TYPE_DOUBLE, proxy->volume * volume, NULL));
+      manager_send_event_to_client (manager, proxy->conn, 0, event);
+    }
   }
 }
 
@@ -1220,20 +1236,20 @@ manager_make_set_media_event (AurManager * manager, guint resource_id)
 
 static AurEvent *
 manager_make_record_event (AurManager * manager G_GNUC_UNUSED,
-    AurPlayerInfo * info)
+    AurClientProxy * proxy)
 {
   GstStructure *msg;
 
-  if (info->record_path == NULL)
-    info->record_path =
-        aur_receiver_get_record_dest (manager->receiver, info->id);
+  if (proxy->record_path == NULL)
+    proxy->record_path =
+        aur_receiver_get_record_dest (manager->receiver, proxy->id);
 
-  g_return_val_if_fail (info->record_path != NULL, NULL);
+  g_return_val_if_fail (proxy->record_path != NULL, NULL);
 
   msg = gst_structure_new ("json", "msg-type", G_TYPE_STRING, "record",
-      "enabled", G_TYPE_BOOLEAN, info->record_enabled,
+      "enabled", G_TYPE_BOOLEAN, proxy->record_enabled,
       "record-port", G_TYPE_INT, manager->rtsp_port,
-      "record-path", G_TYPE_STRING, info->record_path, NULL);
+      "record-path", G_TYPE_STRING, proxy->record_path, NULL);
 
   return aur_event_new (msg);
 }

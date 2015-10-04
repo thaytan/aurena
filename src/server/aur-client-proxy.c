@@ -16,26 +16,40 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  */
-#ifndef __AUR_SERVER_TYPES_H__
-#define __AUR_SERVER_TYPES_H__
 
-#include <glib.h>
-#include <src/common/aur-types.h>
-
-G_BEGIN_DECLS
-
-typedef struct _AurAvahi AurAvahi;
-typedef struct _AurClientProxy AurClientProxy;
-typedef struct _AurHttpResource AurHttpResource;
-typedef struct _AurManager AurManager;
-typedef struct _AurMediaDB AurMediaDB;
-typedef struct _AurReceiver AurReceiver;
-typedef struct _AurReceiverIngest AurReceiverIngest;
-typedef struct _AurReceiverProcessor AurReceiverProcessor;
-typedef struct _AurRTSPPlayMediaFactory AurRTSPPlayMediaFactory;
-typedef struct _AurServer AurServer;
-typedef struct _AurHTTPClient AurHTTPClient;
-
-G_END_DECLS
-
+#ifdef HAVE_CONFIG_H
+#include "config.h"
 #endif
+
+#include <src/common/aur-event.h>
+#include <src/common/aur-component.h>
+#include <src/server/aur-client-proxy.h>
+
+G_DEFINE_TYPE (AurClientProxy, aur_client_proxy, G_TYPE_OBJECT);
+
+static void aur_client_proxy_finalize (GObject * object);
+
+static void
+aur_client_proxy_init (AurClientProxy * proxy G_GNUC_UNUSED)
+{
+}
+
+static void
+aur_client_proxy_class_init (AurClientProxyClass * proxy_class)
+{
+  GObjectClass *object_class = (GObjectClass *) (proxy_class);
+
+  object_class->finalize = aur_client_proxy_finalize;
+}
+
+static void
+aur_client_proxy_finalize (GObject * object)
+{
+  AurClientProxy *proxy = (AurClientProxy *) (object);
+  if (proxy->conn)
+    g_object_unref (proxy->conn);
+
+  g_free (proxy->record_path);
+  g_free (proxy->host);
+  g_free (proxy);
+}

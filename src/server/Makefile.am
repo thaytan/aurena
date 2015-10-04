@@ -2,6 +2,8 @@ noinst_LTLIBRARIES        = libaurena_server.la
 
 libaurena_server_la_SOURCES = \
     aur-avahi.c \
+    aur-client-proxy.c \
+    aur-http-client.c \
     aur-http-resource.c \
     aur-manager.c \
     aur-media-db.c \
@@ -10,11 +12,12 @@ libaurena_server_la_SOURCES = \
     aur-receiver-ingest.c \
     aur-receiver-processor.c \
     aur-rtsp-play-media.c \
-    aur-server.c \
-    aur-http-client.c
+    aur-server.c
 
 noinst_HEADERS = \
     aur-avahi.h \
+    aur-client-proxy.h \
+    aur-http-client.h \
     aur-http-resource.h \
     aur-manager.h \
     aur-media-db.h \
@@ -24,7 +27,6 @@ noinst_HEADERS = \
     aur-receiver-processor.h \
     aur-rtsp-play-media.h \
     aur-server.h \
-    aur-http-client.h \
     aur-server-types.h
 
 libaurena_server_la_CPPFLAGS = -I$(top_srcdir) $(AUR_COMMON_CFLAGS) $(GST_CFLAGS) $(GST_RTSP_CFLAGS) $(EXTRA_CFLAGS)

@@ -28,6 +28,7 @@
 #endif
 
 #include <gst/app/gstappsrc.h>
+#include <gst/audio/audio-info.h>
 
 #include "aur-receiver-processor.h"
 
@@ -95,7 +96,8 @@ aur_receiver_processor_init (AurReceiverProcessor * processor)
   processor->filesink =
       gst_bin_get_by_name (GST_BIN (processor->pipeline), "fsink");
 
-  g_object_set (interleave, "latency", 50 * GST_MSECOND, NULL);
+  g_object_set (interleave, "alignment-threshold", 1 * GST_MSECOND,
+      "latency", 60 * GST_MSECOND, NULL);
 
   for (i = 0; i < 8; i++) {
     AurReceiverProcessorChannel *channel;
@@ -265,17 +267,39 @@ aur_receiver_processor_push_sample (AurReceiverProcessor * processor,
   if (gst_app_src_push_sample (channel->appsrc, push_sample) != GST_FLOW_OK)
     g_print ("Failed to push sample on channel %d\n", channel->id);
 
+  /* Push silence buffers into unused channels */
   if (channel->id == 0) {
+    GstAudioInfo info;
     gint i;
+    GstSample *silence_sample = NULL;
+
     for (i = 1; i < 8; i++) {
       AurReceiverProcessorChannel *cur = processor->channels[i];
       if (cur->inuse == 0) {
-        GST_DEBUG_OBJECT (processor, "Duplicating sample on unused channel %d",
-            i);
-        if (gst_app_src_push_sample (cur->appsrc, push_sample) != GST_FLOW_OK)
+        if (silence_sample == NULL) {
+          GstBuffer *silence;
+          GstMapInfo map_info;
+
+          gst_audio_info_from_caps (&info, gst_sample_get_caps (push_sample));
+          silence = gst_buffer_copy (gst_sample_get_buffer (push_sample));
+          gst_buffer_map (silence, &map_info, GST_MAP_WRITE);
+          gst_audio_format_fill_silence (info.finfo, map_info.data,
+              map_info.size);
+          gst_buffer_unmap (silence, &map_info);
+          silence_sample =
+              gst_sample_new (silence, gst_sample_get_caps (push_sample), NULL,
+              NULL);
+          gst_buffer_unref (silence);
+        }
+
+        GST_DEBUG_OBJECT (processor, "Pushing silence on unused channel %d", i);
+        if (gst_app_src_push_sample (cur->appsrc,
+                silence_sample) != GST_FLOW_OK)
           g_print ("Failed to push sample on channel %d\n", cur->id);
       }
     }
+    if (silence_sample != NULL)
+      gst_sample_unref (silence_sample);
   }
   gst_sample_unref (push_sample);
 }

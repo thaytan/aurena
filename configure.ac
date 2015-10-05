@@ -23,7 +23,7 @@ PKG_CHECK_MODULES(AUR_COMMON, [gobject-2.0 glib-2.0 >= 2.30 gio-2.0 avahi-client
 AC_DEFINE([HAVE_AVAHI], 1, [Defined if compiling with Avahi support])
 
 AC_MSG_NOTICE([Checking for GStreamer 1.0])
-PKG_CHECK_MODULES(GST_1_0, [gstreamer-1.0 gstreamer-net-1.0 gstreamer-tag-1.0], [HAVE_GST_1_0=yes], [HAVE_GST_1_0=no])
+PKG_CHECK_MODULES(GST_1_0, [gstreamer-1.0 gstreamer-net-1.0 gstreamer-tag-1.0 gstreamer-audio-1.0], [HAVE_GST_1_0=yes], [HAVE_GST_1_0=no])
 if test "x$HAVE_GST_1_0" = "xyes"; then
   GST_CFLAGS="$GST_1_0_CFLAGS -DGST_USE_UNSTABLE_API"
   GST_LIBS="$GST_1_0_LIBS"

@@ -20,7 +20,7 @@
 #define __AUR_CLIENT_TYPES_H__
 
 #include <glib.h>
-#include <src/common/aur-types.h>
+#include <common/aur-types.h>
 
 G_BEGIN_DECLS
 

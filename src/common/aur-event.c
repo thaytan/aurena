@@ -106,3 +106,23 @@ aur_event_to_json_msg (const AurEvent * event, AurComponentRole targets)
   gst_structure_free (msg);
   return fields;
 }
+
+gchar *
+aur_event_to_data (const AurEvent * event, AurComponentRole targets,
+  gsize *len)
+{
+  gchar *body;
+  JsonNode *root;
+  JsonGenerator *gen;
+
+  root = aur_event_to_json_msg (event, targets);
+
+  gen = json_generator_new ();
+  json_generator_set_root (gen, root);
+  body = json_generator_to_data (gen, len);
+
+  g_object_unref (gen);
+  json_node_free (root);
+
+  return body;
+}

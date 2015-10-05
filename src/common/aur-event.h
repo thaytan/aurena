@@ -47,6 +47,7 @@ struct _AurEventClass
 AurEvent *aur_event_new (GstStructure *fields);
 const gchar *aur_event_get_name (const AurEvent *event);
 JsonNode *aur_event_to_json_msg (const AurEvent *event, AurComponentRole targets);
+gchar *aur_event_to_data (const AurEvent *event, AurComponentRole targets, gsize *len);
 
 G_END_DECLS
 

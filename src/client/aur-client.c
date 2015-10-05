@@ -44,8 +44,8 @@
 #include <netdb.h>
 #endif
 
-#include "src/common/aur-json.h"
-#include "aur-client.h"
+#include "common/aur-json.h"
+#include "client/aur-client.h"
 
 GST_DEBUG_CATEGORY_STATIC (client_debug);
 #define GST_CAT_DEFAULT client_debug
@@ -737,6 +737,23 @@ fail:
 }
 
 static void
+handle_capture_message (AurClient * client, GstStructure * s)
+{
+  const gchar *msg_type;
+
+  msg_type = gst_structure_get_string (s, "msg-type");
+  if (msg_type == NULL || g_str_equal (msg_type, "ping"))
+    return;
+
+  GST_LOG_OBJECT (client, "Have %s message", msg_type);
+
+  if (g_str_equal (msg_type, "record"))
+    handle_client_record_message (client, s);
+  else
+    g_print ("Unhandled player event of type %s\n", msg_type);
+}
+
+static void
 handle_player_message (AurClient * client, GstStructure * s)
 {
   const gchar *msg_type;
@@ -744,6 +761,8 @@ handle_player_message (AurClient * client, GstStructure * s)
   msg_type = gst_structure_get_string (s, "msg-type");
   if (msg_type == NULL || g_str_equal (msg_type, "ping"))
     return;
+
+  GST_LOG_OBJECT (client, "Have %s message", msg_type);
 
   if (g_str_equal (msg_type, "enrol"))
     handle_player_enrol_message (client, s);
@@ -761,8 +780,6 @@ handle_player_message (AurClient * client, GstStructure * s)
     handle_player_seek_message (client, s);
   else if (g_str_equal (msg_type, "language"))
     handle_player_language_message (client, s);
-  else if (g_str_equal (msg_type, "record"))
-    handle_client_record_message (client, s);
   else
     g_print ("Unhandled player event of type %s\n", msg_type);
 }
@@ -1075,6 +1092,8 @@ handle_received_chunk (SoupMessage * msg, SoupBuffer * chunk,
 
   if (msg_targets & client->roles & AUR_CLIENT_PLAYER)
     handle_player_message (client, s);
+  if (msg_targets & client->roles & AUR_CLIENT_CAPTURE)
+    handle_capture_message (client, s);
   if (msg_targets & client->roles & AUR_CLIENT_CONTROLLER)
     handle_controller_message (client, s);
 

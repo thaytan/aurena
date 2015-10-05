@@ -112,10 +112,8 @@ static void aur_manager_set_property (GObject * object, guint prop_id,
 static void aur_manager_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 static void aur_manager_play_resource (AurManager * manager, guint resource_id);
-static void aur_manager_send_play (AurManager * manager,
-    AurHTTPClient * client);
-static void aur_manager_send_pause (AurManager * manager,
-    AurHTTPClient * client);
+static void aur_manager_send_play (AurManager * manager);
+static void aur_manager_send_pause (AurManager * manager);
 static void aur_manager_adjust_volume (AurManager * manager, gdouble volume);
 static void aur_manager_adjust_client_volume (AurManager * manager,
     guint client_id, gdouble volume);
@@ -127,15 +125,18 @@ static AurEvent *manager_make_player_clients_changed_event
     (AurManager * manager);
 static AurClientProxy *get_client_proxy_by_id (AurManager * manager,
     guint client_id, AurComponentRole roles);
-static void aur_manager_send_seek (AurManager * manager,
-    AurHTTPClient * client, GstClockTime position);
+static void aur_manager_send_seek (AurManager * manager, GstClockTime position);
 static void aur_manager_send_language (AurManager * manager,
-    AurHTTPClient * client, const gchar * language);
+    const gchar * language);
 static AurEvent *manager_make_record_event (AurManager * manager,
     AurClientProxy * proxy);
 
 static void
-manager_send_event_to_client (AurManager * manager, AurHTTPClient * client,
+manager_send_event_to_connection (AurManager * manager, AurHTTPClient * conn,
+    AurComponentRole targets, AurEvent * event);
+static void manager_send_event_to_client (AurManager * manager,
+    AurClientProxy * client, AurComponentRole targets, AurEvent * event);
+static void manager_send_event_to_clients (AurManager * manager,
     AurComponentRole targets, AurEvent * event);
 
 static GstNetTimeProvider *
@@ -264,7 +265,7 @@ find_client_proxy_by_client (const AurClientProxy * proxy,
 }
 
 static void
-manager_client_disconnect (AurHTTPClient * client, AurManager * manager)
+client_disconnect (AurHTTPClient * client, AurManager * manager)
 {
   GList *item = g_list_find_custom (manager->clients, client,
       (GCompareFunc) (find_client_proxy_by_client));
@@ -276,8 +277,10 @@ manager_client_disconnect (AurHTTPClient * client, AurManager * manager)
     g_object_unref (client);
     proxy->conn = NULL;
 
-    manager_send_event_to_client (manager, NULL, AUR_COMPONENT_ROLE_CONTROLLER,
-        manager_make_player_clients_changed_event (manager));
+    if (proxy->roles & AUR_COMPONENT_ROLE_PLAYER) {
+      manager_send_event_to_clients (manager, AUR_COMPONENT_ROLE_CONTROLLER,
+          manager_make_player_clients_changed_event (manager));
+    }
   }
 }
 
@@ -300,24 +303,24 @@ handle_ping_timeout (AurManager * manager)
   event = aur_event_new (gst_structure_new ("json",
           "msg-type", G_TYPE_STRING, "ping", NULL));
 
-  manager_send_event_to_client (manager, NULL, AUR_COMPONENT_ROLE_ALL, event);
+  manager_send_event_to_clients (manager, AUR_COMPONENT_ROLE_ALL, event);
 
   return TRUE;
 }
 
 static void
-send_enrol_events (AurManager * manager, AurHTTPClient * client,
-    AurClientProxy * proxy)
+send_enrol_events (AurManager * manager, AurClientProxy * proxy)
 {
-  manager_send_event_to_client (manager, client,
+  manager_send_event_to_client (manager, proxy,
       AUR_COMPONENT_ROLE_ALL, manager_make_enrol_event (manager, proxy));
 
   if (manager->current_resource) {
-    manager_send_event_to_client (manager, client, AUR_COMPONENT_ROLE_ALL,
+    manager_send_event_to_client (manager, proxy, AUR_COMPONENT_ROLE_ALL,
         manager_make_set_media_event (manager, manager->current_resource));
   }
-  if (proxy == NULL) {
-    manager_send_event_to_client (manager, client,
+
+  if (proxy->roles & AUR_COMPONENT_ROLE_CONTROLLER) {
+    manager_send_event_to_client (manager, proxy,
         AUR_COMPONENT_ROLE_CONTROLLER,
         manager_make_player_clients_changed_event (manager));
   }
@@ -436,13 +439,15 @@ enrol_events_subscriber (AurManager * manager, SoupServer * soup,
   AurClientProxy *proxy;
   client_conn = aur_http_client_new (soup, msg, ctx);
   g_signal_connect (client_conn, "connection-lost",
-      G_CALLBACK (manager_client_disconnect), manager);
+      G_CALLBACK (client_disconnect), manager);
   proxy = get_client_proxy_for_client (manager, client_conn, roles);
-  send_enrol_events (manager, client_conn, proxy);
+  send_enrol_events (manager, proxy);
 
-  manager_send_event_to_client (manager, NULL,
-      AUR_COMPONENT_ROLE_CONTROLLER,
-      manager_make_player_clients_changed_event (manager));
+  if (proxy->roles & AUR_COMPONENT_ROLE_PLAYER) {
+    manager_send_event_to_clients (manager,
+        AUR_COMPONENT_ROLE_CONTROLLER,
+        manager_make_player_clients_changed_event (manager));
+  }
 }
 
 static void
@@ -482,7 +487,8 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
     client_conn = aur_http_client_new_single (soup, msg, ctx);
     g_signal_connect (client_conn, "connection-lost",
         G_CALLBACK (manager_status_client_disconnect), manager);
-    manager_send_event_to_client (manager, client_conn, AUR_COMPONENT_ROLE_CONTROLLER,
+    manager_send_event_to_connection (manager,
+        client_conn, AUR_COMPONENT_ROLE_CONTROLLER,
         make_player_clients_list_event (manager));
   } else {
     soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
@@ -493,39 +499,72 @@ done:
 }
 
 static void
-manager_send_event_to_client (AurManager * manager, AurHTTPClient * client,
+manager_send_event_to_connection (AurManager * manager, AurHTTPClient * client,
     AurComponentRole targets, AurEvent * event)
 {
-  JsonGenerator *gen;
-  JsonNode *root;
   gchar *body;
   gsize len;
 
   g_return_if_fail (event != NULL);
 
-  root = aur_event_to_json_msg (event, targets);
+  body = aur_event_to_data (event, targets, &len);
+
+  GST_LOG_OBJECT (manager, "Sending %s event to connection %d",
+      aur_event_get_name (event), client->conn_id);
+  aur_http_client_send_message (client, body, len);
+
   g_object_unref (event);
+  g_free (body);
+}
 
-  gen = json_generator_new ();
+static void
+manager_send_event_to_client (AurManager * manager, AurClientProxy * client,
+    AurComponentRole targets, AurEvent * event)
+{
+  gchar *body;
+  gsize len;
 
-  json_generator_set_root (gen, root);
+  g_return_if_fail (event != NULL);
 
-  body = json_generator_to_data (gen, &len);
-
-  g_object_unref (gen);
-  json_node_free (root);
-
-  if (client) {
-    aur_http_client_send_message (client, body, len);
-  } else {
-    /* client == NULL - send to all clients */
-    GList *cur;
-    for (cur = manager->clients; cur != NULL; cur = g_list_next (cur)) {
-      AurClientProxy *proxy = (AurClientProxy *) (cur->data);
-      if (proxy->conn && (targets & proxy->roles))
-        aur_http_client_send_message (proxy->conn, body, len);
-    }
+  if (client->conn == NULL) {
+    GST_LOG_OBJECT (manager, "Client %d not currently connected", client->id);
+    g_object_unref (event);
+    return;
   }
+
+  body = aur_event_to_data (event, targets, &len);
+
+  GST_LOG_OBJECT (manager, "Sending %s event to client %d",
+      aur_event_get_name (event), client->id);
+  aur_http_client_send_message (client->conn, body, len);
+
+  g_object_unref (event);
+  g_free (body);
+}
+
+static void
+manager_send_event_to_clients (AurManager * manager,
+    AurComponentRole targets, AurEvent * event)
+{
+  gchar *body;
+  gsize len;
+  GList *cur;
+
+  g_return_if_fail (event != NULL);
+
+  body = aur_event_to_data (event, targets, &len);
+
+  /* Send to all matching clients */
+  GST_LOG_OBJECT (manager, "Sending %s event to clients of type %x",
+      aur_event_get_name (event), targets);
+
+  for (cur = manager->clients; cur != NULL; cur = g_list_next (cur)) {
+    AurClientProxy *proxy = (AurClientProxy *) (cur->data);
+    if (proxy->conn && (targets & proxy->roles))
+      aur_http_client_send_message (proxy->conn, body, len);
+  }
+
+  g_object_unref (event);
   g_free (body);
 }
 
@@ -636,7 +675,7 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
     }
     case AUR_CONTROL_PAUSE:{
       if (!manager->paused)
-        aur_manager_send_pause (manager, NULL);
+        aur_manager_send_pause (manager);
       manager->paused = TRUE;
       break;
     }
@@ -651,7 +690,7 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
           }
         } else {
           manager->paused = FALSE;
-          aur_manager_send_play (manager, NULL);
+          aur_manager_send_play (manager);
         }
       }
       break;
@@ -706,12 +745,12 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
       if (pos_str != NULL)
         sscanf (pos_str, "%" G_GUINT64_FORMAT, &position);
 
-      aur_manager_send_seek (manager, NULL, position);
+      aur_manager_send_seek (manager, position);
       break;
     }
     case AUR_CONTROL_LANGUAGE:{
       const gchar *language = find_param_str ("language", query, post_params);
-      aur_manager_send_language (manager, NULL, language);
+      aur_manager_send_language (manager, language);
       break;
     }
     default:
@@ -1009,12 +1048,12 @@ aur_manager_play_resource (AurManager * manager, guint resource_id)
   manager->base_time = GST_CLOCK_TIME_NONE;
   manager->position = 0;
 
-  manager_send_event_to_client (manager, NULL, AUR_COMPONENT_ROLE_ALL,
+  manager_send_event_to_clients (manager, AUR_COMPONENT_ROLE_ALL,
       manager_make_set_media_event (manager, manager->current_resource));
 }
 
 static void
-aur_manager_send_play (AurManager * manager, AurHTTPClient * client)
+aur_manager_send_play (AurManager * manager)
 {
   GstClock *clock;
   AurEvent *event;
@@ -1030,11 +1069,12 @@ aur_manager_send_play (AurManager * manager, AurHTTPClient * client)
           "msg-type", G_TYPE_STRING, "play",
           "base-time", G_TYPE_INT64, (gint64) (manager->base_time), NULL));
 
-  manager_send_event_to_client (manager, client, AUR_COMPONENT_ROLE_ALL, event);
+  manager_send_event_to_clients (manager,
+      AUR_COMPONENT_ROLE_CONTROLLER | AUR_COMPONENT_ROLE_PLAYER, event);
 }
 
 static void
-aur_manager_send_pause (AurManager * manager, AurHTTPClient * client)
+aur_manager_send_pause (AurManager * manager)
 {
   GstClock *clock;
   GstClockTime now;
@@ -1053,7 +1093,8 @@ aur_manager_send_pause (AurManager * manager, AurHTTPClient * client)
           "msg-type", G_TYPE_STRING, "pause",
           "position", G_TYPE_INT64, (gint64) manager->position, NULL));
 
-  manager_send_event_to_client (manager, client, AUR_COMPONENT_ROLE_ALL, event);
+  manager_send_event_to_clients (manager,
+      AUR_COMPONENT_ROLE_CONTROLLER | AUR_COMPONENT_ROLE_PLAYER, event);
 }
 
 static void
@@ -1073,14 +1114,14 @@ aur_manager_adjust_client_volume (AurManager * manager, guint client_id,
           "msg-type", G_TYPE_STRING, "client-volume",
           "client-id", G_TYPE_INT64, (gint64) client_id,
           "level", G_TYPE_DOUBLE, volume, NULL));
-  manager_send_event_to_client (manager, NULL, AUR_COMPONENT_ROLE_CONTROLLER,
-      event);
+  manager_send_event_to_clients (manager, AUR_COMPONENT_ROLE_CONTROLLER, event);
 
   /* Tell the player which volume to set */
   event = aur_event_new (gst_structure_new ("json",
           "msg-type", G_TYPE_STRING, "volume",
           "level", G_TYPE_DOUBLE, volume * manager->current_volume, NULL));
-  manager_send_event_to_client (manager, proxy->conn, AUR_COMPONENT_ROLE_PLAYER, event);
+  manager_send_event_to_client (manager, proxy, AUR_COMPONENT_ROLE_PLAYER,
+      event);
 }
 
 static void
@@ -1102,19 +1143,22 @@ aur_manager_adjust_client_setting (AurManager * manager, guint client_id,
           "client-id", G_TYPE_INT64, (gint64) client_id,
           "enabled", G_TYPE_BOOLEAN, enable,
           "record-enabled", G_TYPE_BOOLEAN, record_enable, NULL));
-  manager_send_event_to_client (manager, NULL, AUR_COMPONENT_ROLE_CONTROLLER,
-      event);
+  manager_send_event_to_clients (manager, AUR_COMPONENT_ROLE_CONTROLLER, event);
 
   /* Tell the player to change setting */
   event = aur_event_new (gst_structure_new ("json",
           "msg-type", G_TYPE_STRING, "client-setting",
           "enabled", G_TYPE_BOOLEAN, enable,
           "record-enabled", G_TYPE_BOOLEAN, record_enable, NULL));
-  manager_send_event_to_client (manager, proxy->conn, AUR_COMPONENT_ROLE_PLAYER, event);
+  manager_send_event_to_client (manager, proxy, AUR_COMPONENT_ROLE_PLAYER,
+      event);
 
   /* Update recording status at the client */
-  event = manager_make_record_event (manager, proxy);
-  manager_send_event_to_client (manager, proxy->conn, AUR_COMPONENT_ROLE_CAPTURE, event);
+  if (proxy->roles & AUR_COMPONENT_ROLE_CAPTURE) {
+    event = manager_make_record_event (manager, proxy);
+    manager_send_event_to_client (manager, proxy,
+        AUR_COMPONENT_ROLE_CAPTURE, event);
+  }
 }
 
 static void
@@ -1127,8 +1171,7 @@ aur_manager_adjust_volume (AurManager * manager, gdouble volume)
   event = aur_event_new (gst_structure_new ("json",
           "msg-type", G_TYPE_STRING, "volume",
           "level", G_TYPE_DOUBLE, volume, NULL));
-  manager_send_event_to_client (manager, NULL, AUR_COMPONENT_ROLE_CONTROLLER,
-      event);
+  manager_send_event_to_clients (manager, AUR_COMPONENT_ROLE_CONTROLLER, event);
 
   /* Send a volume adjustment to each player */
   for (cur = manager->clients; cur != NULL; cur = cur->next) {
@@ -1138,14 +1181,14 @@ aur_manager_adjust_volume (AurManager * manager, gdouble volume)
       event = aur_event_new (gst_structure_new ("json",
               "msg-type", G_TYPE_STRING, "volume",
               "level", G_TYPE_DOUBLE, proxy->volume * volume, NULL));
-      manager_send_event_to_client (manager, proxy->conn, AUR_COMPONENT_ROLE_PLAYER, event);
+      manager_send_event_to_client (manager, proxy,
+          AUR_COMPONENT_ROLE_PLAYER, event);
     }
   }
 }
 
 static void
-aur_manager_send_seek (AurManager * manager, AurHTTPClient * client,
-    GstClockTime position)
+aur_manager_send_seek (AurManager * manager, GstClockTime position)
 {
   GstClock *clock;
   GstClockTime now;
@@ -1164,12 +1207,11 @@ aur_manager_send_seek (AurManager * manager, AurHTTPClient * client,
           "base-time", G_TYPE_INT64, (gint64) manager->base_time,
           "position", G_TYPE_INT64, (gint64) position, NULL));
 
-  manager_send_event_to_client (manager, client, AUR_COMPONENT_ROLE_ALL, event);
+  manager_send_event_to_clients (manager, AUR_COMPONENT_ROLE_PLAYER, event);
 }
 
 static void
-aur_manager_send_language (AurManager * manager, AurHTTPClient * client,
-    const gchar * language)
+aur_manager_send_language (AurManager * manager, const gchar * language)
 {
   AurEvent *event = NULL;
 
@@ -1180,7 +1222,8 @@ aur_manager_send_language (AurManager * manager, AurHTTPClient * client,
           "msg-type", G_TYPE_STRING, "language",
           "language", G_TYPE_STRING, manager->language, NULL));
 
-  manager_send_event_to_client (manager, client, AUR_COMPONENT_ROLE_ALL, event);
+  manager_send_event_to_clients (manager,
+      AUR_COMPONENT_ROLE_PLAYER | AUR_COMPONENT_ROLE_CONTROLLER, event);
 }
 
 static AurEvent *

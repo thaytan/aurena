@@ -12,9 +12,10 @@ GSTREAMER_ROOT        := $(GSTREAMER_SDK_ROOT_ANDROID)
 endif
 
 LOCAL_MODULE    := android-aurena
-LOCAL_SRC_FILES := android-aurena.c ../../src/common/aur-json.c ../../src/client/aur-client.c
+LOCAL_SRC_FILES := android-aurena.c ../../src/common/aur-component.c \
+    ../../src/common/aur-event.c ../../src/common/aur-json.c ../../src/client/aur-client.c
 LOCAL_SHARED_LIBRARIES := gstreamer_android
-LOCAL_C_INCLUDES := $(LOCAL_PATH)/../..
+LOCAL_C_INCLUDES := $(LOCAL_PATH)/../../src
 LOCAL_LDLIBS := -landroid
 include $(BUILD_SHARED_LIBRARY)
 

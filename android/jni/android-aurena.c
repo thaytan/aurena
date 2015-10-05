@@ -7,7 +7,7 @@
 #include <pthread.h>
 #include <gst/video/videooverlay.h>
 
-#include "src/client/aur-client.h"
+#include "client/aur-client.h"
 
 GST_DEBUG_CATEGORY_STATIC (debug_category);
 #define GST_CAT_DEFAULT debug_category
@@ -226,7 +226,7 @@ setup_client (CustomData * data)
     return;
 
   data->client = 
-      aur_client_new (data->context, data->server, AUR_CLIENT_PLAYER);
+      aur_client_new (data->context, data->server, AUR_CLIENT_PLAYER|AUR_CLIENT_CAPTURE);
 
   if (data->native_window) {
     GST_DEBUG

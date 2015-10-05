@@ -230,8 +230,7 @@ aur_receiver_processor_push_sample (AurReceiverProcessor * processor,
     if (processor->filesink) {
       GDateTime *now = g_date_time_new_now_utc ();
       gchar *nowstr = g_date_time_format (now, "%Y-%m-%d-%H:%M:%S");
-      gchar *fname =
-          g_strdup_printf ("recordings/capture-%s.wav", nowstr);
+      gchar *fname = g_strdup_printf ("recordings/capture-%s.wav", nowstr);
       g_object_set (G_OBJECT (processor->filesink), "location", fname, NULL);
 
       g_date_time_unref (now);

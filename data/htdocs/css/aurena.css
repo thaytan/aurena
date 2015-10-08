@@ -40,3 +40,12 @@ right: 10px; top: 0px;
 #clients, #playlist { padding-left: 10px; }
 
 #debug { display: none; }
+
+.icon-microphone-on { background-position: 0 0; }
+.icon-microphone-off { background-position: -16px 0; }
+.icon-volume-on { background-position: 0 -16px; }
+.icon-volume-off { background-position: -16px -16px; }
+
+.ui-state-default .ui-icon.aurena {
+    background-image: url(aurena-icons.png);
+}

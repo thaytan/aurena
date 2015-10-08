@@ -2,11 +2,6 @@
 <head>
 <meta charset="UTF-8" />
 <title>Aurena</title>
-  <link href="/css/smoothness/jquery-ui-1.8.22.custom.css" rel="stylesheet" type="text/css"/>
-  <script src="/js/jquery-1.7.2.min.js"></script>
-  <script src="/js/jquery-ui-1.8.22.custom.min.js"></script>
-  <link href="/css/aurena.css" rel="stylesheet" type="text/css"/>
-  <script src="/js/aurena.js"></script>
   <link rel="apple-touch-icon" sizes="57x57" href="/apple-touch-icon-57x57.png">
   <link rel="apple-touch-icon" sizes="60x60" href="/apple-touch-icon-60x60.png">
   <link rel="apple-touch-icon" sizes="72x72" href="/apple-touch-icon-72x72.png">
@@ -25,6 +20,13 @@
   <meta name="msapplication-TileColor" content="#da532c">
   <meta name="msapplication-TileImage" content="/mstile-144x144.png">
   <meta name="theme-color" content="#ff5f2b">
+
+  <link href="/css/jquery-ui.min.css" rel="stylesheet" type="text/css"/>
+  <link href="/css/jquery-ui.theme.min.css" rel="stylesheet" type="text/css"/>
+  <script src="/js/jquery-1.11.3.min.js"></script>
+  <script src="/js/jquery-ui.min.js"></script>
+  <link href="/css/aurena.css" rel="stylesheet" type="text/css"/>
+  <script src="/js/aurena.js"></script>
 </head>
 <body>
 <div id=player>
@@ -36,6 +38,7 @@
   <div id="mastervol"><div id="mastervollabel">Volume:</div><div id="mastervolslider"></div><div id="mastervolval">100%</div></div>
   <div id="nowplayingdiv"><div id="nowplayingtitle" class="inline">Now Playing</div>
   <div id="nowplaying" class="inline"></div></div>
+  <button id="frob">Frobnicate</button>
 
   <div id="clients"><p/>Connected outputs:<p id="cliententries"></p></div>
   <div id="playlist">

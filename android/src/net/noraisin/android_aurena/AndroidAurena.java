@@ -22,6 +22,7 @@ import android.widget.Toast;
 
 import android.net.nsd.NsdServiceInfo;
 import android.net.nsd.NsdManager;
+import android.media.AudioManager;
 
 public class AndroidAurena extends Activity implements SurfaceHolder.Callback {
     private static native boolean classInit();
@@ -235,6 +236,11 @@ public class AndroidAurena extends Activity implements SurfaceHolder.Callback {
               if (mLastServer == null || !mLastServer.equals(server)) {
                 Log.d(TAG, "Connecting to server: " + server);
                 nativePause ();
+                /* Configure audio comms mode */
+                AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                am.setMode(AudioManager.MODE_IN_COMMUNICATION);
+                am.setSpeakerphoneOn(true);
+
                 nativePlay (server);
                 mLastServer = server;
               }

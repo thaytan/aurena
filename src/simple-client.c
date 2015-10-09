@@ -94,8 +94,10 @@ on_eos_msg (AurClient *client, G_GNUC_UNUSED GstMessage * msg)
 
   g_print ("Got EOS message\n");
 
+#if 0
   soup_msg = soup_message_new ("GET", url);
   soup_session_send_message (client->soup, soup_msg);
+#endif
   g_free (url);
 }
 

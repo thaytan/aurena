@@ -749,8 +749,10 @@ handle_capture_message (AurClient * client, GstStructure * s)
 
   if (g_str_equal (msg_type, "record"))
     handle_client_record_message (client, s);
-  else
-    g_print ("Unhandled player event of type %s\n", msg_type);
+  else if (g_str_equal (msg_type, "enrol")) {
+    /* Just ignore for now - the player component handled it */
+  } else
+    g_print ("Unhandled capture event of type %s\n", msg_type);
 }
 
 static void
@@ -1012,7 +1014,7 @@ handle_controller_message (AurClient * client, GstStructure * s)
   else if (g_str_equal (msg_type, "language"))
     handle_controller_language_message (client, s);
   else {
-    GST_WARNING_OBJECT (client, "Unhandled contorller event of type %s",
+    GST_WARNING_OBJECT (client, "Unhandled controller event of type %s",
         msg_type);
   }
 }

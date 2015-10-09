@@ -45,6 +45,7 @@ struct _AurClientProxy
 
   guint id;
   gchar *host;
+  gchar *name;
 
   gchar *record_path;
 

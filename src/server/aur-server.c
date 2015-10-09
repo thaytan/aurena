@@ -84,6 +84,9 @@ aur_server_get_resource (AurServer * server, guint resource_id)
     resource =
         server->get_resource (server, resource_id,
         server->get_resource_userdata);
+    if (resource == NULL)
+      return NULL;
+
     if (resource_id != G_MAXUINT)
       g_hash_table_insert (server->resources, GINT_TO_POINTER (resource_id),
           resource);

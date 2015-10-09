@@ -28,10 +28,12 @@ G_BEGIN_DECLS
 
 typedef struct _AurReceiverProcessorClass AurReceiverProcessorClass;
 typedef struct _AurReceiverProcessorChannel AurReceiverProcessorChannel;
+typedef struct _AurReceiverProcessorPrivate AurReceiverProcessorPrivate;
 
 struct _AurReceiverProcessor
 {
   GObject parent;
+  AurReceiverProcessorPrivate *priv;
 
   AurReceiverProcessorChannel *channels[8];
   gint n_inuse;

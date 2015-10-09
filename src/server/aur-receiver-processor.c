@@ -20,7 +20,7 @@
 /*
  * Aurena Receiver Processor receives incoming audio feeds
  * from Aurena Receiver Ingest objects, mixes them and
- * outputs the 8-channel stream for ManyEars
+ * outputs the 8-channel stream for audition/triangulation
  */
 
 #ifdef HAVE_CONFIG_H
@@ -28,6 +28,7 @@
 #endif
 
 #include <gst/app/gstappsrc.h>
+#include <gst/app/gstappsink.h>
 #include <gst/audio/audio-info.h>
 
 #include "aur-receiver-processor.h"
@@ -42,6 +43,22 @@ static void aur_receiver_processor_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * pspec);
 static void aur_receiver_processor_get_property (GObject * object,
     guint prop_id, GValue * value, GParamSpec * pspec);
+
+static void aur_receiver_processor_init_analyser (AurReceiverProcessor * processor);
+static void aur_receiver_processor_cleanup (AurReceiverProcessor * processor);
+
+#define SAMPLING_RATE 48000
+#define SAMPLES_PER_FRAME 512
+#define NB_MICROPHONES 8
+
+struct _AurReceiverProcessorPrivate
+{
+  GstBuffer *cache;
+
+  gboolean analyser;
+
+  float deinterleave_buffer[NB_MICROPHONES][SAMPLES_PER_FRAME];
+};
 
 struct _AurReceiverProcessorChannel
 {
@@ -77,17 +94,34 @@ aur_receiver_processor_class_init (AurReceiverProcessorClass * klass)
   object_class->dispose = aur_receiver_processor_dispose;
   object_class->finalize = aur_receiver_processor_finalize;
 
+  g_type_class_add_private (klass, sizeof (AurReceiverProcessorPrivate));
 }
+
+static GstFlowReturn
+processor_handle_new_sample (GstAppSink * appsink, gpointer user_data);
+
+static GstAppSinkCallbacks sink_cb = {
+  NULL, NULL,
+  processor_handle_new_sample,
+  {0,}
+};
 
 static void
 aur_receiver_processor_init (AurReceiverProcessor * processor)
 {
-  GstElement *interleave;
+  GstElement *interleave, *out;
   gint i;
+
+  processor->priv = G_TYPE_INSTANCE_GET_PRIVATE (G_OBJECT (processor),
+      AUR_TYPE_RECEIVER_PROCESSOR, AurReceiverProcessorPrivate);
+
+  /* Can't actually handle anything other than 8 mics, despite the
+   * configurable-looking #define */
+  g_assert (NB_MICROPHONES == 8);
 
   processor->pipeline =
       gst_parse_launch
-      ("audiointerleave name=i ! audioconvert ! audio/x-raw,channels=8 ! wavenc ! filesink name=fsink",
+      ("audiointerleave name=i ! tee name=t ! wavenc ! filesink name=fsink async=false t. ! audioconvert ! audio/x-raw,channels=8,format=F32LE ! appsink name=out async=false sync=false",
       NULL);
   gst_pipeline_use_clock (GST_PIPELINE (processor->pipeline),
       gst_system_clock_obtain ());
@@ -96,10 +130,14 @@ aur_receiver_processor_init (AurReceiverProcessor * processor)
   processor->filesink =
       gst_bin_get_by_name (GST_BIN (processor->pipeline), "fsink");
 
+  out = gst_bin_get_by_name (GST_BIN (processor->pipeline), "out");
+  gst_app_sink_set_callbacks (GST_APP_SINK_CAST (out),
+    &sink_cb, processor, NULL);
+
   g_object_set (interleave, "alignment-threshold", 1 * GST_MSECOND,
       "latency", 60 * GST_MSECOND, NULL);
 
-  for (i = 0; i < 8; i++) {
+  for (i = 0; i < NB_MICROPHONES; i++) {
     AurReceiverProcessorChannel *channel;
     GstElement *chain =
         gst_parse_bin_from_description ("appsrc name=src ! audioconvert", TRUE,
@@ -156,15 +194,20 @@ static void
 aur_receiver_processor_finalize (GObject * object)
 {
   AurReceiverProcessor *processor = (AurReceiverProcessor *) (object);
+  AurReceiverProcessorPrivate *priv = processor->priv;
   gint i;
 
-  for (i = 0; i < 8; i++) {
+  for (i = 0; i < NB_MICROPHONES; i++) {
     AurReceiverProcessorChannel *channel = NULL;
 
     channel = processor->channels[i];
     gst_object_unref (channel->appsrc);
     g_free (channel);
   }
+
+  aur_receiver_processor_cleanup(processor);
+
+  gst_buffer_replace (&priv->cache, NULL);
 
   G_OBJECT_CLASS (aur_receiver_processor_parent_class)->finalize (object);
 }
@@ -201,7 +244,7 @@ aur_receiver_processor_get_channel (AurReceiverProcessor * processor)
   AurReceiverProcessorChannel *channel = NULL;
   gint i;
 
-  for (i = 0; i < 8; i++) {
+  for (i = 0; i < NB_MICROPHONES; i++) {
     AurReceiverProcessorChannel *cur = processor->channels[i];
     if (cur->inuse)
       continue;
@@ -239,8 +282,13 @@ aur_receiver_processor_push_sample (AurReceiverProcessor * processor,
       g_free (nowstr);
       g_free (fname);
     }
+    aur_receiver_processor_init_analyser (processor);
     processor->state = GST_STATE_PLAYING;
     gst_element_set_state (processor->pipeline, processor->state);
+
+    GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN (processor->pipeline),
+        GST_DEBUG_GRAPH_SHOW_ALL, "processor");
+
   }
 
   /* Adjust passed play_time (time on the clock) back into our segment */
@@ -273,7 +321,7 @@ aur_receiver_processor_push_sample (AurReceiverProcessor * processor,
     gint i;
     GstSample *silence_sample = NULL;
 
-    for (i = 1; i < 8; i++) {
+    for (i = 1; i < NB_MICROPHONES; i++) {
       AurReceiverProcessorChannel *cur = processor->channels[i];
       if (cur->inuse == 0) {
         if (silence_sample == NULL) {
@@ -347,6 +395,7 @@ aur_receiver_processor_release_channel (AurReceiverProcessor * processor,
       end_recording (processor);
     processor->state = GST_STATE_NULL;
     gst_element_set_state (processor->pipeline, processor->state);
+    aur_receiver_processor_cleanup (processor);
   }
 }
 
@@ -354,4 +403,101 @@ AurReceiverProcessor *
 aur_receiver_processor_new ()
 {
   return g_object_new (AUR_TYPE_RECEIVER_PROCESSOR, NULL);
+}
+
+static gboolean
+processFrame (AurReceiverProcessor * processor,
+    float *samples, unsigned int n_frames)
+{
+  AurReceiverProcessorPrivate *priv = processor->priv;
+  guint channel, frame_index;
+
+  g_return_val_if_fail (priv->analyser, FALSE);
+
+  //#1 - Let's create the float data for processing
+  for (channel = 0; channel < NB_MICROPHONES; channel++) {
+    for (frame_index = 0; frame_index < n_frames; frame_index++) {
+      priv->deinterleave_buffer[channel][frame_index] =
+          samples[channel + (NB_MICROPHONES * frame_index)];
+    }
+  }
+
+  return TRUE;
+}
+
+static GstFlowReturn
+processor_handle_new_sample (GstAppSink * appsink, gpointer user_data)
+{
+  AurReceiverProcessor * processor = (AurReceiverProcessor *)(user_data);
+  AurReceiverProcessorPrivate *priv = processor->priv;
+  GstSample *sample;
+  GstBuffer *buf;
+  GstMapInfo info;
+  guint frames_avail, frame_offset;
+  gfloat *samples;
+
+  sample = gst_app_sink_pull_sample (appsink);
+  if (!sample)
+    return GST_FLOW_OK;
+
+  buf = gst_buffer_ref (gst_sample_get_buffer (sample));
+
+  if (priv->cache) {
+    GST_DEBUG_OBJECT (processor, "Appending new buffer to cached samples");
+    buf = gst_buffer_append (priv->cache, buf);
+    priv->cache = NULL;
+  }
+
+  if (!gst_buffer_map (buf, &info, GST_MAP_READ)) {
+    GST_WARNING_OBJECT (processor, "Failed to map sample buffer");
+    gst_buffer_unref (buf);
+    return GST_FLOW_ERROR;
+  }
+
+  frames_avail = info.size / (sizeof (float) * NB_MICROPHONES);
+  frame_offset = 0;
+  samples = (gfloat *) info.data;
+
+  while (frames_avail >= SAMPLES_PER_FRAME) {
+    processFrame (processor, samples + (NB_MICROPHONES * frame_offset),
+       SAMPLES_PER_FRAME);
+    frame_offset += SAMPLES_PER_FRAME;
+    frames_avail -= SAMPLES_PER_FRAME;
+  } 
+
+  if (frames_avail > 0) {
+    GST_DEBUG_OBJECT (processor, "Storing %d frames for next iteration",
+        frames_avail);
+    priv->cache = gst_buffer_copy_region (buf, GST_BUFFER_COPY_MEMORY,
+        frame_offset * sizeof(float) * NB_MICROPHONES,
+        frames_avail * sizeof(float) * NB_MICROPHONES);
+  }
+
+  gst_buffer_unref (buf);
+  return GST_FLOW_OK;
+}
+
+static void
+aur_receiver_processor_init_analyser (AurReceiverProcessor * processor)
+{
+  AurReceiverProcessorPrivate *priv = processor->priv;
+
+  priv->analyser = TRUE;
+
+  GST_DEBUG_OBJECT (processor, "Created analyser");
+}
+
+static void
+aur_receiver_processor_cleanup (AurReceiverProcessor * processor)
+{
+  AurReceiverProcessorPrivate *priv = processor->priv;
+
+  gst_buffer_replace (&priv->cache, NULL);
+
+  if (!priv->analyser)
+    return;
+
+  priv->analyser = FALSE;
+
+  GST_DEBUG_OBJECT (processor, "Destroyed analyser");
 }

@@ -19,7 +19,7 @@
 
 /*
  * Aurena Receiver manages incoming audio feeds
- * mixes them and outputs the 8-channel stream for ManyEars
+ * and feeds them to the processor for analysis.
  */
 
 #ifdef HAVE_CONFIG_H

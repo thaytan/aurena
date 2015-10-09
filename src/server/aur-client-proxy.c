@@ -51,5 +51,6 @@ aur_client_proxy_finalize (GObject * object)
 
   g_free (proxy->record_path);
   g_free (proxy->host);
+  g_free (proxy->name);
   g_free (proxy);
 }

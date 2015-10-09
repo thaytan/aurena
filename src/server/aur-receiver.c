@@ -19,8 +19,7 @@
 
 /*
  * Aurena Receiver manages ingest objects to receive
- * streams and the processor object that mixes them and
- * outputs the 8-channel stream for ManyEars
+ * streams.
  */
 
 #ifdef HAVE_CONFIG_H

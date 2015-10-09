@@ -56,6 +56,7 @@ struct _AurManager
   GFile *custom_file;
   gchar *language;
 
+  guint unknown_client_id;
   guint next_player_id;
   GList *clients;
 
@@ -65,6 +66,7 @@ struct _AurManager
   gdouble current_volume;
 
   guint ping_timeout;
+  guint calibration_timeout;
 
   AurReceiver *receiver;
 };

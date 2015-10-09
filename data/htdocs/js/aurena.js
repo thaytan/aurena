@@ -137,10 +137,38 @@ handle_event : function handle_event(data) {
     case "player-clients-changed":
       aurena.update_player_clients();
       break;
+    case "ping":
+      break;
+    case "client-stats":
+      aurena.update_player_stats(json);
+      break;
     default:
-      $("#debug").prepend("<p>Received message of type " + json["msg-type"] + ": " + data + "</p>");
+      // $("#debug").prepend("<p>Received message of type " + json["msg-type"] + ": " + data + "</p>");
       break;
   }
+},
+update_player_stats : function (stats) {
+  client_id = stats["client-id"];
+  synched = (stats["synchronised"] == true);
+  max_err = Math.max (Math.abs (stats['remote-min-error']),
+                      Math.abs (stats['remote-max-error']));
+  rtt_avg = stats["rtt-average"];
+
+  info_str = "(RTT ";
+  if (max_err > 1000000)
+    info_str += (rtt_avg / 1000000).toFixed(1) + "ms";
+  else
+    info_str += (rtt_avg / 1000).toFixed(1) + "us";
+
+  info_str += " Max Error ";
+  if (max_err > 1000000)
+    info_str += (max_err / 1000000).toFixed(1) + "ms";
+  else
+    info_str += (max_err / 1000).toFixed(1) + "us";
+  info_str += ")";
+  $("#cliententries #stats-" + client_id).empty().prepend (info_str)
+      .toggleClass("client-clock-synched", synched)
+      .toggleClass("client-clock-not-synched", !synched);
 },
 update_player_clients : function () {
   function send_enable_val(client_id) {
@@ -177,7 +205,8 @@ update_player_clients : function () {
                "'/><label for='" + enable_id + "'></label>";
        info += "<input type='checkbox' class='client-record' id='" + record_enable_id +
                "'/><label for='" + record_enable_id + "'></label>";
-       info += " Client " + val["host"];
+       info += " <span>Client " + val["host"] + "</span>";
+       info += " <span id='stats-" + val["client-id"] + "' />";
        info += " <div id='" + volume_id + "' />";
        info += " <div id='volumeval-" + val["client-id"] + "' />";
        info += '</li>';
@@ -231,7 +260,7 @@ send_slider_volume : function send_slider_volume(client_id) {
 
   if (aurena.sendingVol || !aurena.volChange || aurena.slide_update) return;
   aurena.sendingVol = true; aurena.volChange = false;
-  $("#debug").prepend("<p>Sending volume " + curVol.toString() + "</p>");
+  // $("#debug").prepend("<p>Sending volume " + curVol.toString() + "</p>");
   $.ajax({
     type: 'POST',
     url: "../control/volume",

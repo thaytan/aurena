@@ -358,8 +358,8 @@ on_element_msg (G_GNUC_UNUSED GstBus * bus, GstMessage * msg,
   AurEvent *event;
   const GstStructure *s = gst_message_get_structure (msg);
   gboolean synched;
-  GstClockTime rtt_avg;
-  GstClockTimeDiff min_err, max_err;
+  GstClockTime rtt_avg = 0;
+  GstClockTimeDiff min_err = 0, max_err = 0;
 
   if (s == NULL)
     return;
@@ -376,21 +376,22 @@ on_element_msg (G_GNUC_UNUSED GstBus * bus, GstMessage * msg,
 #endif
 
   /* Pull out the stats to send */
-  gst_structure_get (s, "synchronised", G_TYPE_BOOLEAN, &synched,
+  if (!gst_structure_get (s, "synchronised", G_TYPE_BOOLEAN, &synched,
       "rtt-average", G_TYPE_UINT64, &rtt_avg,
       "remote-min-error", G_TYPE_INT64, &min_err,
-      "remote-max-error", G_TYPE_INT64, &max_err, NULL);
+      "remote-max-error", G_TYPE_INT64, &max_err, NULL)) {
+    GST_WARNING_OBJECT (client, "Failed to retrieve clock stats!");
+  }
 
   event = aur_event_new (gst_structure_new ("json",
           "msg-type", G_TYPE_STRING, "client-stats",
           "client-id", G_TYPE_UINT, client->id,
-          "synchronised", G_TYPE_BOOLEAN, &synched,
-          "rtt-average", G_TYPE_UINT64, &rtt_avg,
-          "remote-min-error", G_TYPE_INT64, &min_err,
-          "remote-max-error", G_TYPE_INT64, &max_err, NULL));
+          "synchronised", G_TYPE_BOOLEAN, synched,
+          "rtt-average", G_TYPE_UINT64, rtt_avg,
+          "remote-min-error", G_TYPE_INT64, min_err,
+          "remote-max-error", G_TYPE_INT64, max_err, NULL));
 
   send_event_to_manager (client, event);
-
 }
 
 static void
@@ -813,10 +814,12 @@ handle_client_record_message (AurClient * client, GstStructure * s)
 
   gst_element_set_state (GST_ELEMENT (client->record_pipe), GST_STATE_PLAYING);
 
+#if 0
   gst_element_get_state (GST_ELEMENT (client->record_pipe), NULL, NULL,
       5 * GST_SECOND);
   GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS (GST_BIN (client->record_pipe),
       GST_DEBUG_GRAPH_SHOW_ALL, "recorder");
+#endif
   return;
 
 fail:

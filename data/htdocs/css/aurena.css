@@ -39,7 +39,10 @@ right: 10px; top: 0px;
 }
 #clients, #playlist { padding-left: 10px; }
 
-#debug { display: none; }
+#debug {
+  display: none;
+  color: #fff;
+}
 
 .icon-microphone-on { background-position: 0 0; }
 .icon-microphone-off { background-position: -16px 0; }
@@ -48,4 +51,11 @@ right: 10px; top: 0px;
 
 .ui-state-default .ui-icon.aurena {
     background-image: url(aurena-icons.png);
+}
+
+.client-clock-synched {
+  color: #8F8; 
+}
+.client-clock-not-synched {
+  color: #F88; 
 }

@@ -240,7 +240,7 @@ make_player_clients_list_event (AurManager * manager)
           "enabled", G_TYPE_BOOLEAN, proxy->enabled,
           "record-enabled", G_TYPE_BOOLEAN, proxy->record_enabled,
           "volume", G_TYPE_DOUBLE, proxy->volume,
-          "host", G_TYPE_STRING, proxy->host,
+          "host", G_TYPE_STRING, proxy->name,
           NULL);
 
       g_value_init (&tmp, GST_TYPE_STRUCTURE);
@@ -379,6 +379,28 @@ get_client_proxy_by_id (AurManager * manager,
   return proxy;
 }
 
+static gchar *
+lookup_static_host_to_name (const gchar *host)
+{
+  static const struct {
+    const gchar *host;
+    const gchar *name;
+  } names[] = {
+    { "192.168.1.245", "Nexus 7 2013" },
+    { "192.168.1.238", "Jan Laptop" },
+    { "192.168.1.144", "Galaxy S3" },
+    { "192.168.1.115", "Nexus 7 2012" }
+  };
+  guint i;
+
+  for (i=0; i < G_N_ELEMENTS (names); i++) {
+    if (g_str_equal (names[i].host, host))
+      return g_strdup (names[i].name);
+  }
+
+  return g_strdup (host);
+}
+
 static AurClientProxy *
 get_client_proxy_for_client (AurManager * manager, AurHTTPClient * client,
     AurComponentRole roles)
@@ -400,6 +422,7 @@ get_client_proxy_for_client (AurManager * manager, AurHTTPClient * client,
     /* Init the client proxy */
     proxy->roles = roles;
     proxy->host = g_strdup (host);
+    proxy->name = lookup_static_host_to_name (host);
     proxy->id = manager->next_player_id++;
     proxy->volume = 1.0;
     /* FIXME: Disable new clients if playing, otherwise enable */

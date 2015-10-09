@@ -45,6 +45,7 @@
 #endif
 
 #include "common/aur-json.h"
+#include "common/aur-event.h"
 #include "client/aur-client.h"
 
 GST_DEBUG_CATEGORY_STATIC (client_debug);
@@ -222,6 +223,13 @@ handle_player_enrol_message (AurClient * client, GstStructure * s)
   GstClockTime cur_time;
   gchar *server_ip_str = NULL;
   gdouble new_vol;
+  gint64 client_id;
+
+  if (!aur_json_structure_get_int64 (s, "client-id", &client_id)) {
+    GST_ERROR_OBJECT (client, "No client-id in enrol. Old server?");
+    return;
+  }
+  client->id = client_id;
 
   if (!aur_json_structure_get_int (s, "clock-port", &clock_port))
     return;                     /* Invalid message */
@@ -288,6 +296,8 @@ handle_player_enrol_message (AurClient * client, GstStructure * s)
     client->net_clock = gst_net_client_clock_new ("net_clock", server_ip_str,
         clock_port, cur_time);
     g_free (server_ip_str);
+    if (client->bus)
+      g_object_set (G_OBJECT (client->net_clock), "bus", client->bus, NULL);
   }
 
   g_object_notify (G_OBJECT (client), "enabled");
@@ -310,9 +320,82 @@ on_error_msg (G_GNUC_UNUSED GstBus * bus, GstMessage * msg,
 }
 
 static void
+send_event_to_manager (AurClient * client, AurEvent * event)
+{
+  gchar *uri;
+  SoupMessage *msg;
+  gchar *body;
+  gsize len;
+
+  g_return_if_fail (AUR_IS_CLIENT (client));
+  g_return_if_fail (AUR_IS_EVENT (event));
+
+  if (client->connected_server == NULL) {
+    GST_INFO_OBJECT (client, "Not connected. Dropping event");
+    g_object_unref (event);
+    return;
+  }
+
+  uri = g_strdup_printf ("http://%s:%u/client/events",
+      client->connected_server, client->connected_port);
+
+  GST_LOG_OBJECT (client, "Submitting to server at %s", uri);
+
+  msg = soup_message_new ("POST", uri);
+  g_free (uri);
+
+  body = aur_event_to_data (event, AUR_COMPONENT_ROLE_MANAGER, &len);
+  soup_message_set_request (msg, "application/json",
+       SOUP_MEMORY_TAKE, body, len);
+  soup_session_queue_message (client->soup, msg, NULL, NULL);
+  g_object_unref (event);
+}
+
+static void
+on_element_msg (G_GNUC_UNUSED GstBus * bus, GstMessage * msg,
+    AurClient * client)
+{
+  AurEvent *event;
+  const GstStructure *s = gst_message_get_structure (msg);
+  gboolean synched;
+  GstClockTime rtt_avg;
+  GstClockTimeDiff min_err, max_err;
+
+  if (s == NULL)
+    return;
+  if (!gst_structure_has_name (s, "gst-netclock-statistics"))
+    return;
+
+#if 0
+  {
+    gchar *str;
+    str = gst_structure_to_string (s);
+    g_print ("%s\n", str);
+    g_free (str);
+  }
+#endif
+
+  /* Pull out the stats to send */
+  gst_structure_get (s, "synchronised", G_TYPE_BOOLEAN, &synched,
+      "rtt-average", G_TYPE_UINT64, &rtt_avg,
+      "remote-min-error", G_TYPE_INT64, &min_err,
+      "remote-max-error", G_TYPE_INT64, &max_err, NULL);
+
+  event = aur_event_new (gst_structure_new ("json",
+          "msg-type", G_TYPE_STRING, "client-stats",
+          "client-id", G_TYPE_UINT, client->id,
+          "synchronised", G_TYPE_BOOLEAN, &synched,
+          "rtt-average", G_TYPE_UINT64, &rtt_avg,
+          "remote-min-error", G_TYPE_INT64, &min_err,
+          "remote-max-error", G_TYPE_INT64, &max_err, NULL));
+
+  send_event_to_manager (client, event);
+
+}
+
+static void
 construct_player (AurClient * client)
 {
-  GstBus *bus;
   guint flags;
 
   GST_DEBUG ("Constructing playbin");
@@ -328,23 +411,26 @@ construct_player (AurClient * client)
   flags &= ~0x00000004;
   g_object_set (client->player, "flags", flags, NULL);
 
-  bus = gst_element_get_bus (GST_ELEMENT (client->player));
+  client->bus = gst_element_get_bus (GST_ELEMENT (client->player));
 
 #if 0
   gst_bus_add_signal_watch (bus);
 #else
   {
     GSource *bus_source;
-    bus_source = gst_bus_create_watch (bus);
+    bus_source = gst_bus_create_watch (client->bus);
     g_source_set_callback (bus_source, (GSourceFunc) gst_bus_async_signal_func,
         NULL, NULL);
     g_source_attach (bus_source, client->context);
     g_source_unref (bus_source);
   }
 #endif
-
-  g_signal_connect (bus, "message::error", (GCallback) (on_error_msg), client);
-  gst_object_unref (bus);
+  if (client->net_clock)
+    g_object_set (G_OBJECT (client->net_clock), "bus", client->bus, NULL);
+  g_signal_connect (client->bus, "message::error", (GCallback) (on_error_msg),
+      client);
+  g_signal_connect (client->bus, "message::element",
+      (GCallback) (on_element_msg), client);
 
   gst_element_set_state (client->player, GST_STATE_READY);
 
@@ -726,6 +812,11 @@ handle_client_record_message (AurClient * client, GstStructure * s)
   }
 
   gst_element_set_state (GST_ELEMENT (client->record_pipe), GST_STATE_PLAYING);
+
+  gst_element_get_state (GST_ELEMENT (client->record_pipe), NULL, NULL,
+      5 * GST_SECOND);
+  GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS (GST_BIN (client->record_pipe),
+      GST_DEBUG_GRAPH_SHOW_ALL, "recorder");
   return;
 
 fail:
@@ -857,8 +948,8 @@ handle_player_info (G_GNUC_UNUSED SoupSession * session, SoupMessage * msg,
     player_info = NULL;
 
     g_signal_emit (client, signals[SIGNAL_PLAYER_INFO_CHANGED], 0);
-
   failed:
+    soup_buffer_free (buffer);
     if (player_info)
       free_player_info (player_info);
     gst_structure_free (s1);
@@ -1102,6 +1193,7 @@ handle_received_chunk (SoupMessage * msg, SoupBuffer * chunk,
   gst_structure_free (s);
 
 end:
+  soup_buffer_free (chunk);
   g_free (json_str);
 
   soup_message_body_truncate (msg->response_body);
@@ -1315,6 +1407,8 @@ aur_client_finalize (GObject * object)
   if (client->player) {
     gst_object_unref (client->player);
   }
+  if (client->bus)
+    gst_object_unref (client->bus);
   if (client->context)
     g_main_context_unref (client->context);
 

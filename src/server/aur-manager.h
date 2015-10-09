@@ -23,6 +23,7 @@
 #include <gst/gst.h>
 #include <gst/net/gstnet.h>
 #include <libsoup/soup-types.h>
+#include <json-glib/json-glib.h>
 
 #include <gst/rtsp-server/rtsp-server.h>
 
@@ -69,6 +70,8 @@ struct _AurManager
   guint calibration_timeout;
 
   AurReceiver *receiver;
+
+  JsonParser *json;
 };
 
 struct _AurManagerClass

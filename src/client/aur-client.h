@@ -37,9 +37,8 @@
 
 G_BEGIN_DECLS
 
+G_DECLARE_FINAL_TYPE(AurClient, aur_client, AUR, CLIENT, GObject);
 #define AUR_TYPE_CLIENT (aur_client_get_type ())
-
-typedef struct _AurClientClass AurClientClass;
 
 typedef struct
 {
@@ -60,6 +59,8 @@ typedef enum
 struct _AurClient
 {
   GObject parent;
+
+  guint id;
 
   AurClientRoles roles;
   gdouble volume;
@@ -83,6 +84,7 @@ struct _AurClient
   GMainContext * context;
 
   GstElement *player;
+  GstBus *bus;
   GSource *bus_source;
 
   GSource *recon_timeout;

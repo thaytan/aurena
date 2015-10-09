@@ -202,6 +202,7 @@ manager_make_enrol_event (AurManager * manager, AurClientProxy * proxy)
 
   msg = gst_structure_new ("json",
       "msg-type", G_TYPE_STRING, "enrol",
+      "client-id", G_TYPE_INT64, (gint64) proxy->id,
       "resource-id", G_TYPE_INT64, (gint64) manager->current_resource,
       "clock-port", G_TYPE_INT, clock_port,
       "current-time", G_TYPE_INT64, (gint64) (cur_time),
@@ -451,6 +452,45 @@ enrol_events_subscriber (AurManager * manager, SoupServer * soup,
 }
 
 static void
+handle_client_event (AurManager * manager, SoupMessage * msg)
+{
+  SoupBuffer *buffer;
+  JsonNode *root;
+  GstStructure *s;
+  const gchar *msg_type;
+
+  buffer = soup_message_body_flatten (msg->request_body);
+
+  if (!buffer || !json_parser_load_from_data (manager->json,
+          buffer->data, buffer->length, NULL) ||
+      (root = json_parser_get_root (manager->json)) == NULL) {
+    GST_WARNING_OBJECT (manager, "Invalid client event received");
+    if (buffer != NULL)
+      soup_buffer_free (buffer);
+    return;
+  }
+
+  soup_buffer_free (buffer);
+
+  s = aur_json_to_gst_structure (root);
+  msg_type = gst_structure_get_string (s, "msg-type");
+  if (msg_type == NULL) {
+    GST_WARNING_OBJECT (manager, "Invalid client event received");
+    return;
+  }
+
+  if (g_str_equal (msg_type, "client-stats")) {
+    /* Forward the message directly to controllers */
+    manager_send_event_to_clients (manager,
+        AUR_COMPONENT_ROLE_CONTROLLER, aur_event_new (gst_structure_copy (s)));
+  } else {
+    g_print ("Unknown event of type %s\n", msg_type);
+  }
+
+  gst_structure_free (s);
+}
+
+static void
 manager_client_cb (SoupServer * soup, SoupMessage * msg,
     const char *path, GHashTable * query,
     SoupClientContext * ctx, AurManager * manager)
@@ -467,6 +507,11 @@ manager_client_cb (SoupServer * soup, SoupMessage * msg,
   if (g_str_equal (parts[2], "events")) {
     const gchar *roles_str;
     AurComponentRole roles;
+
+    if (g_str_equal (msg->method, "POST")) {
+      handle_client_event (manager, msg);
+      goto done;
+    }
 
     if (query == NULL ||
         ((roles_str = g_hash_table_lookup (query, "roles")) == NULL) ||
@@ -782,6 +827,8 @@ aur_manager_init (AurManager * manager)
 
   manager->current_resource = 0;
   manager->next_player_id = 1;
+
+  manager->json = json_parser_new ();
 }
 
 static void
@@ -868,6 +915,8 @@ aur_manager_finalize (GObject * object)
 
   g_clear_object (&manager->custom_file);
   g_free (manager->language);
+
+  g_object_unref (manager->json);
 }
 
 static void

@@ -72,25 +72,28 @@ enum _AurControlEvent
   AUR_CONTROL_VOLUME,
   AUR_CONTROL_CLIENT_SETTING,
   AUR_CONTROL_SEEK,
-  AUR_CONTROL_LANGUAGE
+  AUR_CONTROL_LANGUAGE,
+  AUR_CONTROL_CALIBRATION
 };
 
+/* *INDENT-OFF* */
 static const struct
 {
   const char *name;
   AurControlEvent type;
 } control_event_names[] = {
-  {
-  "next", AUR_CONTROL_NEXT}, {
-  "previous", AUR_CONTROL_PREV}, {
-  "play", AUR_CONTROL_PLAY}, {
-  "pause", AUR_CONTROL_PAUSE}, {
-  "enqueue", AUR_CONTROL_ENQUEUE}, {
-  "volume", AUR_CONTROL_VOLUME}, {
-  "setclient", AUR_CONTROL_CLIENT_SETTING}, {
-  "seek", AUR_CONTROL_SEEK}, {
-  "language", AUR_CONTROL_LANGUAGE}
+  { "next", AUR_CONTROL_NEXT},
+  { "previous", AUR_CONTROL_PREV},
+  { "play", AUR_CONTROL_PLAY},
+  { "pause", AUR_CONTROL_PAUSE},
+  { "enqueue", AUR_CONTROL_ENQUEUE},
+  { "volume", AUR_CONTROL_VOLUME},
+  { "setclient", AUR_CONTROL_CLIENT_SETTING},
+  { "seek", AUR_CONTROL_SEEK},
+  { "language", AUR_CONTROL_LANGUAGE},
+  { "calibration", AUR_CONTROL_CALIBRATION}
 };
+/* *INDENT-ON* */
 
 static const gint N_CONTROL_EVENTS = G_N_ELEMENTS (control_event_names);
 
@@ -128,6 +131,7 @@ static AurClientProxy *get_client_proxy_by_id (AurManager * manager,
 static void aur_manager_send_seek (AurManager * manager, GstClockTime position);
 static void aur_manager_send_language (AurManager * manager,
     const gchar * language);
+static void aur_manager_do_calibration (AurManager * manager);
 static AurEvent *manager_make_record_event (AurManager * manager,
     AurClientProxy * proxy);
 
@@ -380,20 +384,22 @@ get_client_proxy_by_id (AurManager * manager,
 }
 
 static gchar *
-lookup_static_host_to_name (const gchar *host)
+lookup_static_host_to_name (const gchar * host)
 {
-  static const struct {
+  static const struct
+  {
     const gchar *host;
     const gchar *name;
   } names[] = {
-    { "192.168.1.245", "Nexus 7 2013" },
-    { "192.168.1.238", "Jan Laptop" },
-    { "192.168.1.144", "Galaxy S3" },
-    { "192.168.1.115", "Nexus 7 2012" }
+    {
+    "192.168.1.245", "Nexus 7 2013"}, {
+    "192.168.1.238", "Jan Laptop"}, {
+    "192.168.1.144", "Galaxy S3"}, {
+    "192.168.1.115", "Nexus 7 2012"}
   };
   guint i;
 
-  for (i=0; i < G_N_ELEMENTS (names); i++) {
+  for (i = 0; i < G_N_ELEMENTS (names); i++) {
     if (g_str_equal (names[i].host, host))
       return g_strdup (names[i].name);
   }
@@ -821,6 +827,10 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
       aur_manager_send_language (manager, language);
       break;
     }
+    case AUR_CONTROL_CALIBRATION:{
+      aur_manager_do_calibration (manager);
+      break;
+    }
     default:
       g_message ("Ignoring unknown/unimplemented control %s\n", parts[2]);
       soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
@@ -917,6 +927,10 @@ aur_manager_dispose (GObject * object)
   if (manager->ping_timeout) {
     g_source_remove (manager->ping_timeout);
     manager->ping_timeout = 0;
+  }
+  if (manager->calibration_timeout) {
+    g_source_remove (manager->calibration_timeout);
+    manager->calibration_timeout = 0;
   }
 
   G_OBJECT_CLASS (aur_manager_parent_class)->dispose (object);
@@ -1378,4 +1392,62 @@ manager_make_player_clients_changed_event (G_GNUC_UNUSED AurManager * manager)
       "msg-type", G_TYPE_STRING, "player-clients-changed", NULL);
 
   return aur_event_new (msg);
+}
+
+static gboolean
+reset_client_volumes (AurManager *manager)
+{
+  aur_manager_adjust_volume (manager, manager->current_volume);
+  return FALSE;
+}
+
+static void
+aur_manager_do_calibration (AurManager * manager)
+{
+  AurEvent *event;
+  GstClockTime base_time, offset = 0;
+  GstClock *clock;
+  GList *cur;
+  gint port;
+
+  /* Set all player client volumes to 1.0, and tell them to play a sound */
+  g_object_get (manager->net_clock, "clock", &clock, NULL);
+  base_time = gst_clock_get_time (clock);
+  gst_object_unref (clock);
+
+  g_object_get (manager->config, "aur-port", &port, NULL);
+
+  for (cur = manager->clients; cur != NULL; cur = g_list_next (cur)) {
+    AurClientProxy *proxy = AUR_CLIENT_PROXY (cur->data);
+
+    if (proxy->conn == NULL || (proxy->roles & AUR_COMPONENT_ROLE_PLAYER) == 0)
+      continue;
+
+    /* Set the player to maximum volume */
+    event = aur_event_new (gst_structure_new ("json",
+            "msg-type", G_TYPE_STRING, "volume",
+            "level", G_TYPE_DOUBLE, 1.0, NULL));
+    manager_send_event_to_client (manager, proxy, AUR_COMPONENT_ROLE_PLAYER,
+        event);
+
+    offset += 500 * GST_MSECOND;
+    event = aur_event_new (gst_structure_new ("json",
+            "msg-type", G_TYPE_STRING, "set-media",
+            "resource-id", G_TYPE_INT64, (gint64) 0,
+            "resource-protocol", G_TYPE_STRING, "http",
+            "resource-port", G_TYPE_INT, port,
+            "resource-path", G_TYPE_STRING, "/media/ping.mkv",
+            "base-time", G_TYPE_INT64, (gint64) (base_time + offset),
+            "position", G_TYPE_INT64, (gint64) (0),
+            "paused", G_TYPE_BOOLEAN, FALSE,
+            "language", G_TYPE_STRING, manager->language, NULL));
+    manager_send_event_to_client (manager, proxy,
+        AUR_COMPONENT_ROLE_PLAYER, event);
+  }
+
+  if (offset > 0) {
+    manager->calibration_timeout =
+        g_timeout_add_seconds (offset / GST_SECOND + 1,
+        (GSourceFunc) reset_client_volumes, manager);
+  }
 }

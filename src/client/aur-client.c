@@ -360,6 +360,8 @@ on_element_msg (G_GNUC_UNUSED GstBus * bus, GstMessage * msg,
   gboolean synched;
   GstClockTime rtt_avg = 0;
   GstClockTimeDiff min_err = 0, max_err = 0;
+  GstClockTimeDiff position = GST_CLOCK_TIME_NONE;
+  GstClockTimeDiff cur_time = GST_CLOCK_TIME_NONE;
 
   if (s == NULL)
     return;
@@ -383,13 +385,22 @@ on_element_msg (G_GNUC_UNUSED GstBus * bus, GstMessage * msg,
     GST_WARNING_OBJECT (client, "Failed to retrieve clock stats!");
   }
 
+  if (!client->paused) {
+    cur_time = gst_clock_get_time (client->net_clock);
+    cur_time -= client->base_time;
+    gst_element_query_position (GST_ELEMENT (client->player), GST_FORMAT_TIME, &position);
+  }
+
   event = aur_event_new (gst_structure_new ("json",
           "msg-type", G_TYPE_STRING, "client-stats",
           "client-id", G_TYPE_UINT, client->id,
           "synchronised", G_TYPE_BOOLEAN, synched,
           "rtt-average", G_TYPE_UINT64, rtt_avg,
           "remote-min-error", G_TYPE_INT64, min_err,
-          "remote-max-error", G_TYPE_INT64, max_err, NULL));
+          "remote-max-error", G_TYPE_INT64, max_err,
+          "position", G_TYPE_INT64, position,
+          "expected-position", G_TYPE_INT64, cur_time,
+          NULL));
 
   send_event_to_manager (client, event);
 }

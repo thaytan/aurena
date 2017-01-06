@@ -153,9 +153,11 @@ update_player_stats : function (stats) {
   max_err = Math.max (Math.abs (stats['remote-min-error']),
                       Math.abs (stats['remote-max-error']));
   rtt_avg = stats["rtt-average"];
+  cur_pos = stats["position"];
+  expected_pos = stats["expected-position"];
 
   info_str = "(RTT ";
-  if (max_err > 1000000)
+  if (rtt_avg > 1000000)
     info_str += (rtt_avg / 1000000).toFixed(1) + "ms";
   else
     info_str += (rtt_avg / 1000).toFixed(1) + "us";
@@ -165,7 +167,14 @@ update_player_stats : function (stats) {
     info_str += (max_err / 1000000).toFixed(1) + "ms";
   else
     info_str += (max_err / 1000).toFixed(1) + "us";
-  info_str += ")";
+  info_str += ") Position offset ";
+
+  pos_diff = cur_pos - expected_pos;
+  if (Math.abs(pos_diff) > 1000000)
+    info_str += (pos_diff / 1000000).toFixed(1) + "ms";
+  else
+    info_str += (pos_diff / 1000).toFixed(1) + "us";
+
   $("#cliententries #stats-" + client_id).empty().prepend (info_str)
       .toggleClass("client-clock-synched", synched)
       .toggleClass("client-clock-not-synched", !synched);

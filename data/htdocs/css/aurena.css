@@ -1,13 +1,16 @@
 body {
   background-color: #000000;
   font-family: "Myriad Pro",Calibri,Helvetica,Arial,sans-serif;
+  text-align: center;
 }
 
 #player {
-  width: 640;
+  display: inline-block;
+  width: 50%;
   background-color: #101010;
   color: white;
   position: relative;
+  text-align: left;
 }
 
 #header {

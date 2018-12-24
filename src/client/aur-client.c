@@ -517,7 +517,7 @@ set_media (AurClient * client)
     /* FIXME Query duration, so we don't seek after EOS */
     if (!gst_element_seek_simple (client->player, GST_FORMAT_TIME,
             GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, client->position)) {
-      g_warning ("Initial seekd failed, player will go faster instead");
+      g_warning ("Initial seek failed, player will go faster instead");
       client->position = 0;
     }
   }

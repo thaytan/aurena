@@ -1,4 +1,4 @@
-GSTREAMER_SDK_ROOT_ANDROID ?= $(HOME)/cerbero/dist/android_armv7
+GSTREAMER_SDK_ROOT_ANDROID ?= $(HOME)/cerbero/dist/android_universal/armv7/
 
 build: setup
 	GSTREAMER_SDK_ROOT_ANDROID=$(GSTREAMER_SDK_ROOT_ANDROID) ndk-build NDK_DEBUG=1

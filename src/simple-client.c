@@ -99,7 +99,7 @@ on_eos_msg (AurClient *client, G_GNUC_UNUSED GstMessage * msg)
 
 #if 0
   soup_msg = soup_message_new ("GET", url);
-  soup_session_send_message (client->soup, soup_msg);
+  soup_session_queue_message (client->soup, soup_msg);
 #endif
   g_free (url);
 }

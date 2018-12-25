@@ -1286,9 +1286,7 @@ aur_client_constructed (GObject * object)
   if (G_OBJECT_CLASS (aur_client_parent_class)->constructed != NULL)
     G_OBJECT_CLASS (aur_client_parent_class)->constructed (object);
 
-  client->soup =
-      soup_session_async_new_with_options (SOUP_SESSION_ASYNC_CONTEXT,
-      client->context, NULL);
+  client->soup = soup_session_new ();
   g_assert (client->soup);
   if (!g_strcmp0 ("1", g_getenv ("AURENA_DEBUG")))
     soup_session_add_feature (client->soup,

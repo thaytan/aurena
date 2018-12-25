@@ -60,7 +60,7 @@ aur_event_finalize (GObject * object)
 }
 
 const gchar *
-aur_event_get_name (const AurEvent * event)
+aur_event_get_name (AurEvent * event)
 {
   const gchar *name;
   g_return_val_if_fail (AUR_IS_EVENT (event), NULL);
@@ -86,7 +86,7 @@ aur_event_new (GstStructure * fields)
 }
 
 JsonNode *
-aur_event_to_json_msg (const AurEvent * event, AurComponentRole targets)
+aur_event_to_json_msg (AurEvent * event, AurComponentRole targets)
 {
   GstStructure *msg;
   JsonNode *fields;
@@ -108,7 +108,7 @@ aur_event_to_json_msg (const AurEvent * event, AurComponentRole targets)
 }
 
 gchar *
-aur_event_to_data (const AurEvent * event, AurComponentRole targets,
+aur_event_to_data (AurEvent * event, AurComponentRole targets,
   gsize *len)
 {
   gchar *body;

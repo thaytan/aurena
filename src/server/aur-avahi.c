@@ -32,8 +32,6 @@
 
 #include "aur-avahi.h"
 
-G_DEFINE_TYPE (AurAvahi, aur_avahi, G_TYPE_OBJECT);
-
 enum
 {
   PROP_0,
@@ -56,6 +54,8 @@ struct _AurAvahiPrivate
   char *service_name;
   int port;
 };
+
+G_DEFINE_TYPE_WITH_PRIVATE  (AurAvahi, aur_avahi, G_TYPE_OBJECT);
 
 static void aur_avahi_finalize (GObject * object);
 
@@ -249,8 +249,7 @@ aur_avahi_finalize (GObject * object)
 static void
 aur_avahi_init (AurAvahi * avahi)
 {
-  AurAvahiPrivate *priv = avahi->priv =
-      G_TYPE_INSTANCE_GET_PRIVATE (avahi, AUR_TYPE_AVAHI, AurAvahiPrivate);
+  AurAvahiPrivate *priv = avahi->priv = aur_avahi_get_instance_private (avahi);
 
   priv->service_name = g_strdup ("Aurena media server");
 
@@ -268,8 +267,6 @@ aur_avahi_class_init (AurAvahiClass * klass)
   gobject_class->finalize = aur_avahi_finalize;
   gobject_class->set_property = aur_avahi_set_property;
   gobject_class->get_property = aur_avahi_get_property;
-
-  g_type_class_add_private (gobject_class, sizeof (AurAvahiPrivate));
 
   g_object_class_install_property (gobject_class, PROP_PORT,
       g_param_spec_int ("aur-port", "Aurena port",

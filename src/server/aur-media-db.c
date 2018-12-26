@@ -47,7 +47,7 @@ enum
   PROP_LAST
 };
 
-struct _AurMediaDBPriv
+struct _AurMediaDBPrivate
 {
   GObject parent;
 
@@ -69,13 +69,12 @@ static void aur_media_db_set_property (GObject * object, guint prop_id,
 static void aur_media_db_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-G_DEFINE_TYPE (AurMediaDB, aur_media_db, G_TYPE_OBJECT);
+G_DEFINE_TYPE_WITH_PRIVATE (AurMediaDB, aur_media_db, G_TYPE_OBJECT);
 
 static void
 aur_media_db_init (AurMediaDB * media_db)
 {
-  media_db->priv = G_TYPE_INSTANCE_GET_PRIVATE (media_db,
-      AUR_TYPE_MEDIA_DB, AurMediaDBPriv);
+  media_db->priv = aur_media_db_get_instance_private (media_db);
 }
 
 static void
@@ -119,7 +118,6 @@ aur_media_db_class_init (AurMediaDBClass * media_db_class)
       g_param_spec_string ("db-file", "Database file",
           "Location for media DB file", NULL,
           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
-  g_type_class_add_private (object_class, sizeof (AurMediaDBPriv));
 }
 
 static void

@@ -29,12 +29,12 @@
 
 G_BEGIN_DECLS
 
-typedef struct _AurMediaDBPriv AurMediaDBPriv;
+typedef struct _AurMediaDBPrivate AurMediaDBPrivate;
 
 struct _AurMediaDB
 {
   GObject parent;
-  AurMediaDBPriv *priv;
+  AurMediaDBPrivate *priv;
 };
 
 AurMediaDB *aur_media_db_new(const char *db_path);

@@ -81,7 +81,7 @@ _do_init ()
 }
 
 G_DEFINE_TYPE_WITH_CODE (AurReceiverProcessor, aur_receiver_processor,
-    G_TYPE_OBJECT, _do_init ());
+    G_TYPE_OBJECT, G_ADD_PRIVATE (AurReceiverProcessor) _do_init ());
 
 static void
 aur_receiver_processor_class_init (AurReceiverProcessorClass * klass)
@@ -93,8 +93,6 @@ aur_receiver_processor_class_init (AurReceiverProcessorClass * klass)
   object_class->get_property = aur_receiver_processor_get_property;
   object_class->dispose = aur_receiver_processor_dispose;
   object_class->finalize = aur_receiver_processor_finalize;
-
-  g_type_class_add_private (klass, sizeof (AurReceiverProcessorPrivate));
 }
 
 static GstFlowReturn
@@ -112,8 +110,7 @@ aur_receiver_processor_init (AurReceiverProcessor * processor)
   GstElement *interleave, *out;
   gint i;
 
-  processor->priv = G_TYPE_INSTANCE_GET_PRIVATE (G_OBJECT (processor),
-      AUR_TYPE_RECEIVER_PROCESSOR, AurReceiverProcessorPrivate);
+  processor->priv = aur_receiver_processor_get_instance_private (processor);
 
   /* Can't actually handle anything other than 8 mics, despite the
    * configurable-looking #define */

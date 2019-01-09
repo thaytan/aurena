@@ -482,6 +482,8 @@ set_language (AurClient * client)
 static void
 set_media (AurClient * client)
 {
+  GstElement *audio_sink = NULL;
+
   if (client->player == NULL) {
     construct_player (client);
     if (client->player == NULL)
@@ -503,6 +505,14 @@ set_media (AurClient * client)
   /* Do the preroll */
   gst_element_set_state (client->player, GST_STATE_PAUSED);
   gst_element_get_state (client->player, NULL, NULL, GST_CLOCK_TIME_NONE);
+
+  /* Configure the audio sink */
+  g_object_get (client->player, "audio-sink", &audio_sink, NULL);
+  if (audio_sink) {
+     GST_LOG_OBJECT (client, "Configuring audio sink %s", GST_OBJECT_NAME (audio_sink));
+     g_object_set (audio_sink, "buffer-time", (gint64) 40000, "drift-tolerance", (gint64) 10000, NULL);
+     gst_object_unref (audio_sink);
+  }
 
   /* Compensate preroll time if playing */
   if (!client->paused) {

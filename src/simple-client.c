@@ -56,6 +56,7 @@ print_position (AurClient *client)
   if (gst_element_query_position (player, format, &pos)) {
     GstClock * clock;
     GstClockTime base_time, stream_time, now;
+    GstClockTimeDiff diff;
 
     if (format != GST_FORMAT_TIME)
       goto end;
@@ -67,12 +68,14 @@ print_position (AurClient *client)
     now = gst_clock_get_time (clock);
     gst_object_unref (clock);
     base_time = gst_element_get_base_time (player);
-    stream_time = now - base_time;
+    stream_time = now - base_time + client->position;
+    diff = pos - stream_time;
 
     g_print ("Playback position %" GST_TIME_FORMAT " (now %" GST_TIME_FORMAT
-        " base_time %" GST_TIME_FORMAT " stream_time %" GST_TIME_FORMAT ")\n",
-        GST_TIME_ARGS (pos), GST_TIME_ARGS (now), GST_TIME_ARGS (base_time),
-        GST_TIME_ARGS (stream_time));
+        " base_time %" GST_TIME_FORMAT " stream_time %" GST_TIME_FORMAT
+        ") Sync error: %" GST_STIME_FORMAT "\n", GST_TIME_ARGS (pos),
+        GST_TIME_ARGS (now), GST_TIME_ARGS (base_time),
+        GST_TIME_ARGS (stream_time), GST_STIME_ARGS (diff));
   }
 
 end:

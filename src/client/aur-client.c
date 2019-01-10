@@ -524,12 +524,19 @@ set_media (AurClient * client)
   /* If position is off by more than 0.5 sec, seek to that position
    * (otherwise, just let the player skip) */
   if (client->position > GST_SECOND / 2) {
+    gint64 position;
     /* FIXME Query duration, so we don't seek after EOS */
     if (!gst_element_seek_simple (client->player, GST_FORMAT_TIME,
             GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, client->position)) {
       g_warning ("Initial seek failed, player will go faster instead");
       client->position = 0;
     }
+    /* After the seek, preroll again and check where we landed in the stream */
+    gst_element_get_state (client->player, NULL, NULL, GST_CLOCK_TIME_NONE);
+    gst_element_query_position (GST_ELEMENT (client->player), GST_FORMAT_TIME, &position);
+    GST_INFO_OBJECT (client, "Seeked to position %" GST_TIME_FORMAT " landed at %" GST_TIME_FORMAT,
+      GST_TIME_ARGS (client->position), GST_TIME_ARGS (position));
+    client->position = position;
   }
 
   /* Set base time considering seek position after seek */

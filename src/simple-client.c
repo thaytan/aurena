@@ -44,9 +44,9 @@ sigint_handler (G_GNUC_UNUSED void *data)
 }
 
 static gboolean
-print_position (AurClient *client)
+print_position (AurClient * client)
 {
-  GstElement * player = client->player;
+  GstElement *player = client->player;
   GstFormat format = GST_FORMAT_TIME;
   gint64 pos;
 
@@ -54,7 +54,7 @@ print_position (AurClient *client)
     goto end;
 
   if (gst_element_query_position (player, format, &pos)) {
-    GstClock * clock;
+    GstClock *clock;
     GstClockTime base_time, stream_time, now;
     GstClockTimeDiff diff;
 
@@ -91,7 +91,7 @@ player_disposed (gpointer user_data,
 }
 
 static void
-on_eos_msg (AurClient *client, G_GNUC_UNUSED GstMessage * msg)
+on_eos_msg (AurClient * client, G_GNUC_UNUSED GstMessage * msg)
 {
   SoupMessage *soup_msg;
   /* FIXME: Next song should all be handled server side */
@@ -108,7 +108,7 @@ on_eos_msg (AurClient *client, G_GNUC_UNUSED GstMessage * msg)
 }
 
 static void
-player_created (AurClient *client, GstElement * player)
+player_created (AurClient * client, GstElement * player)
 {
   GstBus *bus;
   guint timeout;
@@ -141,7 +141,8 @@ main (int argc, char *argv[])
 
   g_unix_signal_add (SIGINT, sigint_handler, NULL);
 
-  client = aur_client_new (NULL, server, AUR_CLIENT_PLAYER|AUR_CLIENT_CAPTURE);
+  client =
+      aur_client_new (NULL, server, AUR_CLIENT_PLAYER | AUR_CLIENT_CAPTURE);
   if (client == NULL)
     goto fail;
 

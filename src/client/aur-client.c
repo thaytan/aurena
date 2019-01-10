@@ -514,7 +514,8 @@ set_media (AurClient * client)
      gst_object_unref (audio_sink);
   }
 
-  /* Compensate preroll time if playing */
+  /* Compensate for the preroll time if we're playing.
+   * If pre-roll took a considerable time, it might be better to seek ahead */
   if (!client->paused) {
     GstClockTime now = gst_clock_get_time (client->net_clock);
     if (now > (client->base_time + client->position))
@@ -537,6 +538,9 @@ set_media (AurClient * client)
     GST_INFO_OBJECT (client, "Seeked to position %" GST_TIME_FORMAT " landed at %" GST_TIME_FORMAT,
       GST_TIME_ARGS (client->position), GST_TIME_ARGS (position));
     client->position = position;
+  }
+  else {
+    client->position = 0;
   }
 
   /* Set base time considering seek position after seek */

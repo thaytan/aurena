@@ -335,10 +335,16 @@ aur_http_client_new (SoupServer * soup, SoupMessage * msg,
   AurHTTPClient *client = g_object_new (AUR_TYPE_HTTP_CLIENT, NULL);
   const gchar *accept_challenge;
   gchar *accept_reply;
+  const gchar *client_name;
+
+  client_name = soup_message_headers_get_one (msg->request_headers, "Client-Name");
 
   client->soup = soup;
   client->event_pipe = msg;
-  client->host = g_strdup (soup_client_context_get_host (context));
+  if (client_name)
+    client->host = g_strdup (client_name);
+  else
+    client->host = g_strdup (soup_client_context_get_host (context));
 
   client->net_event_sig = g_signal_connect (msg, "network-event",
       G_CALLBACK (aur_http_client_network_event), client);

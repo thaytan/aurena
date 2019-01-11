@@ -87,7 +87,7 @@ main (int argc, char *argv[])
 
   avahi_set_allocator (avahi_glib_allocator ());
 
-  client = aur_client_new (NULL, server, AUR_CLIENT_PLAYER);
+  client = aur_client_new (NULL, server, AUR_CLIENT_PLAYER, g_get_host_name ());
   if (client == NULL)
     goto fail;
 

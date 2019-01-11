@@ -61,6 +61,7 @@ struct _AurClient
   GObject parent;
 
   guint id;
+  gchar *client_name;
 
   AurClientRoles roles;
   gdouble volume;
@@ -112,7 +113,7 @@ struct _AurClientClass
 };
 
 GType aur_client_get_type(void);
-AurClient *aur_client_new(GMainContext * context, const gchar *server, AurClientRoles roles);
+AurClient *aur_client_new(GMainContext * context, const gchar *server, AurClientRoles roles, const gchar *client_name);
 
 gboolean aur_client_is_connected (AurClient * client);
 gboolean aur_client_is_enabled (AurClient * client);

@@ -129,6 +129,7 @@ main (int argc, char *argv[])
   AurClient *client = NULL;
   int ret = 1;
   const gchar *server = NULL;
+  const gchar *client_name = g_get_host_name ();
 
   gst_init (&argc, &argv);
 
@@ -142,7 +143,7 @@ main (int argc, char *argv[])
   g_unix_signal_add (SIGINT, sigint_handler, NULL);
 
   client =
-      aur_client_new (NULL, server, AUR_CLIENT_PLAYER | AUR_CLIENT_CAPTURE);
+      aur_client_new (NULL, server, AUR_CLIENT_PLAYER | AUR_CLIENT_CAPTURE, client_name);
   if (client == NULL)
     goto fail;
 

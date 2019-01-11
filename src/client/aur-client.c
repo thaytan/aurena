@@ -69,6 +69,7 @@ G_DEFINE_TYPE_WITH_CODE (AurClient, aur_client, G_TYPE_OBJECT, _do_init ());
 enum
 {
   PROP_0,
+  PROP_CLIENT_NAME,
   PROP_SERVER_HOST,
   PROP_ROLES,
   PROP_PAUSED,
@@ -1282,6 +1283,8 @@ connect_to_server (AurClient * client, const gchar * server, int port)
     GST_DEBUG_OBJECT (client, "Attempting to connect to server at %s", uri);
 
     msg = soup_message_new ("GET", uri);
+    soup_message_headers_append (msg->request_headers, "Client-Name", client->client_name);
+
     g_signal_connect (msg, "got-chunk", (GCallback) handle_received_chunk,
         client);
     soup_session_queue_message (client->soup, msg,
@@ -1340,6 +1343,11 @@ aur_client_class_init (AurClientClass * client_class)
 
   gobject_class->set_property = aur_client_set_property;
   gobject_class->get_property = aur_client_get_property;
+
+  g_object_class_install_property (gobject_class, PROP_CLIENT_NAME,
+      g_param_spec_string ("client-name", "Client Name",
+          "Aurena Client Name", NULL,
+          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY | G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property (gobject_class, PROP_SERVER_HOST,
       g_param_spec_string ("server-host", "Aurena Server",
@@ -1499,6 +1507,12 @@ aur_client_set_property (GObject * object, guint prop_id,
   AurClient *client = (AurClient *) (object);
 
   switch (prop_id) {
+    case PROP_CLIENT_NAME:{
+      if (client->client_name)
+        g_free (client->client_name);
+      client->client_name = g_value_dup_string (value);
+      break;
+    }
     case PROP_SERVER_HOST:{
       if (client->server_host)
         g_free (client->server_host);
@@ -1532,6 +1546,10 @@ aur_client_get_property (GObject * object, guint prop_id,
   AurClient *client = (AurClient *) (object);
 
   switch (prop_id) {
+    case PROP_CLIENT_NAME: {
+      g_value_set_string (value, client->client_name);
+      break;
+    }
     case PROP_SERVER_HOST:{
       char *tmp = NULL;
       if (client->server_host)
@@ -1706,9 +1724,10 @@ search_for_server (AurClient * client)
 
 AurClient *
 aur_client_new (GMainContext * context, const char *server_host,
-    AurClientRoles roles)
+    AurClientRoles roles, const gchar *client_name)
 {
   AurClient *client = g_object_new (AUR_TYPE_CLIENT,
+      "client-name", client_name,
       "main-context", context,
       "server-host", server_host,
       "roles", roles,

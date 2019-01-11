@@ -590,7 +590,7 @@ main (gint argc, gchar *argv[])
   /* Create Aurena client */
   avahi_set_allocator (avahi_glib_allocator ());
   ctx.client = aur_client_new (NULL, server,
-      AUR_CLIENT_PLAYER | AUR_CLIENT_CONTROLLER);
+      AUR_CLIENT_PLAYER | AUR_CLIENT_CONTROLLER, g_get_host_name ());
   if (ctx.client == NULL)
     goto fail;
 

@@ -86,12 +86,14 @@ set_client_enable : function f(client_id, enable, record_enable) {
     options = { text: false, icons: { primary: "aurena icon-volume-off" } };
   s.button( "option", options ).attr('checked', enable);
 
-  var s = $("#record-enable-" + client_id);
-  if (record_enable)
-    options = { text: false, icons: { primary: "aurena icon-microphone-on" } };
-  else
-    options = { text: false, icons: { primary: "aurena icon-microphone-off" } };
-  s.button( "option", options ).attr('checked', record_enable);
+  if (aurena.showRec) {
+    var s = $("#record-enable-" + client_id);
+    if (record_enable)
+      options = { text: false, icons: { primary: "aurena icon-microphone-on" } };
+    else
+      options = { text: false, icons: { primary: "aurena icon-microphone-off" } };
+    s.button( "option", options ).attr('checked', record_enable);
+  }
 },
 
 handle_event : function handle_event(data) {
@@ -212,8 +214,10 @@ update_player_clients : function () {
        var info = '<li id="' + val["client-id"] + '">';
        info += "<input type='checkbox' class='client-enable' id='" + enable_id +
                "'/><label for='" + enable_id + "'></label>";
-       info += "<input type='checkbox' class='client-record' id='" + record_enable_id +
-               "'/><label for='" + record_enable_id + "'></label>";
+       if (aurena.showRec) {
+         info += "<input type='checkbox' class='client-record' id='" + record_enable_id +
+                 "'/><label for='" + record_enable_id + "'></label>";
+       }
        info += " <span>Client " + val["host"] + "</span>";
        info += " <span id='stats-" + val["client-id"] + "' />";
        info += " <div id='" + volume_id + "' />";
@@ -228,9 +232,11 @@ update_player_clients : function () {
      $("#cliententries .client-enable").button({
        icons: { primary: "aurena icon-volume-on" }, text: false
      });
-     $("#cliententries .client-record").button({
-         icons: { primary: "aurena icon-microphone-on" }, text: false
-     });
+     if (aurena.showRec) {
+        $("#cliententries .client-record").button({
+            icons: { primary: "aurena icon-microphone-on" }, text: false
+        });
+     }
      $.each(clients, function(key, val) {
        var client_id = val["client-id"];
        var enable_id = "enable-" + client_id;
@@ -248,7 +254,9 @@ update_player_clients : function () {
        $('#volumeval-' + client_id).text(Math.round(val["volume"] * 100).toString() + '%');
        aurena.set_client_enable (client_id, val["enabled"], val["record-enabled"]);
        $("#" + enable_id).change(function(cid) { return function () { send_enable_val (cid) } }(client_id));
-       $("#" + rec_enable_id).change(function(cid) { return function () { send_enable_val (cid) } }(client_id));
+       if (aurena.showRec) {
+         $("#" + rec_enable_id).change(function(cid) { return function () { send_enable_val (cid) } }(client_id));
+       }
      });
   });
 },
@@ -310,7 +318,7 @@ jumpToTrack : function () {
   }
   $("#jumptotrackid").val("");
 },
-init : function() {
+init : function(showRec = false) {
   aurena.sendingVol = false;
   aurena.volChange = false;
 
@@ -318,6 +326,7 @@ init : function() {
   aurena.slide_update = false;
   aurena.paused = true;
   aurena.cur_media = 0;
+  aurena.showRec = showRec;
 
   $("#mastervolslider").slider({
      animate: true,
@@ -333,12 +342,16 @@ init : function() {
   $("#pause").button().click(function() { aurena.pause() });
   $("#next").button().click(function() { aurena.next() });
   $("#jumptrackform").submit(function(e) { aurena.jumpToTrack(); e.preventDefault(); return false; });
-  $("#frob").button().click(function() { aurena.send_control("calibration") });
+  $("#calibrate").button().click(function() { aurena.send_control("calibration") });
   aurena.websocket_listener();
 }
 
 };
 
 $(document).ready(function() {
-  aurena.init();
+  if ($('#calibrate').length)
+    showRec = true;
+  else
+    showRec = false;
+  aurena.init(showRec);
 });

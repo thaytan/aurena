@@ -95,7 +95,7 @@ on_eos_msg (AurClient * client, G_GNUC_UNUSED GstMessage * msg)
 {
   SoupMessage *soup_msg;
   /* FIXME: Next song should all be handled server side */
-  char *url = g_strdup_printf ("http://%s:%u/control/next",
+  char *url = g_strdup_printf ("http://%s:%u/control/eos",
       client->connected_server, client->connected_port);
 
   g_print ("Got EOS message\n");

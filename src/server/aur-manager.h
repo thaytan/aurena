@@ -68,6 +68,7 @@ struct _AurManager
 
   guint ping_timeout;
   guint calibration_timeout;
+  gboolean in_calibration;
 
   AurReceiver *receiver;
 

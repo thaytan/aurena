@@ -73,7 +73,8 @@ enum _AurControlEvent
   AUR_CONTROL_CLIENT_SETTING,
   AUR_CONTROL_SEEK,
   AUR_CONTROL_LANGUAGE,
-  AUR_CONTROL_CALIBRATION
+  AUR_CONTROL_CALIBRATION,
+  AUR_CONTROL_EOS
 };
 
 /* *INDENT-OFF* */
@@ -91,7 +92,8 @@ static const struct
   { "setclient", AUR_CONTROL_CLIENT_SETTING},
   { "seek", AUR_CONTROL_SEEK},
   { "language", AUR_CONTROL_LANGUAGE},
-  { "calibration", AUR_CONTROL_CALIBRATION}
+  { "calibration", AUR_CONTROL_CALIBRATION},
+  { "eos", AUR_CONTROL_EOS}
 };
 /* *INDENT-ON* */
 
@@ -707,6 +709,12 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
     post_params = soup_form_decode (msg->request_body->data);
 
   switch (event_type) {
+    case AUR_CONTROL_EOS:
+      // Ignore EOS when we're playing calibration sounds
+      if (manager->in_calibration)
+        break;
+      // Otherwise, treat it as a NEXT and fall through
+      // fall through
     case AUR_CONTROL_NEXT:{
       const gchar *id_str = find_param_str ("id", query, post_params);
       guint resource_id;
@@ -744,16 +752,19 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
         resource_id = CLAMP (resource_id, 1, get_playlist_len (manager));
       }
       manager->paused = FALSE;
+      manager->in_calibration = FALSE;
       aur_manager_play_resource (manager, resource_id);
       break;
     }
     case AUR_CONTROL_PAUSE:{
+      manager->in_calibration = FALSE;
       if (!manager->paused)
         aur_manager_send_pause (manager);
       manager->paused = TRUE;
       break;
     }
     case AUR_CONTROL_PLAY:{
+      manager->in_calibration = FALSE;
       if (manager->paused) {
         if (manager->current_resource == 0) {
           guint resource_id =
@@ -1416,6 +1427,7 @@ aur_manager_do_calibration (AurManager * manager)
   gst_object_unref (clock);
 
   g_object_get (manager->config, "aur-port", &port, NULL);
+  manager->in_calibration = TRUE;
 
   for (cur = manager->clients; cur != NULL; cur = g_list_next (cur)) {
     AurClientProxy *proxy = AUR_CLIENT_PROXY (cur->data);

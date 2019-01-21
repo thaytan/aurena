@@ -54,6 +54,8 @@ struct _AurManager
   GPtrArray *playlist;
   gboolean paused;
   guint current_resource;
+  guint track_seqid;
+
   GFile *custom_file;
   gchar *language;
 

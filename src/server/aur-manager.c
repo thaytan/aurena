@@ -709,10 +709,22 @@ control_callback (G_GNUC_UNUSED SoupServer * soup, SoupMessage * msg,
     post_params = soup_form_decode (msg->request_body->data);
 
   switch (event_type) {
-    case AUR_CONTROL_EOS:
+    case AUR_CONTROL_EOS: {
+      const gchar *seqid_str = find_param_str ("track-seqid", query, post_params);
+      guint track_seqid;
+
       // Ignore EOS when we're playing calibration sounds
       if (manager->in_calibration)
         break;
+      // If the EOS has no valid track SeqID or it's not the
+      // current track, then ignore it - it's a 2nd or later client EOS'ing
+      if (seqid_str == NULL || !seqid_str[0]
+          || !sscanf (seqid_str, "%u", &track_seqid) ||
+          track_seqid != manager->track_seqid) {
+          GST_LOG_OBJECT (manager, "Ignoring old EOS with seqid %u", track_seqid);
+          break;
+      }
+    }
       // Otherwise, treat it as a NEXT and fall through
       // fall through
     case AUR_CONTROL_NEXT:{
@@ -1141,6 +1153,7 @@ aur_manager_get_resource_cb (G_GNUC_UNUSED AurServer * server,
 static void
 aur_manager_play_resource (AurManager * manager, guint resource_id)
 {
+  manager->track_seqid++;
   manager->current_resource = resource_id;
   manager->base_time = GST_CLOCK_TIME_NONE;
   manager->position = 0;
@@ -1358,6 +1371,7 @@ manager_make_set_media_event (AurManager * manager, guint resource_id)
 
   msg = gst_structure_new ("json", "msg-type", G_TYPE_STRING, "set-media",
       "resource-id", G_TYPE_INT64, (gint64) resource_id,
+      "track-seqid", G_TYPE_INT64, manager->track_seqid,
 #if 1
       "resource-protocol", G_TYPE_STRING, "http",
 #else

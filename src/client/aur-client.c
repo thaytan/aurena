@@ -560,27 +560,31 @@ handle_player_set_media_message (AurClient * client, GstStructure * s)
 {
   const gchar *protocol, *path, *language;
   int port;
+  gint64 track_seqid;
   gint64 tmp;
 
   protocol = gst_structure_get_string (s, "resource-protocol");
   path = gst_structure_get_string (s, "resource-path");
 
   if (protocol == NULL || path == NULL)
-    return;                     /* Invalid message */
+    goto invalid_msg;
 
   if (!aur_json_structure_get_int (s, "resource-port", &port))
-    return;
+    goto invalid_msg;
+
+  if (!aur_json_structure_get_int64 (s, "track-seqid", &track_seqid))
+    goto invalid_msg;
 
   if (!aur_json_structure_get_int64 (s, "base-time", &tmp))
-    return;                     /* Invalid message */
+    goto invalid_msg;
   client->base_time = (GstClockTime) (tmp);
 
   if (!aur_json_structure_get_int64 (s, "position", &tmp))
-    return;                     /* Invalid message */
+    goto invalid_msg;
   client->position = (GstClockTime) (tmp);
 
   if (!aur_json_structure_get_boolean (s, "paused", &client->paused))
-    return;
+    goto invalid_msg;
 
   g_free (client->language);
   language = gst_structure_get_string (s, "language");
@@ -589,12 +593,18 @@ handle_player_set_media_message (AurClient * client, GstStructure * s)
   g_free (client->uri);
   client->uri = g_strdup_printf ("%s://%s:%d%s", protocol,
       client->connected_server, port, path);
+  client->track_seqid = (guint) track_seqid;
 
   if (client->enabled)
     set_media (client);
 
   g_object_notify (G_OBJECT (client), "language");
   g_object_notify (G_OBJECT (client), "media-uri");
+  return;
+
+invalid_msg:
+  GST_ERROR_OBJECT (client, "Invalid set-media message from server");
+  return;
 }
 
 static void
@@ -1788,6 +1798,22 @@ aur_client_next (AurClient * client, guint id)
     id_str = g_strdup_printf ("%u", id);
   aur_client_set_media (client, id_str);
   g_free (id_str);
+}
+
+void
+aur_client_eos (AurClient * client)
+{
+  SoupMessage *soup_msg;
+  gchar seqid_str[G_ASCII_DTOSTR_BUF_SIZE];
+  gchar *uri = g_strdup_printf ("http://%s:%u/control/eos",
+      client->connected_server, client->connected_port);
+
+  g_ascii_dtostr (seqid_str, sizeof (seqid_str), client->track_seqid);
+
+  soup_msg = soup_form_request_new ("POST", uri, "track-seqid", seqid_str, NULL);
+
+  aur_client_submit_msg (client, soup_msg);
+  g_free (uri);
 }
 
 void

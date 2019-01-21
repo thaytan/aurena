@@ -67,6 +67,7 @@ struct _AurClient
   gdouble volume;
   GArray *player_info;
 
+  guint track_seqid;
   gboolean enabled;
   gboolean paused;
   GstClockTime base_time;
@@ -120,6 +121,7 @@ gboolean aur_client_is_enabled (AurClient * client);
 gboolean aur_client_is_playing (AurClient * client);
 void aur_client_set_media (AurClient * client, const gchar * id);
 void aur_client_next (AurClient * client, guint id);
+void aur_client_eos (AurClient * client);
 void aur_client_play (AurClient * client);
 void aur_client_pause (AurClient * client);
 void aur_client_seek (AurClient * client, GstClockTime position);

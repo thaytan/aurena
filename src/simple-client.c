@@ -93,16 +93,8 @@ player_disposed (gpointer user_data,
 static void
 on_eos_msg (AurClient * client, G_GNUC_UNUSED GstMessage * msg)
 {
-  SoupMessage *soup_msg;
-  /* FIXME: Next song should all be handled server side */
-  char *url = g_strdup_printf ("http://%s:%u/control/eos",
-      client->connected_server, client->connected_port);
-
   g_print ("Got EOS message\n");
-
-  soup_msg = soup_message_new ("GET", url);
-  soup_session_queue_message (client->soup, soup_msg, NULL, NULL);
-  g_free (url);
+  aur_client_eos (client);
 }
 
 static void

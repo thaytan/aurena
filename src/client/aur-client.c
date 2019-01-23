@@ -820,7 +820,7 @@ handle_client_record_message (AurClient * client, GstStructure * s)
 
       pipe_str =
           g_strdup_printf
-          ("%s buffer-time=60000 ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,rate=48000 ! opusenc frame-size=10 ! rtspsink ntp-time-source=3 name=rtspsink",
+          ("%s buffer-time=60000 ! audioconvert ! audioresample ! audio/x-raw,format=S16LE,rate=48000 ! opusenc frame-size=10 ! rtspclientsink ntp-time-source=3 name=rtspsink",
           audiosrc);
       client->record_pipe = gst_parse_launch (pipe_str, &error);
       g_free (pipe_str);

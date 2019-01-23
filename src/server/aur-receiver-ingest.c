@@ -314,7 +314,8 @@ construct_media (GstRTSPMediaFactory * mf, const GstRTSPUrl * url)
 
   /* create a new empty media */
   rtspmedia =
-      g_object_new (AUR_TYPE_RECEIVER_INGEST_MEDIA, "element", element, NULL);
+      g_object_new (AUR_TYPE_RECEIVER_INGEST_MEDIA, "element", element,
+             "transport-mode", GST_RTSP_TRANSPORT_MODE_RECORD, NULL);
 
   gst_rtsp_media_collect_streams (rtspmedia);
 

@@ -26,6 +26,8 @@ G_BEGIN_DECLS
 
 #define AUR_TYPE_RECEIVER_PROCESSOR (aur_receiver_processor_get_type ())
 
+#define AUR_RECEIVER_PROCESSOR_MAX_CHANNELS 16
+
 typedef struct _AurReceiverProcessorClass AurReceiverProcessorClass;
 typedef struct _AurReceiverProcessorChannel AurReceiverProcessorChannel;
 typedef struct _AurReceiverProcessorPrivate AurReceiverProcessorPrivate;
@@ -35,7 +37,7 @@ struct _AurReceiverProcessor
   GObject parent;
   AurReceiverProcessorPrivate *priv;
 
-  AurReceiverProcessorChannel *channels[8];
+  AurReceiverProcessorChannel *channels[AUR_RECEIVER_PROCESSOR_MAX_CHANNELS];
   gint n_inuse;
   GstElement *pipeline;
   GstElement *filesink;

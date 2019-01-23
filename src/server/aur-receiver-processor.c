@@ -112,9 +112,7 @@ aur_receiver_processor_init (AurReceiverProcessor * processor)
 
   processor->priv = aur_receiver_processor_get_instance_private (processor);
 
-  /* Can't actually handle anything other than 8 mics, despite the
-   * configurable-looking #define */
-  g_assert (NB_MICROPHONES == 8);
+  g_assert (NB_MICROPHONES <= AUR_RECEIVER_PROCESSOR_MAX_CHANNELS);
 
   processor->pipeline =
       gst_parse_launch

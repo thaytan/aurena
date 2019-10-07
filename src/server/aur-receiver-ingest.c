@@ -414,7 +414,7 @@ aur_receiver_ingest_media_dispose (GObject * object)
 static gboolean
 custom_setup_rtpbin (GstRTSPMedia * media G_GNUC_UNUSED, GstElement * rtpbin)
 {
-  g_object_set (rtpbin, "ntp-time-source", 3, NULL);
+  g_object_set (rtpbin, "ntp-time-source", 3, "buffer-mode", 4, "ntp-sync", TRUE, NULL);
   return TRUE;
 }
 

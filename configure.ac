@@ -1,5 +1,5 @@
 AC_PREREQ([2.68])
-AC_INIT([aurena], [0.9], [thaytan@noraisin.net])
+AC_INIT([Aurena], [0.9], [thaytan@noraisin.net], [aurena], [https://aurena.noraisin.net])
 
 AM_INIT_AUTOMAKE([-Wno-portability 1.11 no-dist-gzip dist-bzip2 dist-xz tar-ustar subdir-objects])
 
@@ -65,11 +65,24 @@ AC_SUBST([GST_LIBS])
 EXTRA_CFLAGS="-Wall -Wextra -Wno-cast-function-type"
 AC_SUBST([EXTRA_CFLAGS])
 
+dnl plugin configuration
+dnl AC_DEFINE(PACKAGE_VERSION, $PACKAGE_VERSION, [Aurena package version])
+AC_DEFINE(PACKAGE, "Aurena", [The name of the package],)
+AC_DEFINE(GST_LICENSE, "GPL", ["ODAS plugin license"],)
+AC_DEFINE(GST_PACKAGE_NAME, "Aurena", [""])
+
+plugindir="\$(libdir)/gstreamer-1.0"
+AC_SUBST(plugindir)
+
+GST_PLUGIN_LDFLAGS='-module -avoid-version -export-symbols-regex [_]*\(gst_\|Gst\|GST_\).*'
+AC_SUBST(GST_PLUGIN_LDFLAGS)
+
 AC_CONFIG_FILES([
   Makefile
   src/Makefile
   src/common/Makefile
   src/client/Makefile
+  src/plugins/Makefile
   src/server/Makefile
   data/Makefile
   data/htdocs/Makefile

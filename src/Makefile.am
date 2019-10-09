@@ -1,4 +1,4 @@
-SUBDIRS=common client
+SUBDIRS=common client plugins
 bin_PROGRAMS = aurena-simple-client
 
 if BUILD_AUR_SERVER

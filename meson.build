@@ -1,5 +1,5 @@
 project('aurena', 'c',
-  default_options: 'c_std=c99', version : '1.0.0',
+  default_options: 'c_std=gnu99', version : '1.0.0',
   meson_version : '>= 0.34.0')
 
 gst_req = '>= 1.0.0'
@@ -43,6 +43,9 @@ config.set('GST_LICENSE', '"GPL"')
 
 add_global_arguments('-DHAVE_CONFIG_H', language : 'c')
 aurena_inc = include_directories(['.', 'src'])
+
+odas_proj = subproject('odas')
+odas_dep = odas_proj.get_variable('odas_dep')
 
 subdir('src')
 

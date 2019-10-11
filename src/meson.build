@@ -1,6 +1,7 @@
 subdir('common')
 subdir('server')
 subdir('client')
+subdir('plugins')
 
 executable(
         'aurena-server',

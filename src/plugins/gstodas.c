@@ -78,8 +78,10 @@ enum
 enum
 {
   PROP_0,
-  PROP_SILENT
+  PROP_CONFIG_FILE
 };
+
+#define DEFAULT_PROP_CONFIG_FILE NULL
 
 /* the capabilities of the inputs and outputs.
  *
@@ -88,13 +90,13 @@ enum
 static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS (GST_AUDIO_CAPS_MAKE(GST_AUDIO_NE(S16)))
+    GST_STATIC_CAPS (GST_AUDIO_CAPS_MAKE (GST_AUDIO_NE (S16)))
     );
 
 static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS (GST_AUDIO_CAPS_MAKE(GST_AUDIO_NE(S16)))
+    GST_STATIC_CAPS (GST_AUDIO_CAPS_MAKE (GST_AUDIO_NE (S16)))
     );
 
 #define gst_odas_parent_class parent_class
@@ -105,8 +107,10 @@ static void gst_odas_set_property (GObject * object, guint prop_id,
 static void gst_odas_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-static gboolean gst_odas_sink_event (GstPad * pad, GstObject * parent, GstEvent * event);
-static GstFlowReturn gst_odas_chain (GstPad * pad, GstObject * parent, GstBuffer * buf);
+static gboolean gst_odas_sink_event (GstPad * pad, GstObject * parent,
+    GstEvent * event);
+static GstFlowReturn gst_odas_chain (GstPad * pad, GstObject * parent,
+    GstBuffer * buf);
 
 /* GObject vmethod implementations */
 
@@ -123,15 +127,15 @@ gst_odas_class_init (GstODASClass * klass)
   gobject_class->set_property = gst_odas_set_property;
   gobject_class->get_property = gst_odas_get_property;
 
-  g_object_class_install_property (gobject_class, PROP_SILENT,
-      g_param_spec_boolean ("silent", "Silent", "Produce verbose output ?",
-          FALSE, G_PARAM_READWRITE));
+  g_object_class_install_property (gobject_class, PROP_CONFIG_FILE,
+      g_param_spec_string ("config-file", "Configuration File",
+          "Path to configuration file", DEFAULT_PROP_CONFIG_FILE,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  gst_element_class_set_details_simple(gstelement_class,
-    "ODAS",
-    "FIXME:Generic",
-    "FIXME:Generic Template Element",
-    "Jan Schmidt <thaytan@noraisin.net>");
+  gst_element_class_set_details_simple (gstelement_class,
+      "ODAS",
+      "Filter/Analyzer/Audio",
+      "ODAS audio analysis filter", "Jan Schmidt <thaytan@noraisin.net>");
 
   gst_element_class_add_pad_template (gstelement_class,
       gst_static_pad_template_get (&src_factory));
@@ -147,30 +151,33 @@ gst_odas_class_init (GstODASClass * klass)
 static void
 gst_odas_init (GstODAS * filter)
 {
+  filter->config_file = DEFAULT_PROP_CONFIG_FILE;
+
   filter->sinkpad = gst_pad_new_from_static_template (&sink_factory, "sink");
   gst_pad_set_event_function (filter->sinkpad,
-                              GST_DEBUG_FUNCPTR(gst_odas_sink_event));
+      GST_DEBUG_FUNCPTR (gst_odas_sink_event));
   gst_pad_set_chain_function (filter->sinkpad,
-                              GST_DEBUG_FUNCPTR(gst_odas_chain));
+      GST_DEBUG_FUNCPTR (gst_odas_chain));
   GST_PAD_SET_PROXY_CAPS (filter->sinkpad);
   gst_element_add_pad (GST_ELEMENT (filter), filter->sinkpad);
 
   filter->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
   GST_PAD_SET_PROXY_CAPS (filter->srcpad);
   gst_element_add_pad (GST_ELEMENT (filter), filter->srcpad);
-
-  filter->silent = FALSE;
 }
 
 static void
 gst_odas_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstODAS *filter = GST_ODAS (object);
+  GstODAS *odas = GST_ODAS (object);
 
   switch (prop_id) {
-    case PROP_SILENT:
-      filter->silent = g_value_get_boolean (value);
+    case PROP_CONFIG_FILE:
+      GST_OBJECT_LOCK (odas);
+      g_free (odas->config_file);
+      odas->config_file = g_value_dup_string (value);
+      GST_OBJECT_UNLOCK (odas);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -182,11 +189,13 @@ static void
 gst_odas_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  GstODAS *filter = GST_ODAS (object);
+  GstODAS *odas = GST_ODAS (object);
 
   switch (prop_id) {
-    case PROP_SILENT:
-      g_value_set_boolean (value, filter->silent);
+    case PROP_CONFIG_FILE:
+      GST_OBJECT_LOCK (odas);
+      g_value_set_string (value, odas->config_file);
+      GST_OBJECT_UNLOCK (odas);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -211,7 +220,7 @@ gst_odas_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
   switch (GST_EVENT_TYPE (event)) {
     case GST_EVENT_CAPS:
     {
-      GstCaps * caps;
+      GstCaps *caps;
 
       gst_event_parse_caps (event, &caps);
       /* do something with the caps */
@@ -233,15 +242,29 @@ gst_odas_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
 static GstFlowReturn
 gst_odas_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
 {
-  GstODAS *filter;
+  GstODAS *odas = GST_ODAS (parent);
 
-  filter = GST_ODAS (parent);
+  if (odas->odas_initted == FALSE) {
+    GST_OBJECT_LOCK (odas);
+    if (odas->config_file == NULL) {
+      GST_OBJECT_UNLOCK (odas);
+      goto no_config_file;
+    }
+    odas_configs_construct (&odas->odas_cfgs, odas->config_file);
+    GST_OBJECT_UNLOCK (odas);
 
-  if (filter->silent == FALSE)
-    g_print ("I'm plugged, therefore I'm in.\n");
+    odas_objects_construct (&odas->odas_objs, &odas->odas_cfgs);
+    odas->odas_initted = TRUE;
+  }
 
   /* just push out the incoming buffer without touching it */
-  return gst_pad_push (filter->srcpad, buf);
+  return gst_pad_push (odas->srcpad, buf);
+
+no_config_file:
+  gst_buffer_unref (buf);
+  GST_ELEMENT_ERROR (odas, STREAM, DECODE, ("No configuration file provided"),
+      (NULL));
+  return GST_FLOW_ERROR;
 }
 
 static gboolean
@@ -251,13 +274,8 @@ odas_init (GstPlugin * odas)
   return gst_element_register (odas, "odas", GST_RANK_NONE, GST_TYPE_ODAS);
 }
 
-GST_PLUGIN_DEFINE (
-    GST_VERSION_MAJOR,
+GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
     odas,
     "Aurena ODAS plugin",
-    odas_init,
-    PACKAGE_VERSION,
-    GST_LICENSE,
-    PACKAGE_NAME, PACKAGE_URL
-)
+    odas_init, PACKAGE_VERSION, GST_LICENSE, PACKAGE_NAME, PACKAGE_URL)

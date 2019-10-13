@@ -48,6 +48,9 @@
 
 #include <gst/gst.h>
 
+#include "odas-configs.h"
+#include "odas-objects.h"
+
 G_BEGIN_DECLS
 
 /* #defines don't like whitespacey bits */
@@ -71,7 +74,12 @@ struct _GstODAS
 
   GstPad *sinkpad, *srcpad;
 
-  gboolean silent;
+  gchar *config_file;
+
+  gboolean odas_initted;
+
+  odas_configs odas_cfgs;
+  odas_objects odas_objs;
 };
 
 struct _GstODASClass 

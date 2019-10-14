@@ -46,8 +46,12 @@ aurena_inc = include_directories(['.', 'src'])
 
 odas_proj = subproject('odas')
 odas_dep = odas_proj.get_variable('odas_dep')
+
 libconfig_dep = dependency('libconfig')
 libm_dep = cc.find_library('m', required : false)
+
+quiet_proj = subproject('quiet')
+quiet_dep = quiet_proj.get_variable('quiet_dep')
 
 subdir('src')
 

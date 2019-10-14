@@ -1,0 +1,4 @@
+[wrap-git]
+directory = quiet
+url = https://github.com/thaytan/quiet.git
+revision = master

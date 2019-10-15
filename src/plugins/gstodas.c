@@ -83,10 +83,6 @@ enum
 
 #define DEFAULT_PROP_CONFIG_FILE NULL
 
-/* the capabilities of the inputs and outputs.
- *
- * describe the real formats here.
- */
 static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
@@ -135,7 +131,8 @@ gst_odas_class_init (GstODASClass * klass)
   gst_element_class_set_details_simple (gstelement_class,
       "ODAS",
       "Filter/Analyzer/Audio",
-      "ODAS audio analysis filter", "Jan Schmidt <thaytan@noraisin.net>");
+      "ODAS audio analysis filter",
+      "Jan Schmidt <thaytan@noraisin.net>");
 
   gst_element_class_add_pad_template (gstelement_class,
       gst_static_pad_template_get (&src_factory));

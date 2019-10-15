@@ -49,6 +49,9 @@
 #include <gst/gst.h>
 #include <gst/audio/gstaudiodecoder.h>
 
+#include "quiet.h"
+#include "quiet/common.h"
+
 G_BEGIN_DECLS
 
 /* #defines don't like whitespacey bits */
@@ -72,6 +75,10 @@ struct _GstQuietEnc
 
   gchar *profiles_path;
   gchar *profile;
+
+  gint sample_rate;
+  quiet_encoder_options *quietopt;
+  quiet_encoder *quiet;
 };
 
 struct _GstQuietEncClass 

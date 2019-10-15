@@ -103,7 +103,8 @@ static gboolean quiet_enc_stop (GstAudioDecoder * dec);
 static GstFlowReturn quiet_enc_handle_frame (GstAudioDecoder * dec,
     GstBuffer * buffer);
 static void quiet_enc_flush (GstAudioDecoder * dec, gboolean hard);
-static gboolean quiet_enc_set_format (GstAudioDecoder * dec, GstCaps * caps);
+static gboolean quiet_enc_set_format (GstAudioDecoder *base, GstCaps * caps);
+static GstCaps *quiet_sink_getcaps (GstAudioDecoder *base, GstCaps * filter);
 
 static void
 gst_quiet_enc_class_init (GstQuietEncClass * klass)
@@ -118,11 +119,11 @@ gst_quiet_enc_class_init (GstQuietEncClass * klass)
   g_object_class_install_property (G_OBJECT_CLASS (klass), PROP_PROFILES,
       g_param_spec_string ("profiles-file", "profiles",
           "Path to profiles.json file", DEFAULT_PROFILES_PATH,
-          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
+          G_PARAM_READABLE | G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
   g_object_class_install_property (G_OBJECT_CLASS (klass), PROP_PROFILE,
       g_param_spec_string ("profile", "profile",
           "Modem profile to use", DEFAULT_PROFILE,
-          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
+          G_PARAM_READABLE | G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
 
   gst_element_class_set_details_simple (gstelement_class,
       "QuietEnc",
@@ -134,18 +135,19 @@ gst_quiet_enc_class_init (GstQuietEncClass * klass)
   gst_element_class_add_pad_template (gstelement_class,
       gst_static_pad_template_get (&sink_factory));
 
-  base_class->start = GST_DEBUG_FUNCPTR (quiet_enc_start);
-  base_class->stop = GST_DEBUG_FUNCPTR (quiet_enc_stop);
-  base_class->set_format = GST_DEBUG_FUNCPTR (quiet_enc_set_format);
-  base_class->handle_frame = GST_DEBUG_FUNCPTR (quiet_enc_handle_frame);
-  base_class->flush = GST_DEBUG_FUNCPTR (quiet_enc_flush);
+  base_class->start = quiet_enc_start;
+  base_class->stop = quiet_enc_stop;
+  base_class->set_format = quiet_enc_set_format;
+  base_class->handle_frame = quiet_enc_handle_frame;
+  base_class->flush = quiet_enc_flush;
+  base_class->getcaps = quiet_sink_getcaps;
+
 }
 
 static void
 gst_quiet_enc_init (GstQuietEnc * enc)
 {
-  gst_audio_decoder_set_use_default_pad_acceptcaps (GST_AUDIO_DECODER_CAST
-      (enc), TRUE);
+  gst_audio_decoder_set_use_default_pad_acceptcaps (GST_AUDIO_DECODER_CAST(enc), TRUE);
   GST_PAD_SET_ACCEPT_TEMPLATE (GST_AUDIO_DECODER_SINK_PAD (enc));
 
   enc->profiles_path = g_strdup (DEFAULT_PROFILES_PATH);
@@ -201,21 +203,92 @@ gst_quiet_enc_get_property (GObject * object, guint prop_id,
 }
 
 static gboolean
-quiet_enc_start (GstAudioDecoder * dec)
+quiet_enc_start (GstAudioDecoder *base)
 {
+  GstQuietEnc *enc = GST_QUIETENC (base);
+
+  GST_OBJECT_LOCK (base);
+  enc->quietopt = quiet_encoder_profile_filename(enc->profiles_path, enc->profile);
+  GST_OBJECT_UNLOCK (base);
+
+  if (enc->quietopt == NULL) {
+    GST_ELEMENT_ERROR (GST_ELEMENT (base), STREAM, ENCODE,
+        ("Could not load modem profile"), (NULL));
+    return FALSE;
+  }
+
   return TRUE;
 }
 
 static gboolean
-quiet_enc_stop (GstAudioDecoder * dec)
+quiet_enc_stop (GstAudioDecoder *base)
 {
+  GstQuietEnc *enc = GST_QUIETENC (base);
+
+  if (enc->quiet) {
+    quiet_encoder_destroy(enc->quiet);
+    enc->quiet = NULL;
+  }
+
+  if (enc->quietopt) {
+    free (enc->quietopt);
+    enc->quietopt = NULL;
+  }
+
   return TRUE;
 }
 
 static GstFlowReturn
-quiet_enc_handle_frame (GstAudioDecoder * dec, GstBuffer * buffer)
+quiet_enc_handle_frame (GstAudioDecoder *base, GstBuffer * buffer)
 {
-  return GST_FLOW_OK;
+  GstQuietEnc *enc = GST_QUIETENC (base);
+  GstFlowReturn result;
+
+  GstBuffer *cur = NULL, *outbuf = NULL;
+  GstMapInfo map, outmap;
+  size_t frame_len, avail;
+  size_t samplebuf_len = 16384;
+  size_t i;
+
+  /* Draining */
+  if (G_UNLIKELY (!buffer))
+   return GST_FLOW_OK;
+
+  gst_buffer_map (buffer, &map, GST_MAP_READ);
+
+  frame_len = quiet_encoder_get_frame_len(enc->quiet);
+  avail = map.size;
+
+  for (i = 0; i < avail; i += frame_len) {
+    size_t remain = avail-i; 
+    frame_len = (frame_len > remain) ? remain : frame_len;
+    quiet_encoder_send(enc->quiet, map.data + i, frame_len);
+  }
+  gst_buffer_unmap (buffer, &map);
+
+  ssize_t written = samplebuf_len;
+  while (written == samplebuf_len) {
+    cur = gst_audio_decoder_allocate_output_buffer (base, samplebuf_len * sizeof(quiet_sample_t));
+    gst_buffer_map (cur, &outmap, GST_MAP_WRITE);
+    written = quiet_encoder_emit(enc->quiet, (quiet_sample_t *) outmap.data, samplebuf_len);
+    gst_buffer_unmap (cur, &outmap);
+
+    if (written > 0) {
+      gst_buffer_set_size (cur, written * sizeof(quiet_sample_t));  
+      if (outbuf)
+        outbuf = gst_buffer_append (outbuf, cur);
+      else
+        outbuf = cur;
+    }
+    else {
+      gst_buffer_unref (cur);
+    }
+  }
+  if (outbuf)
+    gst_buffer_copy_into (outbuf, buffer, GST_BUFFER_COPY_METADATA, 0, -1);
+  result = gst_audio_decoder_finish_frame (GST_AUDIO_DECODER (base), outbuf, 1);
+
+  return result;
 }
 
 static void
@@ -224,9 +297,34 @@ quiet_enc_flush (GstAudioDecoder * dec, gboolean hard)
 }
 
 static gboolean
-quiet_enc_set_format (GstAudioDecoder * dec, GstCaps * caps)
+quiet_enc_set_format (GstAudioDecoder *base, GstCaps * caps)
 {
+  GstQuietEnc *enc = GST_QUIETENC (base);
+  GstAudioInfo info;
+
+  /* (Re)Create encoder */
+  if (enc->quiet) {
+    free (enc->quiet);
+    enc->quiet = NULL;
+  }
+  enc->quiet = quiet_encoder_create(enc->quietopt, SAMPLE_RATE);
+  if (enc->quiet == NULL) {
+    GST_ELEMENT_ERROR (GST_ELEMENT (base), STREAM, ENCODE,
+        ("Failed to create Quiet encoder"), (NULL));
+    return FALSE;
+  }
+
+  gst_audio_info_set_format (&info, GST_AUDIO_FORMAT_F32, SAMPLE_RATE, 1, NULL);
+  gst_audio_decoder_set_output_format (base, &info);
+
   return TRUE;
+}
+
+static GstCaps *quiet_sink_getcaps (GstAudioDecoder *base, GstCaps *filter)
+{
+  GstCaps *caps = gst_pad_get_pad_template_caps (base->sinkpad);
+
+  return caps;
 }
 
 gboolean

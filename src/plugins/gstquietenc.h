@@ -76,7 +76,6 @@ struct _GstQuietEnc
   gchar *profiles_path;
   gchar *profile;
 
-  gint sample_rate;
   quiet_encoder_options *quietopt;
   quiet_encoder *quiet;
 };

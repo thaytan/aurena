@@ -75,6 +75,9 @@ struct _GstQuietDec
 
   gchar *profiles_path;
   gchar *profile;
+
+  quiet_decoder_options *quietopt;
+  quiet_decoder *quiet;
 };
 
 struct _GstQuietDecClass 

@@ -40,6 +40,11 @@ config.set('PACKAGE_VERSION', '"@0@"'.format(meson.project_version()))
 config.set('PACKAGE_NAME', '"Aurena"')
 config.set('PACKAGE_URL', '"https://aurena.noraisin.net/"')
 config.set('GST_LICENSE', '"GPL"')
+if avahi_client_dep.found() and avahi_glib_dep.found()
+  config.set('HAVE_AVAHI', 1)
+else
+  config.set('HAVE_AVAHI', 0)
+endif
 
 add_global_arguments('-DHAVE_CONFIG_H', language : 'c')
 aurena_inc = include_directories(['.', 'src'])

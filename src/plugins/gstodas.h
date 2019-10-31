@@ -76,7 +76,7 @@ struct _GstODAS
 
   gchar *config_file;
 
-  gboolean odas_initted;
+  gboolean odas_ready;
 
   odas_configs odas_cfgs;
   odas_objects odas_objs;

@@ -244,7 +244,7 @@ odas_objects_construct (odas_objects * objs, const odas_configs * cfgs)
 }
 
 void
-objects_destroy (odas_objects * objs)
+odas_objects_destroy (odas_objects * objs)
 {
   src_hops_destroy (objs->src_hops_mics_object);
 

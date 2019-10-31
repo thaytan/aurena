@@ -311,10 +311,12 @@ gst_quiet_dec_handle_frame (GstAudioEncoder *base, GstBuffer *in_buf)
   gst_buffer_unmap (in_buf, &map);
 
   result = recv_all(dec);
+#if 0
   if (result == GST_FLOW_OK) {
     quiet_decoder_flush(dec->quiet);
     result = recv_all(dec);
   }
+#endif
 
   return result;
 }

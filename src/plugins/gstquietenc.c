@@ -213,7 +213,7 @@ quiet_enc_start (GstAudioDecoder *base)
 
   if (enc->quietopt == NULL) {
     GST_ELEMENT_ERROR (GST_ELEMENT (base), STREAM, ENCODE,
-        ("Could not load modem profile"), (NULL));
+        ("Could not load modem profile '%s'", enc->profile), (NULL));
     return FALSE;
   }
 
@@ -250,6 +250,9 @@ quiet_enc_handle_frame (GstAudioDecoder *base, GstBuffer * buffer)
   size_t samplebuf_len = 16384;
   size_t i;
 
+  if (enc->quiet == NULL)
+    goto no_format;
+
   /* Draining */
   if (G_UNLIKELY (!buffer))
    return GST_FLOW_OK;
@@ -262,6 +265,7 @@ quiet_enc_handle_frame (GstAudioDecoder *base, GstBuffer * buffer)
   for (i = 0; i < avail; i += frame_len) {
     size_t remain = avail-i; 
     frame_len = (frame_len > remain) ? remain : frame_len;
+    GST_LOG_OBJECT (enc, "Sending %zu bytes to Quiet encoder", frame_len);
     quiet_encoder_send(enc->quiet, map.data + i, frame_len);
   }
   gst_buffer_unmap (buffer, &map);
@@ -274,6 +278,7 @@ quiet_enc_handle_frame (GstAudioDecoder *base, GstBuffer * buffer)
     gst_buffer_unmap (cur, &outmap);
 
     if (written > 0) {
+      GST_LOG_OBJECT (enc, "Read %zu samples from Quiet encoder", written);
       gst_buffer_set_size (cur, written * sizeof(quiet_sample_t));  
       if (outbuf)
         outbuf = gst_buffer_append (outbuf, cur);
@@ -289,6 +294,10 @@ quiet_enc_handle_frame (GstAudioDecoder *base, GstBuffer * buffer)
   result = gst_audio_decoder_finish_frame (GST_AUDIO_DECODER (base), outbuf, 1);
 
   return result;
+no_format:
+  GST_ELEMENT_ERROR (GST_ELEMENT (base), STREAM, ENCODE,
+      ("Buffer received before input caps"), (NULL));
+  return GST_FLOW_ERROR;
 }
 
 static void
@@ -301,6 +310,7 @@ quiet_enc_set_format (GstAudioDecoder *base, GstCaps * caps)
 {
   GstQuietEnc *enc = GST_QUIETENC (base);
   GstAudioInfo info;
+  GstAudioChannelPosition chanpos = GST_AUDIO_CHANNEL_POSITION_FRONT_LEFT;
 
   /* (Re)Create encoder */
   if (enc->quiet) {
@@ -314,7 +324,7 @@ quiet_enc_set_format (GstAudioDecoder *base, GstCaps * caps)
     return FALSE;
   }
 
-  gst_audio_info_set_format (&info, GST_AUDIO_FORMAT_F32, SAMPLE_RATE, 1, NULL);
+  gst_audio_info_set_format (&info, GST_AUDIO_FORMAT_F32, SAMPLE_RATE, 1, &chanpos);
   gst_audio_decoder_set_output_format (base, &info);
 
   return TRUE;

@@ -1456,13 +1456,15 @@ aur_manager_do_calibration (AurManager * manager)
     manager_send_event_to_client (manager, proxy, AUR_COMPONENT_ROLE_PLAYER,
         event);
 
-    offset += 500 * GST_MSECOND;
+    offset += 5000 * GST_MSECOND;
+    manager->track_seqid++;
     event = aur_event_new (gst_structure_new ("json",
             "msg-type", G_TYPE_STRING, "set-media",
             "resource-id", G_TYPE_INT64, (gint64) 0,
+            "track-seqid", G_TYPE_INT64, manager->track_seqid,
             "resource-protocol", G_TYPE_STRING, "http",
             "resource-port", G_TYPE_INT, port,
-            "resource-path", G_TYPE_STRING, "/media/ping.mkv",
+            "resource-path", G_TYPE_STRING, "/media/ping.wav",
             "base-time", G_TYPE_INT64, (gint64) (base_time + offset),
             "position", G_TYPE_INT64, (gint64) (0),
             "paused", G_TYPE_BOOLEAN, FALSE,
